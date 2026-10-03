@@ -804,9 +804,9 @@ The product should communicate possibility without hiding uncertainty.
 
 # Current status
 
-**Phase:** Product architecture + design specification.
+**Phase:** Application foundation + product architecture.
 
-This repository is intentionally starting from the problem, user flow, reliability model, and system architecture before implementation.
+The repository includes a runnable landing and workspace shell. Property lookup, the Development Graph, calculations, map/3D rendering, and AI tools remain unimplemented; the workflows above describe the intended product.
 
 The goal is not to build a flashy demo around one happy path.
 
@@ -832,7 +832,7 @@ git clone https://github.com/CosmasMandikonza/Acrevia-.git
 cd Acrevia-
 ~~~
 
-Implementation details and local-development instructions will be added as the codebase lands.
+See the local-development section below for setup and the current implementation boundaries.
 
 ---
 
@@ -840,3 +840,60 @@ Implementation details and local-development instructions will be added as the c
   <strong>Acrevia</strong><br/>
   From land to possibility, with proof.
 </p>
+
+## Local development — foundation shell (issue #1)
+
+The repository now includes an application shell. Enter an address to carry it
+into the workspace, navigate the six product surfaces, and open the Copilot rail.
+Property lookup, map/3D rendering, analysis, persistence, and Copilot tools are
+**not connected**. The landing illustration is conceptual, not a real property.
+The product capabilities described above remain the roadmap.
+
+### Setup
+
+Use Node.js 22 LTS (22.12 or later) and npm. `.nvmrc` selects Node 22.
+
+```bash
+npm ci
+npm run dev
+```
+
+Open http://localhost:3000. No environment variables, API keys, database, or external
+services are required. Address text is stored only in the URL, so it appears in
+browser history; it is not geocoded, verified, or saved as a project. To reset,
+return to `/` or open `/workspace` without query parameters.
+
+### Checks and production preview
+
+```bash
+npm run check        # lint, strict TypeScript, unit/component tests
+npm run build
+npm run start
+```
+
+For browser checks, stop any existing server first. Playwright starts the production
+server after a build, or uses an existing local server when available:
+
+```bash
+npx playwright install --with-deps chromium
+npm run test:e2e
+```
+
+The suite exercises desktop (1440×900), laptop (1280×800), and mobile (390×844)
+layouts, keyboard behavior, address/navigation state, error paths, and automated
+accessibility checks. Screenshots and failure traces live in `test-results/`;
+`playwright-report/` contains the HTML report. Automated CI is not configured yet.
+
+### Structure
+
+- `src/app/`: landing page, workspace route, route boundaries, and global design tokens.
+- `src/components/ui/`: shared button and loading/empty/error/stale primitives.
+- `src/components/workspace/`: workspace composition and accessible Copilot rail.
+- `src/lib/`: UI navigation and address validation; no domain model yet.
+- `tests/`: component and production-browser checks.
+- `docs/adr/0001-foundation-shell.md`: scope and future service/model boundaries.
+
+The Development Graph belongs to #3; the renderer decision belongs to #8.
+
+On hosts that block Turbopack's local worker ports, use the supported webpack
+fallback: `npm run dev -- --webpack` or `npm run build -- --webpack`.
