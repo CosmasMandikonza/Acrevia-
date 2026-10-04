@@ -203,7 +203,7 @@ propertyDirs().forEach((dir) => {
       });
     });
 
-    it("rules: nothing is VERIFIED or SOURCE_CONFIRMED without a source, quote, and section", () => {
+    it("rules: VERIFIED and SOURCE_CONFIRMED require a quote; VERIFIED additionally requires a code section", () => {
       rules
         .filter((rule) => rule.status === "VERIFIED" || rule.status === "SOURCE_CONFIRMED")
         .forEach((rule) => {
@@ -250,6 +250,42 @@ propertyDirs().forEach((dir) => {
     });
 
     if (isCanonical) {
+      it("canonical: raw PWD area, fixture area, and prose all agree (drift regression)", () => {
+        const raw = JSON.parse(
+          readFileSync(join(benchmarksRoot, dir, "raw", "pwd-parcel.json"), "utf-8"),
+        ) as { rows: Array<{ gross_area: number; area_m2: number }> };
+        const { gross_area: grossArea, area_m2: areaM2 } = raw.rows[0];
+        expect(grossArea).toBe(parcel.properties.recordedAreaSqFt);
+        expect(Math.round(areaM2 * 10.7639)).toBe(parcel.properties.geodesicAreaSqFtPostGIS);
+
+        // Prose drift: any parcel-area-sized number in the human-facing docs must be
+        // one of the fixtures' own values (recorded / geodesic / equirect / OPA artifact).
+        const allowed = new Set<number>([
+          parcel.properties.recordedAreaSqFt as number,
+          parcel.properties.geodesicAreaSqFtPostGIS as number,
+          parcel.properties.equirectAreaSqFtCheck as number,
+          221980, // OPA frontage-x-depth artifact, documented in the fixture
+          ...propertyDirs().flatMap((other) => {
+            if (other === dir) return [];
+            const otherParcel = loadJson(other, "parcel.geojson") as unknown as GeoJSONFeature;
+            return [otherParcel.properties.recordedAreaSqFt as number];
+          }),
+        ]);
+        const proseFiles = ["README.md", "../SELECTION.md"];
+        const offenders: string[] = [];
+        proseFiles.forEach((file) => {
+          const text = readFileSync(join(benchmarksRoot, dir, file), "utf-8");
+          const matches = text.matchAll(/\b(\d{3}),(\d{3})\b/g);
+          for (const match of matches) {
+            const value = Number(`${match[1]}${match[2]}`);
+            if (value >= 110000 && value <= 230000 && !allowed.has(value)) {
+              offenders.push(`${file}: ${match[0]}`);
+            }
+          }
+        });
+        expect(offenders, `undocumented area-like numbers in prose: ${offenders.join(", ")}`).toEqual([]);
+      });
+
       it("canonical: raw evidence directory exists and is populated", () => {
         const rawDir = join(benchmarksRoot, dir, "raw");
         expect(existsSync(rawDir)).toBe(true);

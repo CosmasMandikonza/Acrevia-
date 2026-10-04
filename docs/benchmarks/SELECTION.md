@@ -16,33 +16,54 @@ logs are summarized in each property README and in the PR description.
 
 ## Weighted selection matrix
 
-Criteria and weights (approved by maintainer, 2026-10-03):
+**Weighting correction (2026-10-04, PR review).** The first version of this document
+scored candidates against a provisional weighting (0.25 data / 0.15 ownership /
+0.15 land / 0.15 access / 0.10 housing relevance / 0.10 complexity / 0.10 visual)
+and incorrectly labeled it "approved by maintainer." The maintainer's specified
+matrix is different: **0.30 data quality / 0.20 real-person access / 0.15
+underused land / 0.15 regulatory complexity / 0.10 visual potential / 0.05
+ownership verifiability / 0.05 storytelling.** The matrix below is re-scored
+against the maintainer's actual weights. Affordable-housing relevance, which the
+maintainer's matrix does not carry as a standalone criterion, informed the
+storytelling and complexity scores rather than disappearing.
 
-| Criterion | Weight |
-| --- | --- |
-| Authoritative parcel/zoning data quality | 0.25 |
-| Publicly verifiable faith ownership | 0.15 |
+| Criterion (weight) | Weight |
+| --- | ---: |
+| Authoritative parcel/zoning data quality | 0.30 |
+| Realistic access to a real person (pastor/board/ministry/dev partner) | 0.20 |
 | Visible underused/developable land | 0.15 |
-| Realistic access to a real person (pastor/board/ministry/dev partner) | 0.15 |
-| Affordable-housing feasibility relevance | 0.10 |
-| Regulatory complexity that exercises Acrevia | 0.10 |
+| Regulatory complexity that exercises Acrevia | 0.15 |
 | Visual potential for 2D/3D Forge | 0.10 |
+| Publicly verifiable faith ownership | 0.05 |
+| Storytelling (documented, verifiable human narrative) | 0.05 |
 
-Scores 1–5, from verified evidence only:
+Scores 1–5, from verified evidence only (storytelling scored on documented,
+verifiable narrative material — a stalled project record, an operating school, a
+shelter ministry lead, an active congregation's own publications — not on
+invented demo copy):
 
-| Candidate | Data | Owner | Land | Access | Housing | Complexity | Visual | **Weighted** |
+| Candidate | Data | Access | Land | Complexity | Visual | Owner | Story | **Weighted** |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| DC — Wesley Theological Seminary | 4.5 | 5 | 5 | 4.5 | 4.5 | 4.5 | 4.0 | **4.60** |
-| Portland — Central Church of the Nazarene | 4.0 | 5 | 5 | 5 | 4.0 | 5 | 4.5 | **4.60** |
-| Minneapolis — Central Lutheran Church | 4.0 | 5 | 5 | 4.5 | 4.5 | 4.5 | 4.5 | **4.53** |
-| **Philadelphia — Calvary Memorial Church** | 4.5 | 5 | 4.5 | 5 | 4.0 | 4.0 | 4.0 | **4.50** |
-| NYC — St. Peter's Episcopal (Bronx) | 4.0 | 5 | 5 | 3.0 | 5 | 5 | 4.0 | **4.35** |
-| Seattle — St. Alphonsus (Ballard) | 3.0 | 5 | 4.5 | 4.0 | 4.5 | 4.0 | 4.5 | **4.08** |
-| Denver — Riverside Baptist Church | 3.5 | 5 | 4.5 | 2.0 | 4.0 | 4.0 | 4.0 | **3.80** |
+| Portland — Central Church of the Nazarene | 4.0 | 5.0 | 5.0 | 5.0 | 4.5 | 5 | 4.0 | **4.60** |
+| **Philadelphia — Calvary Memorial Church** | 4.5 | 5.0 | 4.5 | 4.0 | 4.0 | 5 | 4.5 | **4.50** |
+| DC — Wesley Theological Seminary | 4.5 | 4.5 | 5.0 | 4.5 | 4.0 | 5 | 3.0 | **4.48** |
+| Minneapolis — Central Lutheran Church | 4.0 | 4.5 | 5.0 | 4.5 | 4.5 | 5 | 4.5 | **4.45** |
+| NYC — St. Peter's Episcopal (Bronx) | 4.0 | 3.0 | 5.0 | 5.0 | 4.0 | 5 | 5.0 | **4.20** |
+| Seattle — St. Alphonsus (Ballard) | 3.0 | 4.0 | 4.5 | 4.0 | 4.5 | 5 | 3.5 | **3.85** |
+| Denver — Riverside Baptist Church | 3.5 | 2.0 | 4.5 | 4.0 | 4.0 | 5 | 3.0 | **3.53** |
 
-The top four sit within 0.10 points (2%) of each other. The matrix alone does not
-separate them, so the decision layer below is documented explicitly rather than
-hidden inside a rounded score.
+**Under the maintainer's weights, Portland scores highest (4.60), with
+Philadelphia second (4.50), DC (4.48), and Minneapolis (4.45) effectively tied.**
+The 0.10 spread across the top four is within the noise of one-point subjective
+scores, so the decision layer below remains the decisive justification — now
+stated more precisely: Philadelphia is recommended as the FIRST canonical gold
+fixture on completeness-of-evidence grounds (three adopted-code live captures;
+every load-bearing value already closed), while Portland's flagship number
+(developable fraction of 10.97 acres) depends on an unfetched floodway layer and
+its chapter PDFs lag the consolidated code. If the maintainer prefers strict
+matrix ordering, Portland is the defensible canonical choice — all four fixtures
+already exist, so re-cutting the canonical designation is a documentation change,
+not new research.
 
 ## Finalist tradeoffs
 
@@ -112,14 +133,14 @@ hidden inside a rounded score.
 ### Philadelphia — Calvary Memorial Church (canonical)
 
 - **Identity/ownership:** OPA parcel 778273000, owner "CALVARY MEMORIAL CHURCH",
-  fully tax-exempt (exempt land $456,768 / building $3,056,832), book/page
-  0880322. Church website independently confirms name, address, phone, email,
+  OPA exemption values populated for land and building
+  (exempt land $456,768 / building $3,056,832; exemption fields evidence religious use, not a complete tax analysis), book/page 0880322. Church website independently confirms name, address, phone, email,
   9:15 a.m. Sunday School, 10:30 a.m. service, and an affiliated school.
 - **Land:** verified PWD parcel polygon 119,295 sq ft (2.74 ac); exactly one
   building (city footprint layer: "Calvary Memorial Church", 31,272 sq ft,
-  ~26% of parcel); ~74% of the parcel is open land whose specific current use
-  (parking vs other) is **UNKNOWN** — the church's website does not mention a
-  parking lot, so no parking claim is made.
+  ~26% of parcel); the remaining ~74% is not covered by the mapped building
+  footprint, and its actual surfacing/use is **UNKNOWN** — the church's website does
+  not mention a parking lot, so no parking or land-use claim is made.
 - **Zoning/rules:** RM-1, `pending: No` (official L&I zoning layer, verified
   first-hand); four overlays incl. /SIX (§ 14-548 — adopted text captured live,
   ADU prohibition verbatim); RM-1 dimensionals from the official PCPC Quick
@@ -134,7 +155,8 @@ hidden inside a rounded score.
      flood/historic negatives, and RCO data — each item fetched first-hand by the
      benchmark author, not accepted from a secondary report.
   2. **Exact Mission Compiler shape:** one parcel, one congregation, sanctuary +
-     Sunday school + affiliated school + large open land. The things Acrevia's
+     Sunday school + affiliated school + a large area not covered by any mapped building.
+     The things Acrevia's
      mission constraints are supposed to reason about are physically real here.
   3. **Strongest, most redundant human-access paths:** the church publishes a
      phone and email; Partners for Sacred Places (national congregation-capacity

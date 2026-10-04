@@ -31,7 +31,7 @@
       "retrievedAt": "2026-10-04T04:30:00Z",
       "purpose": "Authoritative parcel geometry (MultiPolygon, WGS84) and recorded gross_area",
       "rawEvidence": "raw/pwd-parcel.json",
-      "notes": "gross_area 119295 sq ft; PostGIS geodesic area 119283 sq ft (0.01% agreement). First captured 2026-10-04T03:16:00Z."
+      "notes": "gross_area 119295 sq ft; PostGIS geodesic area 11,083.343 m2 = 119,300 sq ft (0.004% agreement). First captured 2026-10-04T03:16:00Z."
     },
     {
       "id": "S3",
@@ -79,14 +79,14 @@
     },
     {
       "id": "S7",
-      "title": "The Philadelphia Code \u00a7 14-802 Motor Vehicle Parking Ratios (American Legal Publishing code library)",
+      "title": "The Philadelphia Code \u00a7 14-802 Motor Vehicle Parking Ratios incl. \u00a7 14-802(2) Required Parking in Residential Districts (American Legal Publishing code library)",
       "publisher": "City of Philadelphia (codified by American Legal Publishing)",
-      "url": "https://codelibrary.amlegal.com/codes/philadelphia/latest/philadelphia_pa/0-0-0-293733",
+      "url": "https://codelibrary.amlegal.com/codes/philadelphia/latest/philadelphia_pa/0-0-0-293741",
       "authorityLevel": "ADOPTED_CODE",
       "retrievedAt": "2026-10-04T04:21:00Z",
       "purpose": "Adopted parking ratio table (Table 14-802-1), RM-1 column",
       "rawEvidence": "raw/code-14-802-excerpt.md",
-      "notes": "Captured live via a rendering fetcher. Table note 879 records amendments by Bill No. 210075 (March 29, 2021), Bill No. 210078-A (April 28, 2021), Bill No. 250525 (approved June 13, 2025)."
+      "notes": "Captured live via a rendering fetcher; the host blocks plain HTTP clients (HTTP 403 / Cloudflare). Section head at node 0-0-0-293733; the residential parking table (Table 14-802-1) renders at node 0-0-0-293741. Table note 879 records amendments by Bill No. 210075 (March 29, 2021), Bill No. 210078-A (April 28, 2021), Bill No. 250525 (approved June 13, 2025). Neighboring-cell values re-verified live 2026-10-04T12:11:00Z during PR review."
     },
     {
       "id": "S8",

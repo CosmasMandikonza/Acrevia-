@@ -1,0 +1,1884 @@
+Title 33, Planning and Zoning                    Chapter 33.266
+
+1/1/25  Parking, Loading, And Transportation And Parking Demand Management
+
+33.266 Parking, Loading, And Transportation And
+Parking Demand Management
+
+                                                                                      266
+
+Sections:
+    33.266.010 Introduction
+
+Motor Vehicle Parking
+    33.266.100 General Regulations
+    33.266.110 Required Carpool and Electric Vehicle Parking
+    33.266.115 Maximum Allowed Parking Spaces
+    33.266.120 Development Standards for Houses, Duplexes, Triplexes, and Fourplexes
+    33.266.130 Development Standards for All Other Development
+    33.266.140 Stacked Parking Areas
+    33.266.150 Vehicles in Residential Zones
+
+Bicycle Parking
+    33.266.200 Minimum Required Bicycle Parking
+    33.266.210 Bicycle Parking Development Standards
+
+Loading
+    33.266.310 Loading Standards
+
+Transportation and Parking Demand Management
+    33.266.410 Transportation and Parking Demand Management
+    33.266.420 Transportation Impact Review in the Campus Institutional Zones
+
+33.266.010 Introduction
+This chapter establishes the standards for the amount, location, and development of motor vehicle
+parking, standards for bicycle parking, and standards for on-site loading areas, and requirements for
+transportation demand management plans. Other titles of the City Code may regulate other aspects
+of parking and loading.
+
+                                          Motor Vehicle Parking
+
+33.266.100 General Regulations
+
+    A. Where the regulations apply. The regulations of this chapter apply to all parking areas in
+           all zones. Parking areas include those accessory to a use, part of a Commercial Parking use,
+           or for a park and ride facility in the Community Services use category.
+
+    B. Calculations of amounts of maximum allowed parking.
+
+           1. The maximum allowed number of parking spaces is computed based on the primary
+                 uses on the site except as stated in Paragraph C.2., below. When there are two or
+                 more separate primary uses on a site, the allowed parking for the site is the sum of
+                 the allowed parking for the individual primary uses. When there are two or more
+                 instances of the same primary use on the site, the maximum allowed parking is based
+                 on the total square footage of all those same uses added together.
+
+                               266-1
+Chapter 33.266         Title 33, Planning and Zoning
+
+Parking, Loading, And Transportation And Parking Demand Management  1/1/25
+
+      2. When more than 20 percent of the net building area on a site is in an accessory use,
+            the allowed parking is calculated separately for the accessory use. An example would
+            be a 40,000 square foot building with a 30,000 square foot warehouse and a 10,000
+            square foot accessory office area. The maximum allowed parking would be computed
+            separately for the office and warehouse uses.
+
+      3. If the maximum number of spaces allowed is less than one, then the maximum
+            number is automatically increased to one.
+
+C. Proximity of parking to use. Parking spaces must be located on the site of the use or in
+      parking areas whose closest point is within 500 feet of the site.
+
+D. Stacked parking. Stacked or valet parking is allowed if an attendant is present to move
+      vehicles. Automated stacked parking and tandem parking for individual dwelling units are
+      exempt from the attendant requirements. The requirements for maximum spaces and all
+      parking area development standards continue to apply for stacked parking. See also
+      33.266.140.
+
+E. Office of Transportation review. The Office of Transportation reviews the layout of parking
+      areas for compliance with the curb cut and access restrictions of Section 17.28.110,
+      Driveways – Permits and Conditions.
+
+33.266.110 Required Carpool and Electric Vehicle Parking
+
+    A. Purpose. These regulations encourage carpooling and electric vehicles by requiring that,
+           when parking spaces are provided, enough of the spaces are reserved for carpool use and
+           will accommodate electric vehicle charging infrastructure. Provision of carpool parking, and
+           locating it close to the building entrance, will encourage carpool use. Providing
+           opportunities to install electric vehicle chargers within parking areas encourages electric
+           vehicles as an alternative to vehicles that burn fossil fuels.
+
+    B. Required carpool parking spaces. For office, industrial, and institutional uses where there
+           are more than 20 parking spaces on the site, the following standards must be met:
+
+           1. Five spaces or five percent of the parking spaces on site, whichever is less, must be
+                 reserved for carpool use before 9:00 AM on weekdays. More spaces may be reserved,
+                 but they are not required.
+
+           2. The spaces must be those closest to the building entrance or elevator, but not closer
+                 than the spaces for disabled parking and those signed for exclusive customer use.
+
+           3. Signs must be posted indicating these spaces are reserved for carpool use before
+                 9:00 AM on weekdays.
+
+    C. Required electric vehicle charging spaces. For Commercial Parking uses and for sites with 5
+           or more dwelling units, the following standards must be met:
+
+           1. Commercial Parking. For Commercial Parking uses, at least 20 percent of the total
+                 number of parking spaces must include electrical conduit adjacent to the spaces that
+                 will allow for the installation of at least a Level 2 electric vehicle charger.
+
+           2. In buildings with five or more dwelling units, if parking spaces are provided for any of
+                 the dwelling units, the following standards apply:
+
+                266-2
+Title 33, Planning and Zoning         Chapter 33.266
+
+1/1/25  Parking, Loading, And Transportation And Parking Demand Management
+
+                 a. If between one and six spaces are provided for dwelling units, 100 percent of the
+                       spaces must include electrical conduit adjacent to the spaces that will allow for
+                       installation of at least a Level 2 electric vehicle charger.
+
+                 b. If seven or more spaces are provided for dwelling units, 50 percent, or six,
+                       whichever is greater of the parking spaces provided must include electrical
+                       conduit adjacent to the spaces that will allow for installation of at least a Level 2
+                       electric vehicle charger.
+
+33.266.115 Maximum Allowed Parking Spaces
+
+    A. Purpose. Limiting the number of spaces allowed promotes efficient use of land, enhances
+           urban form, encourages use of alternative modes of transportation, provides for better
+           pedestrian movement, and protects air and water quality.
+
+    B. Maximum number of parking spaces allowed. Regulations in a plan district or overlay zone
+           may supersede the regulations in this Subsection. Park and ride facilities are exempt from
+           parking maximums.
+
+           1. Surface parking. Where more than 25 percent of the parking accessory to a use is on
+                 surface parking lots, the maximum number of parking spaces allowed is stated in
+                 Tables 266-1 and 266-2 and apply to both the structured and surface parking. Parking
+                 accessory to a use includes accessory parking that is on- and off-site.
+
+           2. Structured parking. Where 75 percent or more of the parking accessory to a use is in
+                 structured parking, both the structured and surface parking are regulated as follows.
+                 Parking accessory to a use includes accessory parking that is on- and off-site:
+
+                 a. Generally. The maximum number of parking spaces allowed is 125 percent of the
+                       amount stated in Tables 266-1 and 266-2, except as provided in Subparagraph
+                       B.2.b;
+
+                 b. Parking accessory to Medical Centers and Colleges. The maximum parking
+                       allowed that is accessory to Medical Centers and Colleges is stated in
+                       Tables 266-1 and 266-2.
+
+           3. Exception in the EG and I zones. In the EG and I zones, there is no maximum number
+                 of accessory parking spaces for either structured or surface parking where both
+                 Subparagraphs B.3.a. and b. are met, and either Subparagraph B.3.c. or d. is met:
+
+                 a. The site is at least eight acres in area;
+
+                 b. The site is located more than 1/2 mile from a transit stop or station with 20-
+                       minute peak-hour light rail or streetcar service; and
+
+                 c. At least 700 of the accessory parking spaces are in a structure; or
+
+                 d. The structured parking is in a structure with at least three floors, and parking is
+                       on at least three floors of the structure.
+
+                               266-3
+Chapter 33.266                                                                 Title 33, Planning and Zoning
+
+Parking, Loading, And Transportation And Parking Demand Management             1/1/25
+
+Zone                                              Table 266-1
+OS, R, C, CI, EG, I, IR   Maximum Allowed Parking Spaces By Zone [1], [2]
+
+                                    Requirement
+
+                                   Maximum is Standard B in Table 266-2.
+
+EX                        Maximum is Standard A in Table 266-2, except for the following, where the
+
+                          maximum is Standard B:
+
+                                         1) Retail, personal service-oriented, repair-oriented
+                                         2) Restaurants and bars
+                                         3) General office
+                                         4) Medical/Dental office
+
+[1] Regulations in a plan district or overlay zone may supersede the standards of this table.
+[2] Uses subject to a Conditional Use, Impact Mitigation Plan, or Transportation Impact review may establish
+different parking requirements through the review.
+
+                                              Table 266-2
+                         Maximum Allowed Parking Spaces by Use [1]
+                (Refer to Table 266-1 to determine which standard applies.)
+
+Use Categories            Specific Uses              Standard A                Standard B
+Residential Categories                               1 per 2 units
+Household Living                                                               No maximum, except 1.35
+                                                     1 per 4 bedrooms          per unit on sites that are in
+Group Living              Retail, personal service,  1 per 500 sq. ft. of net  a commercial/mixed use or
+Commercial Categories     repair oriented            building area             multi-dwelling zone.
+Retail Sales And Service  Restaurants and bars       1 per 250 sq. ft. of net  Houses, attached houses
+                                                     building area             and duplexes are exempt.
+                          Health clubs, gyms,        1 per 330 sq. ft. of net  No maximum
+                          lodges, meeting rooms,     building area
+                          and similar. Continuous                              1 per 200 sq. ft. of net
+                          entertainment such as                                building area
+                          arcades and bowling                                  1 per 75 sq. ft. of net
+                          alleys                                               building area
+                          Temporary lodging                                    1 per 200 sq. ft. of net
+                                                                               building area
+
+                          Theaters                   1 per rentable room; for  1.5 per rentable room; for
+                                                     associated uses such as   associated uses such as
+                                                     restaurants, see above    restaurants, see above
+                                                     1 per 4 seats or 1 per 6  1 per 3 seats or 1 per 4 feet
+                                                     feet of bench area        of bench area
+
+                                                     266-4
+Title 33, Planning and Zoning                                                         Chapter 33.266
+
+1/1/25                    Parking, Loading, And Transportation And Parking Demand Management
+
+                                                 Table 266-2
+
+                          Maximum Allowed Parking Spaces by Use [1]
+
+                     (Refer to Table 266-1 to determine which standard applies.)
+
+Commercial Categories
+
+Office                    General office         1 per 500 sq. ft. of net  1 per 300 sq. ft. of net
+
+                                                 building area             building area
+
+                          Medical/Dental office  1 per 500 sq. ft. of net  1 per 200 sq. ft. of net
+
+                                                 building area             building area
+
+Quick Vehicle Servicing                          1 per 500 sq. ft. of net  1 per 200 sq. ft. of net
+
+                                                 building area             building area
+
+Vehicle Repair                                   1 per 750 sq. ft. of net  1 per 500 sq. ft. of net
+
+                                                 building area             building area
+
+Commercial Parking                               None                      None
+
+Self-Service Storage                             1 per resident manager’s 2 per resident manager’s
+
+                                                 facility, plus 3 per leasing facility, plus 5 per leasing
+
+                                                 office, plus 1 per 100    office, plus 1 per 70
+
+                                                 leasable storage spaces in leasable storage spaces in
+
+                                                 multi-story buildings.    multi-story buildings.
+
+Commercial Outdoor                               20 per acre of site       30 per acre of site
+
+Recreation
+
+Major Event                                      1 per 8 seats             1 per 5 seats
+
+Entertainment
+
+Industrial Categories
+
+Manufacturing And                                1 per 750 sq. ft. of net  1 per 500 sq. ft. of net
+
+Production                                       building area [1]         building area
+
+Warehouse And Freight                            1 per 750 sq. ft. of net  1 per 500 sq. ft. of net
+
+Movement                                         building area for the first building area for the first
+
+                                                 3,000 sq. ft. of net      3,000 sq. ft. of net building
+
+                                                 building area and then 1 area and then 1 per 2,500
+
+                                                 per 3,500 sq. ft. of net  sq. ft. of net building area
+
+                                                 building area thereafter thereafter
+
+Wholesale Sales,                                 1 per 750 sq. ft. of net  1 per 500 sq. ft. of net
+
+Industrial Service,                              building area             building area
+
+Railroad Yards
+
+Waste-Related                                    See note [1]              See note [1]
+Institutional Categories
+Basic Utilities                                  None                      None
+Community Service                                1 per 500 sq. ft. of net  1 per 200 sq. ft. of net
+                                                 building area             building area
+Parks And Open Areas                             Per CU review for active  Per CU review for active
+                                                 areas                     areas
+Schools                   Grade, elementary,     1 per classroom           1.5 per classroom
+Medical Centers           middle, junior high
+                          High school            7 per classroom           10.5 per classroom
+                                                 1 per 500 sq. ft. of net  1 per 200 sq. ft. of net
+                                                 building area             building area
+
+                                                 266-5
+Chapter 33.266                                                             Title 33, Planning and Zoning
+
+Parking, Loading, And Transportation And Parking Demand Management                                  1/1/25
+
+                                                    Table 266-2
+                               Maximum Allowed Parking Spaces by Use [1]
+                      (Refer to Table 266-1 to determine which standard applies.)
+
+Use Categories          Specific Uses            Standard A                Standard B
+
+Colleges                                         1 per 600 sq. ft. of net  1 per 400 sq. ft. of net
+
+                                                 building area exclusive of building area exclusive of
+
+                                                 dormitories, plus 1 per 4 dormitories, plus 1 per 2.6
+
+                                                 dorm rooms                dorm rooms
+
+Religious Institutions                           1 per 100 sq. ft. of main 1 per 70 sq. ft. of main
+
+                                                 assembly area             assembly area
+
+Daycare                                          1 per 500 sq. ft. of net  1 per 330 sq. ft. of net
+
+                                                 building area             building area
+
+Other Categories
+
+Agriculture                                      None                      None
+
+Aviation                                         See note [1]              See note [1]
+
+Detention Facilities                             See note [1]              See note [1]
+
+Mining                                           See note [1]              See note [1]
+
+Radio Frequency         Personal wireless service None                     None
+
+Transmission Facilities and other non-broadcast
+
+                        facilities
+
+                        Radio or television      2 per site                None
+
+                        broadcast facilities
+
+Rail Lines & Utility                             None                      None
+
+Corridors
+
+Notes:
+
+[1] Uses subject to a Conditional Use, Impact Mitigation Plan, or Transportation Impact review may
+
+establish parking requirements through the review.
+
+33.266.120 Development Standards for Houses, Duplexes, Triplexes, and Fourplexes
+
+    A. Purpose. The size and placement of vehicle parking areas are regulated in order to enhance
+          the appearance and pedestrian experience of neighborhoods.
+
+    B. Structures these regulations apply to. The regulations of this section apply to houses,
+          attached houses, duplexes, attached duplexes, triplexes, fourplexes, manufactured homes,
+          and houseboats. The regulations apply to all parking areas. The following are exceptions to
+          this requirement:
+
+          1. Parking that is in a parking tract is subject to the standards of Section 33.266.130
+                instead of the standards of this section. However, perimeter landscaping is not
+                required where the parking tract abuts a lot line internal to the site served by
+                the tract.
+
+          2. Parking for manufactured dwelling parks is regulated in Chapter 33.251.
+
+    C. Parking area locations.
+
+          1. Vehicle area. The following standards apply to the location of vehicle area:
+
+                a. Vehicle area is prohibited between the primary structure and the street except as
+                      follows. This standard does not apply to houses on lots that are at least 32 feet
+                      wide:
+
+                                                 266-6
+Title 33, Planning and Zoning         Chapter 33.266
+
+1/1/25  Parking, Loading, And Transportation And Parking Demand Management
+
+                  (1) Parking spaces located entirely behind the front and side street building
+                        lines of a primary structure are allowed; and
+
+                  (2) Driveways to parking spaces located entirely behind the front and side
+                        street building lines of a primary structure are allowed.
+
+            b. No more than 40 percent of the land area between the front lot line and the
+                  front building line may be paved or used for vehicle areas. See Figure 266-2. On
+                  corner lots, no more than 20 percent of the land area between the side street lot
+                  line and the side street building line may be paved or used for vehicle areas. For
+                  attached houses, this standard applies to the combined lot lines of attached
+                  house lots. As an exception to the area limitations in this subparagraph, a flag lot
+                  with a pole that allows vehicle access is allowed at least a 12-foot wide vehicle
+                  area.
+
+      2. Parking spaces. The following standards apply to the location of parking spaces:
+
+            a. Generally, parking spaces are not allowed within the first 10 feet from a front lot
+                  line, and on corner lots, parking spaces are not allowed within the side street
+                  setback.
+
+            b. Exceptions.
+
+                  (1) A parking space is allowed within the first 10 feet from a front lot line or
+                        within a side street setback when the parking space is in a driveway behind
+                        a parking space that is located outside of the first 10 feet from a front lot
+                        line or outside of the side street setback. See Figure 266-1.
+
+                  (2) On lots where the front lot line abuts a common green or shared court,
+                        parking spaces are allowed within 10 feet of the front lot line.
+
+      3. Vehicle area access. If the lot abuts an alley, all parking and vehicle access to the site
+            must be from the alley.
+
+      4. Parking in garages. Parking in garages is subject to the garage setback standards of the
+            base zone, overlay zone or plan district.
+
+D. Parking space sizes.
+
+      1. A parking space must be at least 9 feet by 18 feet.
+
+      2. The minimum driveway width on private property is 9 feet.
+
+      3. Shared driveways are allowed to extend across a property line onto abutting private
+            properties if the following are met:
+
+            a. The width of the shared driveway is at least 9 feet; and
+
+            b. There is a recorded easement guaranteeing reciprocal access and maintenance
+                  for all affected properties.
+
+E. Paving.
+
+      1. Generally. All driveways and parking areas must be paved.
+
+      2. Exceptions.
+
+                               266-7
+Chapter 33.266                           Title 33, Planning and Zoning
+
+Parking, Loading, And Transportation And Parking Demand Management  1/1/25
+
+a. Gravel surfaces may be approved by PP&D when the abutting street or alley is
+      not paved, and the applicant executes a covenant agreeing to pave the area if
+      the street or alley is paved in the future.
+
+b. Utility trailers and non-motorized accessory recreational vehicles may be stored
+      on unpaved surfaces. A gravel surface is not required.
+
+                       Figure 266-1
+                Parking Space Locations
+
+                266-8
+Title 33, Planning and Zoning                           Chapter 33.266
+
+1/1/25  Parking, Loading, And Transportation And Parking Demand Management
+
+                                     Figure 266-2
+                               Parking Area Limitation
+
+33.266.130 Development Standards for All Other Development
+    A. Purpose. The development standards promote vehicle areas that are safe and attractive for
+           motorists and pedestrians. Vehicle area locations are restricted in some zones to promote
+           the desired character of those zones.
+           Together with the transit street building setback standards in the base zone chapters, the
+           vehicle area location regulations:
+
+                                                                        266-9
+Chapter 33.266          Title 33, Planning and Zoning
+
+Parking, Loading, And Transportation And Parking Demand Management  1/1/25
+
+      • Provide pedestrian access that is protected from auto traffic;
+      • Create an environment that is inviting to pedestrians and transit users, especially on
+
+           transit streets and in Pedestrian Districts;
+      • Limit the prominence of vehicle areas along street frontages and create a strong
+
+           relationship between buildings and the sidewalk;
+      • Create a sense of enclosure on transit and pedestrian street frontages; and
+      • Limit the size of paved parking area and the type of paving material allowed in order to
+
+           limit increases in temperature associated with asphalt and reduce impacts from urban
+           heat islands.
+
+      The parking area layout, setback, and landscaping standards are intended to promote safe
+      circulation within the parking area, provide for the effective management of stormwater
+      runoff from vehicle areas, and provide for convenient entry and exit of vehicles. The layout,
+      setback, and landscaping standards:
+      • Improve and soften the appearance of parking areas;
+      • Reduce the visual impact of parking areas from sidewalks, streets, and especially from
+
+           adjacent residential zones;
+      • Provide flexibility to reduce the visual impacts of small residential parking lots;
+      • Direct traffic in parking areas;
+      • Shade and cool parking areas;
+      • Reduce the amount and rate of stormwater runoff from vehicle areas;
+      • Reduce pollution and temperature of stormwater runoff from vehicle areas;
+      • Decrease airborne and waterborne pollution;
+      • Provide flexibility for locating electric vehicle chargers and equipment while limiting
+
+           their impact on adjacent streets and lots; and
+      • Generate solar power to offset the impacts of surface parking areas.
+
+B. Where these standards apply. The standards of this section apply to all vehicle areas,
+      except for residential vehicle areas subject to the standards of 33.266.120.
+
+C. On-site locations and size of vehicle areas.
+
+      1. Location of vehicle areas. The allowed on-site location of all vehicle areas is stated in
+            Table 266-3. Additionally, on sites in single dwelling zones or multi-dwelling zones that
+            abut an alley and are 10,000 square feet or less in total site area, vehicle area may
+            only be accessed from the alley.
+
+      2. Building setbacks for structures that contain vehicle areas.
+
+            a. Structures that contain vehicle areas are subject to the building setbacks of the
+                  base zone, where exiting in a forward motion is provided.
+
+            b. Structured parking that does not allow exiting in a forward motion in R Zones is
+                  subject to the garage entrance setback standard of the base zone.
+
+            c. Structured parking that does not allow exiting in a forward motion in C, E, I, CI, or
+                  IR zones must be set back 18 feet from the street lot line.
+
+                266-10
+Title 33, Planning and Zoning          Chapter 33.266
+
+1/1/25  Parking, Loading, And Transportation And Parking Demand Management
+
+      3. Frontage limitation.
+
+            a. The standard of this Subparagraph applies outside the Central City plan district in
+                  the R20 through R2.5, RM1, RM2, RM3, RM4, and RMP zones. No more than 40
+                  percent of the frontage on a street may be used for vehicle areas. On sites with
+                  more than one street frontage, this standard applies to the street with the
+                  highest transit designation. If two streets have the same highest transit
+                  classification, the applicant may choose on which street to meet the standard.
+                  Sites where there is less than 100 square feet of net building area are exempt
+                  from this standard.
+
+            b. The standard of this Paragraph applies outside the Central City plan district in the
+                  RX, CR, CM1, CM2, CM3, CE, CX, EG1, EX, CI, and IR zones. Where vehicle areas
+                  are adjacent to a transit street or a street in a Pedestrian District, no more than
+                  50 percent of the frontage on the transit street or street in a Pedestrian District
+                  may be used for vehicle areas. Sites where there is less than 100 square feet of
+                  net building area are exempt from this standard.
+
+      4. Surface parking and driveway paving limitations.
+
+            a. In the RM1 through RM4 zones, the following parking area and driveway size and
+                  paving material limitations apply:
+
+                  (1) No more than 30 percent of total site area may be paved or used for surface
+                        parking and driveways; and
+
+                  (2) Asphalt paving for surface parking and driveways may not cover more than
+                        15 percent of total site area.
+
+            b. On sites with more than 65,000 square feet of net building area, surface parking
+                  is limited to an amount equal to the total net building area on site.
+
+D. Improvements.
+
+      1. Paving. In order to control dust and mud, all vehicle areas must be paved. However,
+            some portions of individual parking spaces may be landscaped per the standards of
+            Paragraph F.4, below.
+
+      2. Striping. All parking areas, except for stacked parking, must be striped in conformance
+            with the parking dimension standards of Subsection F. below.
+
+      3. Protective curbs around landscaping. All perimeter and interior landscaped areas must
+            have protective curbs along the edges. Curbs separating landscaped areas from
+            parking areas may allow stormwater runoff to pass through them. Tire stops, bollards,
+            or other protective barriers may be used at the front ends of parking spaces. Curbs
+            may be perforated or have gaps or breaks. Trees must have adequate protection from
+            car doors as well as car bumpers.
+
+                               266-11
+Chapter 33.266                                                         Title 33, Planning and Zoning
+
+Parking, Loading, And Transportation And Parking Demand Management                                      1/1/25
+
+                                                 Table 266-3
+
+                                   Location of Vehicle Areas [1], [2]
+
+Zone                          General Standard           Exception for Through    Exception for Full-Block
+
+                                                         Lots and Sites with Three Sites
+
+                                                         Frontages
+
+OS, RF, EG2, I                No restrictions.
+
+RMP, IR, CE, EG1, CI; sites Vehicle areas not allowed May have vehicle areas      May have vehicle areas
+
+in RM1, RM2, and RM3          between the portion of     between the portion of   between the portion of
+
+that are more than            the building that complies the building that complies the building that complies
+
+10,000 square feet in         with the maximum street with the maximum street with the maximum street
+
+total area; sites in CM1, setback and the transit        setback and one Local    setback and two Local
+
+CM2, and CM3 that are street or streets in a             Service Transit Street.  Service Transit Streets.
+
+more than 2 acres in total Pedestrian District.
+
+area
+
+R20-R2.5, RM4, RX, CX,        Not allowed between a      May have vehicle areas   May have vehicle areas
+
+CR, EX;, sites in RM1,        building and any street. between the building and between the building and
+
+RM2, and RM3 that are                                    one Local Service Transit two Local Service Transit
+
+10,000 square feet or less                               Street.                  Streets.
+
+in total area; sites in CM1,
+
+CM2, and CM3 that are 2
+
+acres or less in total area
+
+Notes:
+
+[1] Driveways that provide a straight-line connection between the street and a parking area inside a building are
+
+not subject to these regulations.
+
+[2] Vehicle areas that are separated from a street by a building are not subject to these regulations.
+
+E. Stormwater management. Stormwater runoff from parking lots is regulated by the Bureau
+      of Environmental Services. See Chapter 17.38, Drainage and Water Quality, and the City’s
+      Stormwater Management Manual, which contain requirements for managing stormwater
+      in parking lot landscaping.
+
+F. Parking area layouts.
+
+      1. Access to parking spaces.
+
+            a. All parking areas, except stacked parking areas, must be designed so that a
+                  vehicle may enter or exit without having to move another vehicle.
+
+            b. All parking areas must be designed to allow vehicles to enter and exit the
+                  roadway in a forward motion, except:
+
+                  (1) Parking areas with one or two spaces whose only access is on a local
+                        service street;
+
+                  (2) Parking areas may be designed so that vehicles back out into an alley.
+                        However, there must be a maneuvering area of at least 20 feet between the
+                        end of each parking space and the opposite side of the alley. If the alley is
+                        less than 20 feet wide, some of this maneuvering area will be on-site.
+
+      2. Parking space and aisle dimensions. Parking spaces and aisles must meet the
+            minimum dimensions contained in Table 266-4. For stacked parking areas, see
+
+                                                 266-12
+Title 33, Planning and Zoning                                                           Chapter 33.266
+
+1/1/25                 Parking, Loading, And Transportation And Parking Demand Management
+
+        Section 33.266.140 below. Mechanical parking systems are exempt from the parking
+        space dimensions in Table 266-4.
+
+        3. Parking for disabled persons. Portland Permitting & Development regulates the
+
+        following disabled person parking standards and access standards through the Oregon
+
+        Structural Specialty Code.
+
+        •              Dimensions of disabled person parking spaces and access aisles;
+
+        •              The minimum number of disabled person parking spaces required;
+
+        •              Location of disabled person parking spaces and circulation routes,
+
+        •              Curb cuts and ramps including slope, width and location;
+
+        •              Signage and pavement markings.
+
+        4. A portion of a standard parking space may be landscaped instead of paved, as follows:
+
+        a. As shown in Figure 266-3, up to 2 feet of the front of the space as measured from
+              a line parallel to the direction of the bumper of a vehicle using the space may be
+              landscaped area;
+
+        b. Landscaping must be ground cover plants; and
+
+        c. The portion of the 2-foot wide area described in 4.a that is landscaped counts
+              toward parking lot interior landscaping requirements and toward any overall site
+              landscaping requirements. However, the landscaped area does not count toward
+              perimeter landscaping requirements.
+
+                                                   Table 266-4
+
+                       Minimum Parking Space and Aisle Dimensions [1,2]
+
+        Angle                  Width  Curb                 1 Way Aisle 2 Way Aisle Stall
+
+        (A)                    (B)    Length               Width   Width         Depth
+
+                                      (C)                  (D)     (D)           (E)
+
+        0° (Parallel)          8 ft.  22 ft. 6 in. 12 ft.          20 ft.        8 ft.
+
+        30°                    8 ft. 6 in. 17 ft.          12 ft.  20 ft.        15 ft.
+
+        45°                    8 ft. 6 in. 12 ft.          12 ft.  20 ft.        17 ft.
+
+        60°                    8 ft. 6 in. 9 ft. 9 in. 16 ft.      20 ft.        17 ft. 6 in.
+
+        90°                    8 ft. 6 in. 8 ft. 6 in. 20 ft.      20 ft.        16 ft.
+
+        Notes:
+
+        [1] See Figure 266-4.
+
+        [2] See Section 33.266.130.F.3 for information on parking spaces for the disabled.
+
+                                                   266-13
+Chapter 33.266  Title 33, Planning and Zoning
+
+Parking, Loading, And Transportation And Parking Demand Management  1/1/25
+
+                                  Figure 266-3
+                Landscaped area at front of parking space.
+
+                                          Figure 266-4
+                                  Parking Dimension Factors
+
+5. Driveway and parking area green features. The following standards apply to new
+      driveways and new parking areas in all zones when the new parking area is at least
+      21,780 square feet in total area. Structured parking is not included in the total.
+      a. The site must include one of the following features:
+            (1) Tree canopy. Tree canopy must shade at least 40 percent of the parking
+                  area. The amount of shade is determined by the diameter of the mature
+                  crown spread stated for the species of the tree. Trees used to meet this
+                  standard can also be used to meet the P1 Parking Lot Landscaping
+                  requirement.
+
+                                                         266-14
+Title 33, Planning and Zoning          Chapter 33.266
+
+1/1/25  Parking, Loading, And Transportation And Parking Demand Management
+
+                    (2) Solar panels. The site must include solar panels that generate at least 0.5
+                          kilowatts per parking space. The solar panels may be placed anywhere on
+                          the site.
+
+                    (3) Green energy. If the parking is provided for a public building as defined in
+                          ORS 270c.527, the site complies with OAR 330-135-0010.
+
+              b. Driveways and internal accessways that are not parking aisles must include the
+                    following. Parking areas greater than 125,000 square feet on sites in R, C, E, IR,
+                    and CI zones are exempt from this standard:
+
+                    (1) Curbs on both sides and an unobstructed sidewalk on at least one side that
+                          is part of the pedestrian system and meets the requirements of the
+                          pedestrian standards of the base zone, overlay zone or plan district;
+
+                    (2) One large tree is required per 30 lineal feet of required sidewalk, one
+                          medium tree per 22 lineal feet of required sidewalk, or one small tree per
+                          15 lineal feet of required sidewalk. Trees of different sizes may be combined
+                          to meet the standard. The access ways are excluded from the portion of the
+                          parking and loading area used to calculate required interior landscaping.
+
+        6. Large parking areas in R, C, E, IR, and CI zones. In the R, C, E, IR, and CI zones, where a
+              parking area on the site is more than 125,000 square feet, the parking area must
+              contain the following elements. Parking areas in structures are not included in
+              this total:
+
+              a. Internal access ways must divide the parking area into smaller areas that are no
+                    greater than 55,000 square feet;
+
+              b. These accessways must connect to the adjacent street at least every
+                    250 feet; and
+
+              c. Each internal accessway must have at least one auto travel lane, curbs, and
+                    unobstructed sidewalks on both sides. One of the following must be met:
+                   • The sidewalks must be at least 10 feet wide and planted with trees. One large
+                        tree is required per 30 lineal feet of sidewalk, one medium tree per 22 lineal
+                        feet of sidewalk, or one small tree per 15 lineal feet of sidewalk. Trees of
+                        different sizes may be combined to meet the standard;
+                   • Trees must be planted in the center of unpaved tree wells that must be at
+                        least 18 square feet in area, with a minimum dimension of 3 feet. The
+                        unpaved area may be covered with a tree grate. Tree wells must be adjacent
+                        to the curb, and must be located so there is at least 6 feet of unobstructed
+                        sidewalk; or
+                   • The sidewalks must be at least 6 feet wide. There must be a planting strip at
+                        least 4 feet wide. The planting strip must be between the curb and the
+                        sidewalk, and be landscaped to at least the L1 standard except that trees
+                        cannot be grouped.
+
+              d. The internal accessways are excluded from the portion of the parking and loading
+                    area used to calculate required interior landscaping.
+
+                               266-15
+Chapter 33.266                                   Title 33, Planning and Zoning
+
+Parking, Loading, And Transportation And Parking Demand Management  1/1/25
+
+G. Parking area setbacks and landscaping.
+
+      1. All landscaping must comply with the standards of Chapter 33.248, Landscaping and
+            Screening. Trees and shrubs must be fully protected from potential damage
+            by vehicles.
+
+      2. Setbacks and perimeter landscaping.
+
+            a. Where these regulations apply. The regulations of this paragraph apply to:
+
+                  (1) Surface parking areas abutting a lot line;
+
+                  (2) Any portion of structured parking areas where the parking area is within 4
+                        feet of adjacent grade and there is no roof over it;
+
+                  (3) Driveways.
+
+            b. Exceptions.
+
+                  (1) Shared driveways and parking aisles that straddle a lot line do not need to
+                        meet setback and perimeter landscaping requirements;
+
+                  (2) Sites containing 5 or fewer parking spaces and developed only with
+                        residential development may provide a 3-foot-high fence meeting the F2
+                        standards as an alternative to the perimeter setback and landscaping
+                        requirements on any lot line not abutting a street;
+
+                  (3) Stacked parking areas must meet the requirements of Section
+                        33.266.140, below.
+
+            c. Setbacks. The minimum required setbacks for surface parking areas are stated in
+                  Table 266-5. Unless allowed under 33.266.130.H, protective curbs, tire stops,
+                  bollards or other protective barriers are not allowed within the minimum
+                  required setbacks.
+
+                                    Table 266-5
+
+                Minimum Parking Area Setbacks and Landscaping
+
+Location                            All zones except EG2 EG2, IG2
+
+                                    and IG2
+
+Lot line abutting street            5 ft. of L2  10 ft. of L2
+
+Lot line abutting a C, E, I, or CI
+
+zone lot line                       5 ft. of L2  5 ft. of L2
+
+Lot line abutting a OS, R, or IR
+
+zone lot line                       5 ft. of L3  10 ft. of L3
+
+d. Perimeter landscaping. The minimum setbacks and landscaping standards
+      required are provided in Table 266-5.
+
+      (1) Surface parking abutting streets, and C, E, I, and CI zones. Where a surface
+            parking area abuts a street lot line, or a C, E, I, or CI zone lot line, only the
+            minimum required setbacks must be landscaped. The landscaping must
+            meet the L2 standard of Chapter 33.248, and must be adjacent to the
+            parking area and driveway. Where a setback is provided that is greater than
+            the required minimum, the landscaping must be placed within 25 feet of the
+
+                                    266-16
+Title 33, Planning and Zoning          Chapter 33.266
+
+1/1/25  Parking, Loading, And Transportation And Parking Demand Management
+
+                          edge of the parking area and driveway. To provide connectivity between
+                          sites, a single driveway up to 20 feet wide may interrupt the landscaping
+                          that abuts a C, E, or I zone lot line.
+
+                    (2) Surface parking abutting OS, R, and IR zones. Where a surface parking area
+                          abuts an OS, R, or IR zone lot line, only the minimum required setbacks must
+                          be landscaped. The landscaping must meet the L3 standard of Chapter
+                          33.248, and must be adjacent to the parking area and driveway. Where a
+                          setback is provided that is greater than the required minimum, the
+                          landscaping must be placed within 25 feet of the edge of the parking area
+                          and driveway.
+
+        3. Interior landscaping. The regulations of this paragraph apply to all surface parking
+              areas except stacked parking areas. For stacked parking areas, see Section
+              33.266.140 below.
+
+              a. Amount of interior landscaping required. In all zones, interior landscaping must
+                    be provided for sites where there are more than 10 parking spaces on the entire
+                    site. At least 45 square feet of interior landscaped area must be provided for
+                    each parking space.
+
+              b. The landscape materials must comply with the P1 standard of Chapter 33.248.
+
+              c. The landscaping must be dispersed throughout the parking area. All of the
+                    required landscape area may be in the parking area, or some may be in the
+                    loading area.
+
+              d. Perimeter landscaping may not substitute for interior landscaping. However,
+                    interior landscaping may join perimeter landscaping as long as it extends at least
+                    four feet into the parking area from the perimeter landscape line.
+
+              e. Exception for existing parking lots. Where compliance with Subparagraph G.3.a,
+                    above, would result in the loss of existing required parking spaces, the amount of
+                    parking required is reduced by the amount needed to accommodate the
+                    minimum landscaping required.
+
+              f. Layout of interior landscaped areas. The layout of the interior landscaped areas
+                    must meet either one or a combination of the standards of this subparagraph:
+
+                    (1) Option 1: Landscape strips. See Figure 266-5.
+                          • Interior landscaping must be arranged in landscape strips at least four
+                               feet wide between rows of parking stalls.
+                          • Where the front portions of parking stalls are landscaped as allowed by
+                               Paragraph F.4, the landscaped portion of the parking stall must be
+                               adjacent to the four-foot landscape strip.
+
+                               266-17
+Chapter 33.266                    Title 33, Planning and Zoning
+
+Parking, Loading, And Transportation And Parking Demand Management  1/1/25
+
+                  Figure 266-5
+                Landscape Strips
+
+      (2) Option 2: Other landscape patterns. See Figure 266-6.
+            • Interior landscaping must be arranged in areas at the ends of rows of
+                 parking or between parking spaces within rows of parking.
+            • Interior landscaping may join perimeter landscaping as long as the
+                 interior landscape area extends at least 4 feet into the parking area
+                 from the perimeter landscape line.
+            • Landscaping that abuts, but does not extend into, the parking area may
+                 be included as interior landscaping if all of the following are met:
+                  − The abutting landscaped area must be in addition to required
+                       perimeter landscaping;
+                  − Only the first 10 feet of the abutting landscaped area, measured
+                       from the edge of the parking area, may be included as interior
+                       landscaping; and
+                  − The landscaped area is not abutting and parallel to required
+                       perimeter landscaping.
+
+g. Individual tree-planting spaces. Where an individual tree is planted in a space
+      surrounded by pavement, the planting area must have a minimum interior
+      dimension of five feet. See Figure 266-7.
+
+                                                  266-18
+Title 33, Planning and Zoning                                   Chapter 33.266
+
+1/1/25  Parking, Loading, And Transportation And Parking Demand Management
+
+                                       Figure 266-6
+                               Other Landscape Patterns
+
+                                          Figure 266-7
+                               Individual Tree-Planting Spaces
+
+                                                  266-19
+Chapter 33.266          Title 33, Planning and Zoning
+
+Parking, Loading, And Transportation And Parking Demand Management  1/1/25
+
+H. Electric vehicle chargers in parking areas. Electric vehicle chargers, accessory equipment,
+      and protective curbs, tire stops, bollards or other barriers needed to protect the charger or
+      accessory equipment, may be located within parking areas, or adjacent to parking areas,
+      subject to the following:
+
+      1. The chargers, accessory equipment, and protective barriers cannot be located more
+            than 2 feet into required perimeter landscaping areas; and
+
+      2. The accessory equipment may be located anywhere on site but must be screened
+            from the street and adjacent residential zones by walls, fences, or vegetation.
+            Screening must comply with at least the L2 or F2 standards of Chapter 33.248,
+            Landscaping and Screening, and be tall enough to screen the equipment.
+
+33.266.140 Stacked Parking Areas
+Stacked parking areas must comply with all of the development standards of Section 33.266.130
+above, except for those standards superseded by this section.
+
+    A. Perimeter setbacks and landscaping. Parking areas must be set back from streets at least 4
+           feet and landscaped to at least the L2 level.
+
+    B. Striping and layout. Parking areas used exclusively for stacked parking need not be striped
+           or meet the layout standards of Subsection F. above. Stacked parking areas which will allow
+           parking at some times without attendants must be striped in conformance with the layout
+           standards of Subsection F. above.
+
+    C. Interior landscaping for surface parking areas. The minimum interior landscaping
+           requirement for surface parking areas is one tree per 5,000 square feet of parking area. If
+           surrounded by cement, the tree planting area must have a minimum dimension of 4 ft. If
+           surrounded by asphalt, the tree planting area must have a minimum dimension of 3 ft.
+           Trees must be protected from potential damage by vehicles through the use of bollards,
+           curbs, wheel stops, or other physical barriers.
+
+33.266.150 Vehicles in Residential Zones
+
+    A. Purpose. The regulations of this section are intended to reinforce community standards
+           and to promote an attractive residential appearance in the City's neighborhoods. The size,
+           number, and location of parked and stored vehicles in residential zones are regulated in
+           order to preserve the appearance of neighborhoods as predominantly residential in
+           character. Since parking lots and outdoor storage are not intended to be primary activities
+           in residential zones, these activities should constitute no more than a minimal intrusion on
+           any residential area.
+
+    B. Where these regulations apply. These regulations apply to all residential uses in all
+           R zones.
+
+    C. Parking of passenger vehicles and light trucks. Passenger vehicles and light trucks may be
+           parked in any allowed parking area.
+
+    D. Parking of medium and heavy trucks.
+
+           1. The parking or storage of medium and heavy trucks and equipment is prohibited,
+                 except for motor homes and pickup trucks in the medium truck category.
+
+           2. Motor homes in medium truck category may be parked in allowed parking areas
+                 except they may not be parked between the front lot line and the building line.
+
+                266-20
+Title 33, Planning and Zoning                                                       Chapter 33.266
+
+1/1/25  Parking, Loading, And Transportation And Parking Demand Management
+
+      3. Fire trucks and emergency vehicles are allowed if they are parked within a completely
+            enclosed building.
+
+E. Utility trailers and accessory recreational vehicles. Utility trailers and accessory
+      recreational vehicles may be parked in other allowed parking areas, except they may not
+      be parked or stored between the front lot line and the building line.
+
+F. Inoperable vehicles. The outdoor accumulation and storage of inoperable, neglected, or
+      discarded vehicles is regulated by Section 29.20.010 of Title 29, Property and
+      Maintenance Regulations.
+
+G. Vehicle service and repair. Service and repair of vehicles not owned by and registered to a
+      resident of the site is prohibited. Vehicles may be serviced and repaired if:
+
+      1. The vehicles are owned by and registered to residents of the site; and
+
+      2. The service and repair is minor. Minor service and repair includes tune-ups,
+            replacement and servicing of oil and other fluids, and replacement and adjustment of
+            minor parts such as tires, hoses, belts, filters, fuses, and similar items. It does not
+            include: body and fender repair and replacement; painting; engine or transmission
+            removal or replacement; or any work using welders, torches, or air-driven power
+            tools.
+
+                                                    OR
+        3. The vehicles are owned by and registered to a resident of the site; and
+        4. All work occurs within a completely enclosed building; and
+        5. The off-site impact standards of Chapter 33.262 are met.
+
+                                               Bicycle Parking
+
+33.266.200 Minimum Required Bicycle Parking
+
+    A. Purpose. Bicycle parking is required for most use categories to encourage the use of
+           bicycles by providing secure and convenient places to park bicycles. These regulations
+           ensure adequate short and long-term bicycle parking based on the demand generated by
+           different uses. Minimum bicycle parking facilities are based on the City’s mode split goals,
+           while acknowledging the usage rates for different uses. These regulations will help meet
+           the City’s goal that 25 percent of all trips be made by bicycle, while still acknowledging that
+           to meet the citywide goal the bicycle mode split will vary by geographic area.
+
+B. Number of spaces required.
+
+      1. The required minimum number of bicycle parking spaces for each use category is
+            shown in Table 266-6. No bicycle parking is required for uses not listed. Minimum
+            bicycle parking is calculated on a geographic hierarchy based on the current and
+            future bicycle usage. Standard A in Table 266-6 applies to the areas shown as Standard
+            A on Map 266-1. Standard B in Table 266-6 applies to all other areas of the city.
+
+      2. The required minimum number of bicycle parking spaces is based on the primary uses
+            on a site. When there are two or more separate primary uses on a site, the required
+
+                               266-21
+          Chapter 33.266                                                  Title 33, Planning and Zoning
+
+          Parking, Loading, And Transportation And Parking Demand Management               1/1/25
+
+                        bicycle parking for the site is the sum of the required parking for each primary use.
+
+                                                Table 266-6
+
+                               Minimum Required Bicycle Parking Spaces [1]
+
+                               Long-term Spaces                     Short-term Spaces
+
+Uses              Specific Uses Standard A       Standard B         Standard A             Standard B
+
+Residential Categories                                                                     2, or 1 per 20 units
+
+Household Living 5 or more     2, or 1.5 per unit 2, or 1.1 per unit 2, or 1 per 20 units  2, or 1 per 20
+                                                                                           bedrooms
+                  units on site [4]              [5]                                       2, or 1 per 20
+                                                                                           bedrooms
+Group Living                   2, or 1 per 4     2, or 1 per 4      2, or 1 per 20
+                                                                                           4 spaces
+                               bedrooms          bedrooms           bedrooms
+                                                                                           2, or 1 per 4,400 sq.
+                  Units with 2, or 1 per 5       2, or 1 per 10     2, or 1 per 20         ft. of net building
+                                                                                           area
+                  restricted   bedrooms          bedrooms           bedrooms               2, or 1 per 40
+                                                                                           rentable rooms; and
+                  tenancy [2]                                                              1 per 10,000 sq. ft. of
+                                                                                           conference, meeting
+                  Dormitory 2, or 1 per 4        2, or 1 per 4      4 spaces               room
+                                                                                           2, or 1 per 1,600 sq.
+                               bedrooms          bedrooms                                  ft. of net building
+                                                                                           area
+Commercial Categories                                                                      2, or 1 per 33,000 sq.
+                                                                                           ft. of net building
+Retail Sales and               2, or 1 per 3,800 2, or 1 per 7,500 2, or 1 per 2,700       area
+                                                                                           None
+Services                       sq. ft. of net    sq. ft. of net     sq. ft. of net
+                                                                                           2, or 1 per 3 acres
+                               building area     building area      building area
+                                                                                           10, or 1 per 40 seats
+                  Temporary 2, or 1 per 20       2, or 1 per 20     2, or 1 per 40
+                                                                                           2, or 1 per 53,000 sq.
+                  lodging      rentable rooms rentable rooms rentable rooms;               ft. of net building
+                                                                                           area
+                                                                    and 1 per 5,000 sq.    2, or 1 per 152,000
+                                                                                           sq. ft. of net building
+                                                                    ft. of conference,     area
+
+                                                                    meeting room
+
+                  Restaurant 2, or 1 per 2,300 2, or 1 per 4,800 2, or 1 per 1,000
+
+                  and Bar      sq. ft. of net    sq. ft. of net     sq. ft. of net
+
+                               building area     building area      building area
+
+Office                         2, or 1 per 1,800 2, or 1 per 3,500 2, or 1 per 20,000
+
+                               sq. ft. of net    sq. ft. of net     sq. ft. of net
+
+                               building area     building area      building area
+
+Commercial                     10, or 1 per 10   10, or 1 per 10    None
+
+Parking [3]                    auto spaces       auto spaces
+
+Commercial                     2, or 1 per 12,500 2, or 1 per 25,000 2, or 1 per 2 acres
+
+Outdoor                        sq. ft. of net    sq. ft. of net
+
+Recreation                     building area     building area
+
+Major Event                    10, or 1 per      10, or 1 per       10, or 1 per 40
+
+Entertainment                  10,000 sq. ft. of 20,000 sq. ft. or seats
+
+                               net building area net building area
+
+Self-Service                   2, or 1 per       2, or 1 per        2, or 1 per 26,000
+
+Storage                        100,000 sq. ft. of 200,000 sq. ft. of sq. ft. of net
+
+                               net building area net building area building area
+
+Wholesale Sales                2, or 1 per 12,500 2, or 1 per 25,000 2, or 1 per 91,000
+
+                               sq. ft. of net    sq. ft. of net     sq. ft. of net
+
+                               building area     building area      building area
+
+                                                 266-22
+          Title 33, Planning and Zoning                                                           Chapter 33.266
+
+          1/1/25                       Parking, Loading, And Transportation And Parking Demand Management
+
+                                                       Table 266-6
+
+                                   Minimum Required Bicycle Parking Spaces [1]
+
+                                       Long-term Spaces                  Short-term Spaces
+
+Uses                   Specific Uses Standard A          Standard B      Standard A               Standard B
+
+Industrial Categories                                                                             2, or 1 per 111,000
+                                                                                                  sq. ft. of net building
+Manufacturing and                      2, or 1 per 5,000 2, or 1 per 9,000 2, or 1 per 67,000     area
+                                                                                                  2, or 1 per 333,000
+Production                             sq. ft. of net    sq. ft. of net  sq. ft. of net           sq. ft. of net building
+                                                                                                  area
+                                       building area     building area   building area
+                                                                                                  12 spaces
+Warehouse and                          2, or 1 per 12,500 2, or 1 per 25,000 2, or 1 per 200,000
+                                                                                                  4 spaces
+Freight Movement                       sq. ft. of net    sq. ft. of net  sq. ft. of net
+                                                                                                  2, or 1 per 10,000 sq.
+                                       building area     building area   building area            ft. of net building
+                                                                                                  area
+Institutional Categories                                                                          2, or 1 per 2,000 sq.
+                                                                                                  ft. of net building
+Basic Utilities        Transit         30 spaces         30 spaces       12 spaces                area
+
+                       centers                                                                    6 spaces
+                                                                                                  Per CU Review
+                       Light rail      12 spaces         12 spaces       4 spaces
+                                                                                                  2, or 1 per 100,000
+                       stations                                                                   sq. ft. of net building
+                                                                                                  area
+Community Service                      2, or 1 per 6,700 2, or 1 per 12,500 2, or 1 per 6,300     2, or 1 per 100,000
+                                                                                                  sq. ft. of net building
+                                       sq. ft. of net    sq. ft. of net  sq. ft. of net           area
+                                                                                                  2, or 1 per 16,000 sq.
+                                       building area     building area   building area            ft. of net building
+                                                                                                  area
+                       Libraries,      2, or 1 per 3,000 2, or 1 per 5,900 2, or 1 per 1,200
+                                                                                                  2, or 1 per 100,000
+                       community sq. ft. of net          sq. ft. of net  sq. ft. of net           sq. ft. of net building
+                                                                                                  area
+                       centers and building area         building area   building area            2, or 1 per 25,000 sq.
+                                                                                                  ft. of net building
+                       museums                                                                    area
+                                                                                                  2, or 1 per 33,000 sq.
+                       Park and ride 12, or 5 per acre 12, or 5 per acre 6 spaces                 ft. of net building
+                                                                                                  area
+Parks and Open                         None              None            Per CU Review
+
+Areas
+
+Schools                Grades K        6 per classroom 5 per classroom 2, or 1 per 25,000
+
+                       through 8                                         sq. ft. of net
+
+                                                                         building area
+
+                       Grades 9        5 per classroom 5 per classroom 2, or 1 per 25,000
+
+                       through 12                                        sq. ft. of net
+
+                                                                         building area
+
+Colleges               Excluding       2, or 1 per 10,000 2, or 1 per 20,000 2, or 1 per 10,000
+
+                       dormitories sq. ft. of net        sq. ft. of net  sq. ft. of net
+
+                       (see group building area          building area   building area
+
+                       living, above)
+
+Medical Centers                        2, or 1 per 2,700 2, or 1 per 5,500 2, or 1 per 50,000
+
+                                       sq. ft. of net    sq. ft. of net  sq. ft. of net
+
+                                       building area     building area   building area
+
+Religious                              2, or 1 per 11,000 2, or 1 per 25,000 2, or 1 per 14,000
+
+Institutions                           sq. ft. of net    sq. ft. of net  sq. ft. of net
+
+                                       building area     building area   building area
+
+Daycare                                2, or 1 per 3,000 2, or 1 per 6,000 2, or 1 per 25,000
+
+                                       sq. ft. of net    sq. ft. of net  sq. ft. of net
+
+                                       building area     building area   building area
+
+                                                         266-23
+      Chapter 33.266                                                      Title 33, Planning and Zoning
+
+      Parking, Loading, And Transportation And Parking Demand Management                                 1/1/25
+
+                                                Table 266-6
+
+                                Minimum Required Bicycle Parking Spaces [1]
+
+                                Long-term Spaces                  Short-term Spaces
+
+Uses                  Specific Uses Standard A    Standard B      Standard A         Standard B
+
+Other Categories
+
+Aviation and                    2, or 1 per 4,500 2, or 1 per 4,500 None             None
+
+Surface Passenger               sq. ft. of net    sq. ft. of net
+
+Terminals                       building area     building area
+
+Detention Facilities            2, or 1 per 5,000 2, or 1 per 5,000 None             None
+
+                                sq. ft. of net    sq. ft. of net
+
+                                building area     building area
+
+      Notes:
+
+      [1] Wherever this table indicates two numerical standards, such as “2, or 1 per 3,000 sq. ft. of net building
+
+      area,” the larger number applies.
+
+      [2] Group Living units with restricted tenancy are units that are regulated affordable housing per the Portland
+
+      Housing Bureau requirements. The applicant must provide a letter from the Portland Housing Bureau
+
+      certifying that the group living development meets any income restrictions and administrative requirements.
+
+      The letter is required to be submitted before a building permit can be issued for the development but is not
+
+      required in order to apply for a land use review. The applicant must also execute a covenant with the City that
+
+      complies with the requirements of Section 33.700.060. The covenant must ensure that the group living use
+
+      will remain limited to households meeting any income restrictions and administrative requirements of the
+
+      Portland Housing Bureau.
+
+      [3] No long-term bicycle parking is required for a Commercial Parking facility with less than 10 vehicle parking
+
+      spaces.
+
+      [4] Standard A for development that includes a Household Living use is 1.0 space per unit until January 1,
+
+      2029.
+
+      [5] Standard B for development that includes a Household Living use is 0.7 space per unit until January 1,
+
+      2029.
+
+      33.266.210 Bicycle Parking Development Standards
+
+          A. Purpose. These standards ensure that required bicycle parking is designed so people of all
+                 ages and abilities can access the bicycle parking and securely lock their bicycle without
+                 undue inconvenience. Bicycle parking is in areas that are reasonably safeguarded from
+                 theft and accidental damage. The standards allow for a variety of bicycle types, including
+                 but not limited to standard bicycles, tricycles, hand cycles, tandems, electric motor assisted
+                 cycles and cargo bicycles. Long-term bicycle parking is in secure, weather protected
+                 facilities and is intended for building and site occupants, and others who need bicycle
+                 parking for several hours or longer. Short-term bicycle parking is located in publicly
+                 accessible, highly visible locations that serve the main entrance of a building. Short-term
+                 bicycle parking is visible to pedestrians and bicyclists on the street and is intended for
+                 building and site visitors.
+
+          B. Where these standards apply. The standards of Subsection C and D apply to required long-
+                 term bicycle parking, and the standards of Subsection C and E apply to required short-term
+                 bicycle parking.
+
+          C. Standards for all bicycle parking. The Bureau of Transportation maintains a bicycle parking
+                 handbook that includes information on rack standards, siting guidelines and other
+                 standards of this code chapter. Long-term and short-term bicycle parking must be provided
+                 in lockers or racks that meet the following standards:
+
+                                                  266-24
+Title 33, Planning and Zoning                                                         Chapter 33.266
+
+1/1/25                         Parking, Loading, And Transportation And Parking Demand Management
+
+        1. Bicycle parking area standards. The area devoted to bicycle parking must be hard
+              surfaced.
+
+        2. Bicycle racks. Where bicycle parking is provided in racks, the racks must meet the
+              following standards:
+
+              a. The rack must be designed so that the bicycle frame and one wheel can be
+                    locked to a rigid portion of the rack with a U-shaped shackle lock, when both
+                    wheels are left on the bicycle;
+
+              b. If the rack is a horizontal rack, it must support the bicycle at two points, including
+                    the frame; and
+
+              c. The rack must be securely anchored with tamper-resistant hardware.
+
+                                                     Table 266-7
+
+                              Minimum Dimensions for Bicycle Parking Spaces [1]
+
+                                       Bicycle       Bicycle      Bicycle Space Maneuvering  Clearance to
+                                                                                             rack from walls
+                                       Space Depth Space Width Height          Depth         2 ft. 6 in.
+
+Standard Spacing     Standard Bicycle  6 ft.         2 ft.        3 ft. 4 in.  5 ft.         2 ft. 6 in.
+Alternative Spacing                                                                          1 ft.
+                     Spacing                                                                 3 ft.
+
+                     Horizontal: Side by 6 ft.       1 ft. 6 in.  3 ft. 4 in.  5 ft.         --
+
+                     Side
+
+                     Horizontal: Wall  6 ft.         2 ft.        3 ft. 4 in.  5 ft.
+
+                     Attached
+
+                     Horizontal: Diagonal 6 ft.      1 ft. 6 in.  3 ft. 4 in.  5 ft.
+
+                     (45-60 degree)
+
+                     Vertical Spaces [2] 3ft. 4 in.  1 ft. 5 in.  6 ft.        5 ft.
+
+                     Stacked Spaces [3] --           1 ft. 5 in.  --           8 ft.         --
+
+                     Larger Bicycle Space 10 ft.     3 ft.        3 ft. 4 in.  5 ft.         3 ft.
+
+Notes:
+
+[1] See Figures 266-8 through 266-14.
+
+[2] The alternative spacing allowed for vertical bicycle parking spaces requires a minimum vertical stagger of 8
+inches between each space.
+
+[3] The alternative spacing allowed for stacked bicycle parking spaces requires a vertical stagger to be included
+in the manufacturer design.
+
+        3. Bicycle Parking Space, Maneuvering Area, and Clearance Dimensions. Bicycle parking
+              spaces, aisles and clearances must meet the minimum dimensions contained in Table
+              266-7.
+
+                     a. Standard Bicycle Parking Space Requirements.
+
+                     (1) The standard required bicycle space is 2 feet wide, 6 feet long and 3 feet 4
+                           inches tall. See Figure 266-8;
+
+                                                     266-25
+Chapter 33.266          Title 33, Planning and Zoning
+
+Parking, Loading, And Transportation And Parking Demand Management  1/1/25
+
+      (2) There must be at least 5 feet behind all bicycle parking spaces to allow room
+            for bicycle maneuvering. Where short-term bicycle parking is adjacent to a
+            sidewalk, the maneuvering area may extend into the right-of-way;
+
+      (3) A wall clearance of 2 feet 6 inches must be provided. See Figure 266-9.
+
+b. Alternative Spacing Requirements. The following bicycle parking layouts may be
+      provided as an exception to the standard spacing requirements in Subparagraph
+      C.3.a. See Table 266-7 for the alternative spacing dimensions.
+
+      (1) Horizontal bicycle parking spaces. Horizontal bicycle parking spaces secure
+            the parked bicycle horizontal to the ground.
+            • Horizontal: Side by Side. Horizontal bicycle parking that is placed side by
+                 side as shown in Figure 266-9 may meet the alternative side by side
+                 dimensions in Table 266-7.
+            • Horizontal: Wall Attached. Horizontal bicycle parking that is attached to
+                 the wall as shown in Figure 266-10 may meet the alternative wall
+                 attached dimensions in Table 266-7.
+            • Horizontal: Diagonal. Horizontal bicycle parking that is placed at a
+                 diagonal as shown in Figure 266-11 may meet the alternative diagonal,
+                 45-60 degree dimensions in Table 266-7.
+
+      (2) Vertical bicycle parking space. Vertical bicycle parking secures the parked
+            bicycle perpendicular to the ground. Vertical bicycle parking that is placed
+            as shown in Figure 266-12 may meet the alternative vertical dimensions in
+            Table 266-7.
+
+      (3) Stacked bicycle parking spaces. Stacked bicycle parking are racks that are
+            stacked, one tier on top of another. Bicycles are horizontal when in the final
+            stored position. Stacked bicycle parking that is placed as shown in Figure
+            266-13 may meet the alternative stacked dimensions in Table 266-7 and the
+            following:
+            • The rack must include a mechanically-assisted lifting mechanism to
+                 mount the bicycle on the top tier.
+
+                266-26
+Title 33, Planning and Zoning                                   Chapter 33.266
+
+1/1/25  Parking, Loading, And Transportation And Parking Demand Management
+
+                                           Figure 266-8
+                               Standard Spacing Requirements
+
+                                          Figure 266-9
+                               Horizontal Spaces: Side-by-Side
+
+                               266-27
+Chapter 33.266                                    Title 33, Planning and Zoning
+
+Parking, Loading, And Transportation And Parking Demand Management  1/1/25
+
+                            Figure 266-10
+                Horizontal Spaces: Wall Attached
+
+                                  Figure 266-11
+                Horizontal Spaces: Diagonal (45-60 degree)
+
+                266-28
+Title 33, Planning and Zoning                   Chapter 33.266
+
+1/1/25  Parking, Loading, And Transportation And Parking Demand Management
+
+                               Figure 266-12
+                               Vertical Spaces
+
+                               Figure 266-13
+                               Stacked Spaces
+
+                               266-29
+Chapter 33.266                       Title 33, Planning and Zoning
+
+Parking, Loading, And Transportation And Parking Demand Management  1/1/25
+
+                   Figure 266-14
+                Large Bicycle Space
+
+4. Bicycle lockers. Bicycle lockers are fully enclosed and secure bicycle parking spaces.
+      a. The locker must be securely anchored to the ground.
+      b. There must be an aisle at least 5 feet wide behind all bicycle lockers to allow
+            room for bicycle maneuvering.
+      c. Locker Dimensions. All bicycle lockers must meet one of the following:
+            (1) The locker space has a minimum depth of 6 feet and an access door that is a
+                  minimum of 2 feet wide.
+            (2) A locker provided in a triangle locker layout for two bicycle parking spaces
+                  must have a minimum depth of 6 feet and an access door that is a minimum
+                  of 2 feet wide on each end.
+
+5. Signage
+      a. Light rail stations and transit centers. If bicycle parking is not visible from the
+            light rail station or transit center, a sign must be posted at the station or center
+            indicating the location of the bicycle parking.
+      b. Other uses. If bicycle parking is not visible from the streets or main building
+            entrances, a sign must be permanently posted at the main entrance indicating
+            the location of the bicycle parking.
+
+6. Bicycle parking information in plans. The following information must be submitted
+      with applications for a building permit or land-use review:
+      a. Location, access route to long-term bicycle parking and number of bicycle
+            parking spaces for short-term and long-term bicycle parking requirements;
+      b. The model or design of the bicycle parking facilities to be installed;
+      c. Dimensions of all aisles and maneuvering areas; and
+
+                                                         266-30
+Title 33, Planning and Zoning          Chapter 33.266
+
+1/1/25  Parking, Loading, And Transportation And Parking Demand Management
+
+            d. If applicable, information adequate to illustrate the racks and spaces that satisfy
+                  the minimum horizontal requirement, and the racks and spaces that
+                  accommodate a larger bicycle footprint.
+
+D. Standards for Long-Term Bicycle Parking.
+
+      1. General Standards. Long-term bicycle parking must be provided in lockers or racks
+            that meet the following standards. The following general standards apply to long-term
+            bicycle parking:
+
+            a. Location standards. Long-term bicycle parking must be provided in one or more
+                  of the following locations. School uses are only allowed to choose between
+                  Subsubparagraph (1) or (5) or a combination of (1) and (5):
+
+                  (1) Within a building outside of dwelling units, including on the ground floor or
+                        on individual building floors;
+
+                  (2) Within dwelling units. Long-term bicycle parking is allowed in dwelling units
+                        as follows. Long-term bicycle parking provided in a dwelling unit is exempt
+                        from the standards of Paragraph C.2, but all other standards in Subsection C
+                        apply. Adjustments and modifications to this Subsubparagraph may be
+                        requested prior to January 2, 2032. Beginning January 2, 2032, adjustments
+                        and modifications to this Subsubparagraph are prohibited:
+
+                        • Sites containing residential development with 12 or fewer dwelling units
+                             may provide up to 100 percent of required long-term bicycle parking
+                             spaces in the dwelling units. For buildings with no elevators, long-term
+                             bicycle parking spaces are only allowed in ground floor dwelling units.
+                             Only two spaces per dwelling unit count toward the total required long-
+                             term bicycle parking spaces.
+
+                        • For all other residential development, up to 50 percent of the required
+                             long-term bicycle parking spaces may be provide within dwelling units.
+                             For buildings with no elevators, long-term bicycle parking spaces are
+                             only allowed in ground floor units. Only two spaces per dwelling unit
+                             count toward the total required long-term bicycle parking spaces.
+
+                  (3) On-site, including in parking areas and structured parking;
+
+                  (4) In an area where the closest point is within 300 feet of the site; or
+
+                  (5) For Schools, long-term bicycle parking must be placed where the closest
+                        space is within 100 feet of a main entrance.
+
+            b. For sites with multiple primary uses, long-term bicycle parking must be provided
+                  in an area that can be accessed from each use. If bicycle parking is provided in a
+                  common area on the site, the area must be accessible for all tenants.
+
+            c. Covered bicycle parking. All long-term bicycle parking must be covered. Where
+                  covered bicycle parking is not within a building or locker, the cover must be:
+
+                  (1) Permanent;
+
+                  (2) Impervious; and
+
+                               266-31
+Chapter 33.266          Title 33, Planning and Zoning
+
+Parking, Loading, And Transportation And Parking Demand Management  1/1/25
+
+                  (3) The cover must project out a minimum of 2 feet beyond the bicycle parking
+                        spaces on the portion of the structure that is not enclosed by a wall.
+
+      2. Security standards.
+
+            a. Long-term bicycle parking must meet the following security standards:
+
+                  (1) Long-term bicycle parking for residential uses must be provided in one of
+                        the following:
+                        • A restricted access, lockable room or enclosure, designated primarily for
+                             bicycle parking;
+                        • A bicycle locker; or
+                        • In a residential dwelling unit meeting Subsubparagraph 1.a.(2), above.
+
+                  (2) Long-term bicycle parking for all other uses must be located in one of the
+                        following locations. For Schools, a minimum of 10 percent of bicycle parking
+                        must be located in the following:
+                        • A restricted access, lockable room or enclosure; or
+                        • A bicycle locker.
+
+            b. All access routes and the bicycle parking spaces must be lighted to a level where
+                  the system can be used at night by the employees and residents.
+
+      3. Additional development standards. The following standards apply to sites with more
+            than 20 long-term bicycle parking spaces:
+
+            a. Minimum number of horizontal bicycle parking spaces. At least 30 percent of
+                  spaces must be in a horizontal rack, or on the lower level of a stacked bicycle
+                  parking rack. For Schools (K-8), all spaces located outside of the building must be
+                  in a horizontal rack.
+
+            b. Parking for larger bicycle space. At least 5 percent of spaces must accommodate
+                  a larger bicycle space, placed in a horizontal rack. These spaces may be included
+                  to meet the requirement for Subparagraph D.3.a. See Figure 266-14.
+                  Development that includes a residential use is exempt from this standard until
+                  January 1, 2029.
+
+            c. Electrical outlet requirement. At least 5 percent of spaces must have electrical
+                  sockets accessible to the spaces. Each electrical socket must be accessible to
+                  horizontal bicycle parking spaces.
+
+E. Standards for Short-term Bicycle Parking
+
+      1. Development Standards. Short-term bicycle parking must meet the following
+            standards:
+
+            a. Location Standards. Short-term bicycle parking must meet the following location
+                  standards:
+
+                  (1) On-site, outside a building;
+
+                  (2) At the same grade as the sidewalk or at a location that can be reached by an
+                        accessible route; and
+
+                  (3) Within the following distances of the main entrance:
+
+                266-32
+Title 33, Planning and Zoning          Chapter 33.266
+
+1/1/25  Parking, Loading, And Transportation And Parking Demand Management
+
+                    • Building with one main entrance. For a building with one main entrance,
+                         the bicycle parking must be within 50 feet of the main entrance to the
+                         building as measured along the most direct pedestrian access route.
+                         (See Figure 266-15)
+
+                    • Building with more than one main entrance. For a building with more
+                         than one main entrance, the bicycle parking must be along all façades
+                         with a main entrance, and within 50 feet of at least one main entrance
+                         on each façade that has a main entrance, as measured along the most
+                         direct pedestrian access route. (See Figure 266-16)
+
+                    • Sites with more than one primary building. For sites that have more
+                         than one primary building, but are not an institutional campus, the
+                         bicycle parking must be within 50 feet of a main entrance as measured
+                         along the most direct pedestrian access route, and must be distributed
+                         to serve all primary buildings (See Figure 266-17);
+
+                    • Institutional Campus. On an institutional campus with more than one
+                         building or main entrance, the bicycle parking must be either:
+                          − Within 50 feet of a main entrance as measured along the most
+                               direct pedestrian access route; or
+                          − If the short-term bicycle parking is more than 50 feet from a main
+                               entrance, it must be in a common bicycle parking location along a
+                               pedestrian access route.
+
+        b. Bicycle Parking Fund
+
+              (1) This option may be used if any of the required short-term bicycle parking
+                    cannot be provided on site in a way that complies with all of the standards
+                    in Subsection C and E. This option may not be used if:
+
+                    • There are surface parking areas, plazas, exterior courtyards, or other
+                         open areas on the site, other than required landscaping;
+
+                    • Those open areas are large enough, separately or in combination, to
+                         accommodate all short-term bicycle parking; and
+
+                    • The open areas meet the location requirements of Subparagraph E.1.a.,
+                         above.
+
+              (2) Fund use and administration. The Bicycle Parking Fund is collected and
+                    administered by the Bureau of Transportation. The funds collected will be
+                    used to install bicycle parking and associated improvements in the right-of-
+                    way.
+
+                               266-33
+Chapter 33.266          Title 33, Planning and Zoning
+
+Parking, Loading, And Transportation And Parking Demand Management          1/1/25
+
+                                        Figure 266-15
+                Short-term bike parking – one building, one entrance
+
+                                            Figure 266-16
+                Short-term bike parking – one building, multiple entrances
+
+                266-34
+Title 33, Planning and Zoning                                             Chapter 33.266
+
+1/1/25  Parking, Loading, And Transportation And Parking Demand Management
+
+                                       Figure 266-17
+        Short-term bike parking – multiple buildings, multiple entrances
+
+                                                   Loading
+
+33.266.310 Loading Standards
+    A. Purpose. A minimum number of loading spaces are required to ensure adequate areas for
+           loading for larger uses and developments. These regulations ensure that the appearance of
+           loading areas will be consistent with that of parking areas. The regulations ensure that
+           access to and from loading facilities will not have a negative effect on the traffic safety or
+           other transportation functions of the abutting right-of-way.
+    B. Where these regulations apply. The regulations of this section apply to all required and
+           non-required loading areas.
+    C. Number of loading spaces.
+           1. Buildings where all of the floor area is in Household Living uses must meet the
+                 standards of this Paragraph.
+                 a. One loading space meeting Standard B is required where there are more than 50
+                       dwelling units in the building and the site abuts a street that is not a streetcar
+                       alignment or light rail alignment.
+                 b. One loading space meeting Standard B is required where there are more than 20
+                       dwelling units in a building located on a site whose only street frontage is on a
+                       streetcar alignment or light rail alignment.
+                 c. One loading space meeting Standard A or two loading spaces meeting Standard B
+                       are required when there are more than 100 dwelling units in the building. This
+                       standard does not apply until January 1, 2029.
+
+                                                                       266-35
+Chapter 33.266                                                  Title 33, Planning and Zoning
+
+Parking, Loading, And Transportation And Parking Demand Management                 1/1/25
+
+      2. Buildings where any of the floor area is in uses other than Household Living must meet
+            the standards of this Paragraph.
+
+            a. Buildings with any amount of net building area in Household Living and with less
+                  than 20,000 square feet of floor area in uses other than Household Living are
+                  subject to the standards in C.1. above.
+
+            b. One loading space meeting Standard A is required for buildings with at least
+                  20,000 and up to 50,000 square feet of net building area in uses other than
+                  Household Living.
+
+            c. Two loading spaces meeting Standard A are required for buildings with more
+                  than 50,000 square feet of net building area in uses other than Household Living.
+
+D. Size of loading spaces. Required loading spaces must meet the standards of
+      this subsection.
+
+      1. Standard A: the loading space must be at least 35 feet long, 10 feet wide, and have a
+            clearance of 13 feet.
+
+      2. Standard B: The loading space must be at least 18 feet long, 9 feet wide, and have a
+            clearance of 10 feet.
+
+E. Placement, setbacks and landscaping. Loading areas must comply with the setback and
+      perimeter landscaping standards stated in Table 266-8 below. When parking areas are
+      prohibited or not allowed between a building and a street, loading areas are also
+      prohibited or not allowed.
+
+F. Forward motion.
+
+      1. Outside the Central City plan district. Outside the Central City plan district, loading
+            facilities generally must be designed so that vehicles enter and exit the site in a
+            forward motion. Standard B loading spaces that are accessed from a Local Service
+            Traffic Street are exempt from this requirement
+
+      2. In the Central City plan district. In the Central City plan district, loading facilities that
+            abut a light rail or streetcar alignment must be designed so that vehicles enter and
+            exit the site in a forward motion.
+
+G. Paving. In order to control dust and mud, all loading areas must be paved.
+
+                                            Table 266-8
+
+                Minimum Loading Area Setbacks And Perimeter Landscaping
+
+Location                                    All zones except EG2 and IG2 EG2, IG2
+
+Lot line abutting street                    5 ft. / L2 or           10 ft. / L2 or
+
+                                            10 ft. / L1             15 ft. / L1
+
+Lot line abutting a C, E, I, or CI zone lot line 5 ft. / L2 or      10 ft. / L2 or
+
+                                            10 ft. / L1             10 ft. / L1
+
+Lot line abutting an OS zone lot line       5 ft. / L3              10 ft. / L3
+
+Lot line abutting an R or IR zone lot line  5 ft. / L4              10 ft. / L4
+
+                                            266-36
+Title 33, Planning and Zoning          Chapter 33.266
+
+1/1/25  Parking, Loading, And Transportation And Parking Demand Management
+
+                         Transportation and Parking Demand Management
+
+33.266.410 Transportation and Parking Demand Management
+
+    A. Purpose. Transportation and parking demand management (TDM) encompasses a variety
+           of strategies to encourage more efficient use of the existing transportation system, and
+           reduce reliance on the personal automobile. This is achieved by encouraging people
+           through education, outreach, financial incentives, and pricing to choose other modes,
+           share rides, travel outside peak times, and telecommute, among other methods. Effective
+           TDM also incorporates management of parking demand. Transportation and parking
+           demand management strategies help reduce traffic congestion, reduce the amount of
+           money that must be spent to expand transportation system capacity, improve air quality,
+           and ensure road capacity is available for those who need it most.
+
+    B. Transportation and parking demand management in the commercial/mixed use and multi-
+           dwelling zones. In the commercial/mixed use and multi-dwelling zones, a TDM plan is
+           required when new development includes a building with more than 10 dwelling units, or
+           an alteration to existing development includes the addition of more than 10 dwelling units
+           within a building. Sites in the Central City plan district are exempt from this requirement.
+           To meet the TDM standard, the applicant must choose one of the following:
+
+           1. Go through the Transportation Impact review process set out in chapter 33.852; or
+
+           2. Meet the objective standards of Title 17.107 as verified by the Portland Bureau of
+                 Transportation.
+
+33.266.420 Transportation Impact Review in the Campus Institutional Zones
+Development on a site zoned CI with a College or Medical Center use must conform to an approved
+Transportation Impact review. Development that is not in conformance with an approved
+Transportation Impact review requires Transportation Impact review when the development:
+
+    A. Increases the net building area on the campus by more than 20,000 square
+           feet; or
+
+    B. Increases the number of parking spaces on the campus by more than 4.
+
+(Amended by: Ord. No. 164014, effective 3/27/91; Ord. No. 164899, effective 12/11/91; Ord. No.
+165376, effective 5/29/92; Ord. No. 166313, effective 4/9/93; Ord. No. 167054, effective 10/25/93;
+Ord. No. 167186, effective 12/31/93; Ord. No. 167189, effective 1/14/94; Ord. No. 169324, effective
+10/12/95; Ord. No. 169535, effective 1/8/96; Ord. No. 169699, effective 2/7/96; Ord. No. 170704,
+effective 1/1/97; Ord. No. 171718, effective 11/29/97; Ord. No. 174263, effective 4/15/00; Ord. No.
+174980, effective 11/20/00; Ord. Nos. 175341 and 175358, effective 3/16/01; Ord. No. 175837,
+effective 9/7/01; Ord. No. 175966, effective 10/26/01; Ord. Nos. 175965 and 176333, effective
+7/1/02; Ord. No. 176469, effective 7/1/02; Ord. No. 177028, effective 12/14/02; Ord. No. 177422,
+effective 6/7/03; Ord. No. 177701, effective 8/30/03; Ord. No. 178172, effective 3/5/04; Ord. No.
+178509, effective 7/16/04; Ord. No. 179316, effective 7/8/05; Ord. No. 179845, effective 1/20/06;
+Ord. No. 179980, effective 4/22/06; Ord. No. 181357, effective 11/9/07; Ord. No. 182429, effective
+1/16/09; Ord. No. 183598, effective 4/24/10; Ord. No. 184524, effective 7/1/11; Ord. No. 185974,
+effective 5/10/13; Ord. No. 186639, effective 7/11/14; Ord. No. 187216, effective 7/24/15; Ord. No.
+188162, effective 2/1/17; Ord. No. 188259, effective 3/31/17; Ord. No. 188177, effective 5/24/18;
+
+                               266-37
+Chapter 33.266          Title 33, Planning and Zoning
+
+Parking, Loading, And Transportation And Parking Demand Management  1/1/25
+
+Ord. No. 188958, effective 5/24/18; Ord. No. 189137, effective 8/22/18; Ord. No. 189805, effective
+3/1/20; Ord. No 189784, effective 3/1/20; Ord. No. 190093, effective 8/1/21; Ord. No. 190380,
+effective 8/1/21; Ord. No. 190687, effective 3/1/22; Ord. No. 190851, effective 6/30/22; Ord. No.
+191164, effective 3/31/23; Ord. No. 191310, effective 6/30/23; Ord. No. 191609, effective 3/1/24;
+Ord. No. 191779, effective 10/1/24; Ord. No. 191942, effective 1/1/25.)
+
+                266-38
+266-39
+266-40
+

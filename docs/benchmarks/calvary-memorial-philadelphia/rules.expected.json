@@ -222,13 +222,13 @@
       "value": 0,
       "unit": "spaces",
       "sourceRef": "S7",
-      "codeSection": "The Philadelphia Code \u00a7 14-802, Table 14-802-1 (Motor Vehicle Parking Ratios), RSA-4/5/6, RTA-2, RM-1 column",
+      "codeSection": "The Philadelphia Code \u00a7 14-802(2), Table 14-802-1 (Required Parking in Residential Districts), RSA-4/5/6, RTA-2, RM-1 column",
       "authorityLevel": "ADOPTED_CODE",
       "status": "VERIFIED",
       "legalFinality": "EXPERT_REVIEW_REQUIRED",
       "retrievedAt": "2026-10-04T04:21:00Z",
       "verbatimQuote": "Table 14-802-1 \u2014 'RESIDENTIAL USE CATEGORY ... Single-Family [0] Two-Family [0] Multi-Family 0' (RSA-4/5/6, RTA-2, RM-1 column); table note 879: 'Amended, Bill No. 210075 (approved March 29, 2021); Bill No. 210078-A (approved April 28, 2021); Bill No. 250525 (approved June 13, 2025).'",
-      "notes": "Column attribution is the RM-1 group column, which sits between the RSD/RSA-1/2/3/RTA-1/RMX-1 column (values 1/1/2 per unit) and the RM-2/3/4... column (0s). A research-agent report earlier misattributed 'one space per dwelling unit' to this district; independent live capture shows 0 for the RM-1 column. Any mission constraint to 'keep Sunday parking' is therefore a MISSION choice, not a zoning parking minimum for housing."
+      "notes": "Column attribution: Table 14-802-1 group 2 is the RM-1 column, with 0 across Single-Family, Two-Family, and Multi-Family. Neighboring groups for Multi-Family are 1 space/unit (group 1: RSD/RSA-1/2/3/RTA-1/RMX-1) and 3/10 units (group 3: RM-2/RM-3/RM-4/RM-5/RMX-2/RMX-3/CMX-1/CMX-2). A research-agent report earlier misattributed 'one space per dwelling unit' to this district; independent live capture shows 0 for the RM-1 column. Re-verified live 2026-10-04T12:11:00Z during PR review. Any mission constraint to 'keep Sunday parking' is therefore a MISSION choice, not a zoning parking minimum for housing."
     },
     {
       "id": "phl-parking-religious-assembly",
@@ -237,7 +237,7 @@
       "value": null,
       "unit": "spaces_per_10_seats_or_per_1000_sqft_whichever_greater",
       "sourceRef": "S7",
-      "codeSection": "The Philadelphia Code \u00a7 14-802, Table 14-802-1 (all residential-district columns)",
+      "codeSection": "The Philadelphia Code \u00a7 14-802(2), Table 14-802-1 (all residential-district columns)",
       "authorityLevel": "ADOPTED_CODE",
       "status": "VERIFIED",
       "legalFinality": "EXPERT_REVIEW_REQUIRED",
@@ -353,7 +353,7 @@
     {
       "id": "phl-site-building",
       "category": "site-condition",
-      "statement": "Exactly one building occupies the parcel: the church (BIN 1282177), footprint 31,272 sq ft (~26.2% of the 119,295 sq ft parcel), approximate height 29 ft, OPA year built 1990, 'HSE WORSHIP ALL 1 STY MAS'.",
+      "statement": "Exactly one building occupies the parcel per the city footprint layer: the church (BIN 1282177), footprint 31,272 sq ft (~26.2% of the 119,295 sq ft parcel), approximate height 29 ft, OPA year built 1990, 'HSE WORSHIP ALL 1 STY MAS'. The remaining ~74% of the parcel is not covered by the mapped building footprint; its actual surfacing and use (parking, paving, vegetation) are unknown without a survey.",
       "value": 31272,
       "unit": "sq_ft_footprint",
       "sourceRef": "S8",
@@ -363,7 +363,7 @@
       "legalFinality": "EXPERT_REVIEW_REQUIRED",
       "retrievedAt": "2026-10-04T04:30:00Z",
       "verbatimQuote": "{\"bin\": \"1282177\", \"address\": \"7200-50 E ROOSEVELT BLVD\", \"building_name\": \"Calvary Memorial Church\", \"approx_hgt\": 29, \"square_ft\": 31272}",
-      "notes": "Polygon-level intersect: 100% of footprint vertices inside the parcel ring; no other buildings intersect the parcel. The remaining ~74% of the parcel is open land whose current use is UNKNOWN \u2014 no 'parking lot' claim is made."
+      "notes": "Polygon-level intersect: 100% of footprint vertices inside the parcel ring; no other buildings intersect the parcel. 'Not covered by the mapped building footprint' is a statement about mapped geometry, not about usable or developable land."
     },
     {
       "id": "phl-site-flood",
@@ -398,7 +398,7 @@
     {
       "id": "phl-site-parcel-area",
       "category": "site-condition",
-      "statement": "Recorded parcel area is 119,295 sq ft (PWD gross_area); independent PostGIS geodesic computation returns 119,283 sq ft (0.01% difference). OPA's total_area field reports 221,980 sq ft \u2014 a frontage-x-depth rectangle artifact that must not be used.",
+      "statement": "Recorded parcel area is 119,295 sq ft (PWD gross_area); the recorded PostGIS geodesic area (11,083.343 m2) converts to 119,300 sq ft (0.004% difference). OPA's total_area field reports 221,980 sq ft - a frontage-x-depth rectangle artifact that must not be used.",
       "value": 119295,
       "unit": "sq_ft",
       "sourceRef": "S2",
@@ -407,7 +407,7 @@
       "status": "SOURCE_CONFIRMED",
       "legalFinality": "EXPERT_REVIEW_REQUIRED",
       "retrievedAt": "2026-10-04T04:30:00Z",
-      "verbatimQuote": "pwd_parcels: {\"brt_id\": \"778273000\", \"gross_area\": 119295, \"area_m2\": 11083.34} (= 119,283 sq ft); opa_properties_public: \"total_area\": 221980 with frontage 483 x depth 459.",
+      "verbatimQuote": "pwd_parcels: {\"brt_id\": \"778273000\", \"gross_area\": 119295, \"area_m2\": 11083.343424441293} (= 119,300 sq ft at 10.7639 sq ft/m2); opa_properties_public: \"total_area\": 221980 with frontage 483 x depth 459.",
       "notes": "Parcel area is a geometry fact, NOT a developable-area claim. Existing building footprint, context-based setbacks, access, easements, and mission constraints all reduce what can actually be built."
     }
   ]

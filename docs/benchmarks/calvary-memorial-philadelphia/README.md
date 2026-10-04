@@ -10,8 +10,8 @@
 ## Why this property
 
 A single congregation owns a single 119,295 sq ft (2.74 acre) parcel on which it operates its
-sanctuary (one building, 31,272 sq ft, ~26% of the parcel) plus an affiliated school, with ~74% of
-the parcel in open land. The base district (RM-1) permits multi-family housing by right with zero
+sanctuary (one building, 31,272 sq ft, ~26% of the parcel) plus an affiliated school; the remaining
+~74% of the parcel is not covered by the mapped building footprint (actual surfacing/use unsurveyed). The base district (RM-1) permits multi-family housing by right with zero
 required parking spaces, and a city overlay (/SIX) genuinely constrains the scenario space (ADU
 prohibition). In other words: the exact inputs Acrevia exists to reason about — real church, real
 parcel, real rules, real trade-offs — are physically and legally present, and every consequential
@@ -21,8 +21,8 @@ fact below traces to an official source fetched during this research.
 
 | Fact | Value | Source (manifest id) | Status |
 | --- | --- | --- | --- |
-| Owner of record | CALVARY MEMORIAL CHURCH (fully tax-exempt) | S1 (OPA) | SOURCE_CONFIRMED |
-| Parcel geometry & area | MultiPolygon; 119,295 sq ft recorded / 119,283 sq ft geodesic | S2 (PWD parcels) | SOURCE_CONFIRMED |
+| Owner of record | CALVARY MEMORIAL CHURCH (OPA exemption values populated for land and building) | S1 (OPA) | SOURCE_CONFIRMED |
+| Parcel geometry & area | MultiPolygon; 119,295 sq ft recorded / 119,300 sq ft geodesic | S2 (PWD parcels) | SOURCE_CONFIRMED |
 | Base zoning | RM-1, pending: No | S3 (L&I zoning layer; matches OPA field) | SOURCE_CONFIRMED |
 | Overlays | /SIX (14-548); sign controls (14-904(4)); childcare standards (14-603(5)); /NIS (14-540) | S4 (L&I overlay layer) | SOURCE_CONFIRMED |
 | Multi-family use | Permitted by right (Y[1]) | S5 (PCPC Quick Guide, Table 14-602-1) | SOURCE_CONFIRMED |
@@ -53,9 +53,10 @@ fact below traces to an official source fetched during this research.
   setbacks, mission constraints) that belong to the scenario solver (#7), not the benchmark.
 - **No developable-area claim.** Parcel area is geometry. Existing building, context front
   setbacks, side/rear yards, access, easements, and mission reservations all reduce buildable land.
-- **No parking-lot claim.** ~74% of the parcel is unbuilt (verified geometry), but the church's own
-  website never mentions parking, and no public source inventories stalls — current use of the open
-  land is UNKNOWN.
+- **No parking-lot claim and no land-use claim.** ~74% of the parcel is not covered by the mapped
+  building footprint (a statement about mapped geometry), but the church's own website never mentions
+  parking, and no public source inventories stalls or describes that unmapped area — its
+  current use is UNKNOWN.
 - **No legal conclusion of any kind.** Every record carries `legalFinality: EXPERT_REVIEW_REQUIRED`.
 
 ## Reproducing this research

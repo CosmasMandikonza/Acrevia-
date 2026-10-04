@@ -36,7 +36,7 @@
       "id": "oq-bonus-geo-restrictions",
       "category": "bonus",
       "kind": "UNKNOWN",
-      "question": "Do any geographic bonus restrictions apply to this parcel? The guide says 'For bonus restrictions in select geographic areas, see page 49', but the printed page 49 contains no such list — the pointer could not be resolved within the guide.",
+      "question": "Do any geographic bonus restrictions apply to this parcel? The guide says 'For bonus restrictions in select geographic areas, see page 49', but the printed page 49 contains no such list \u2014 the pointer could not be resolved within the guide.",
       "whyItMatters": "The 25%/50% mixed-income unit bonuses may be unavailable in restricted areas; assuming they apply could overstate capacity."
     },
     {
@@ -57,7 +57,7 @@
       "id": "oq-environmental",
       "category": "environmental",
       "kind": "EXPERT_REQUIRED",
-      "question": "Phase I Environmental Site Assessment for the open land (potential fill, tanks, historic uses) has not been performed.",
+      "question": "Phase I Environmental Site Assessment for the portion of the parcel not covered by the mapped building footprint (potential fill, tanks, historic uses) has not been performed.",
       "whyItMatters": "Environmental conditions can determine buildability and cost more than zoning does."
     },
     {
@@ -99,7 +99,7 @@
       "id": "oq-site-layout",
       "category": "site-condition",
       "kind": "UNKNOWN",
-      "question": "Exact layout, surfacing, tree cover, and drainage of the ~74% open land; no imagery analysis or survey was performed.",
+      "question": "Exact layout, surfacing, tree cover, and drainage of the ~74% of the parcel not covered by the mapped building footprint; no imagery analysis or survey was performed.",
       "whyItMatters": "Usable-area and placement logic depend on real site conditions."
     }
   ]
