@@ -73,13 +73,13 @@ map/canvas is the product surface. Regulatory interpretation stays with #5.
 
 ## Validation
 
-35 GIS tests across 3 files: 8 canonical (no-AIS path, hint-not-truth,
-area separation, provenance chain, logical key separation), 12 adversarial
-(ambiguity, zero/multi parcels, campus, CRS, invalid geometry, malformed
-payloads, provider outages, tamper-evident envelope, partial failures,
-invalid-geometry gate), 10 final-pass (full-session signing, production
-fail-closed, jurisdictions[]), 5 browser (canonical with SVG geometry
-assertions, neutral-basemap fallback). Full suite: 156/156 tests.
+34 GIS Vitest tests across 3 files: 8 canonical, 21 adversarial, and 5 final-pass
+tests covering the no-AIS path, hint-not-truth, area separation, provenance,
+ambiguity, zero/multi parcels, campus behavior, CRS, invalid geometry,
+malformed payloads, provider outages, full-session signing, production
+fail-closed, partial failures, and per-parcel jurisdictions. In addition,
+2 Playwright end-to-end tests verify canonical SVG geometry rendering and the
+neutral-basemap fallback. Full Vitest suite: 156/156 tests.
 
 ## Consequences
 
