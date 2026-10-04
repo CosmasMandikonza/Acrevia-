@@ -1,0 +1,156 @@
+{
+  "schema": "acrevia.benchmark.sources.v1",
+  "property": "calvary-memorial-philadelphia",
+  "authorityHierarchy": [
+    "ADOPTED_CODE",
+    "OFFICIAL_GIS",
+    "OFFICIAL_CITY_TOOL",
+    "OFFICIAL_CITY_REFERENCE",
+    "PROPERTY_SELF_REPORTED",
+    "SECONDARY"
+  ],
+  "timestampPolicy": "UTC, ISO 8601, recorded at fetch time to the minute. Early-session fetches (03:14Z-03:18Z) were anchored to recorded date-u marks; all raw evidence in raw/ was re-fetched and saved at 2026-10-04T04:30:00Z.",
+  "sources": [
+    {
+      "id": "S1",
+      "title": "Office of Property Assessment \u2014 opa_properties_public (CARTO SQL API)",
+      "publisher": "City of Philadelphia",
+      "url": "https://phl.carto.com/api/v2/sql?q=SELECT parcel_number,location,owner_1,owner_2,zoning,total_area,total_livable_area,frontage,depth,year_built,building_code_description,category_code_description,exempt_land,exempt_building,book_and_page,geographic_ward,census_tract FROM opa_properties_public WHERE parcel_number='778273000'",
+      "authorityLevel": "OFFICIAL_GIS",
+      "retrievedAt": "2026-10-04T04:30:00Z",
+      "purpose": "Ownership of record (owner_1), building attributes, exemption status, ward/tract, deed book/page pointer",
+      "rawEvidence": "raw/opa-record.json",
+      "notes": "owner_1 = 'CALVARY MEMORIAL CHURCH'; exempt_land 456768, exempt_building 3056832; book_and_page 0880322. WARNING: total_area field (221980) is a frontage x depth rectangle artifact \u2014 see S2. category_code_description = 'COMMERCIAL' (assessment category; building description 'HSE WORSHIP ALL 1 STY MAS' and full exemption indicate religious use)."
+    },
+    {
+      "id": "S2",
+      "title": "PWD Parcels \u2014 pwd_parcels (CARTO SQL API)",
+      "publisher": "Philadelphia Water Department / City of Philadelphia",
+      "url": "https://phl.carto.com/api/v2/sql?q=SELECT brt_id,address,owner1,gross_area,ST_Area(the_geom::geography) AS area_m2,ST_AsGeoJSON(the_geom) AS geojson FROM pwd_parcels WHERE brt_id='778273000'",
+      "authorityLevel": "OFFICIAL_GIS",
+      "retrievedAt": "2026-10-04T04:30:00Z",
+      "purpose": "Authoritative parcel geometry (MultiPolygon, WGS84) and recorded gross_area",
+      "rawEvidence": "raw/pwd-parcel.json",
+      "notes": "gross_area 119295 sq ft; PostGIS geodesic area 11,083.343 m2 = 119,300 sq ft (0.004% agreement). First captured 2026-10-04T03:16:00Z."
+    },
+    {
+      "id": "S3",
+      "title": "Zoning Base Districts (L&I zoning GIS layer)",
+      "publisher": "City of Philadelphia, Licenses & Inspections / Office of Innovation and Technology",
+      "url": "https://services.arcgis.com/fLeGjb7u4uXqeF9q/arcgis/rest/services/Zoning_BaseDistricts/FeatureServer/0/query?geometry=-75.056429177,40.043767556&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&f=json",
+      "authorityLevel": "OFFICIAL_GIS",
+      "retrievedAt": "2026-10-04T04:30:00Z",
+      "purpose": "Parcel-specific base zoning district assignment",
+      "rawEvidence": "raw/zoning-base.json",
+      "notes": "code 'RM1', long_code 'RM-1', zoninggroup 'Residential/Multi-Family/Residential Mixed-Use', pending 'No'. First captured 2026-10-04T03:17:00Z."
+    },
+    {
+      "id": "S4",
+      "title": "Zoning Overlays (L&I zoning GIS layer)",
+      "publisher": "City of Philadelphia, Licenses & Inspections / Office of Innovation and Technology",
+      "url": "https://services.arcgis.com/fLeGjb7u4uXqeF9q/arcgis/rest/services/Zoning_Overlays/FeatureServer/0/query?geometry=-75.056429177,40.043767556&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&f=json",
+      "authorityLevel": "OFFICIAL_GIS",
+      "retrievedAt": "2026-10-04T04:30:00Z",
+      "purpose": "Overlay districts applying at the parcel (point-intersect at centroid)",
+      "rawEvidence": "raw/zoning-overlays.json",
+      "notes": "Four overlays: /SIX Sixth District Overlay (14-548); Accessory Sign Controls - Roosevelt Boulevard (14-904(4)); Use-Specific Standards - Child Care - Family Child Care Area 1/2 (14-603(5)); /NIS Narcotics Injection Sites Overlay (14-540). Point intersect at centroid; a polygon-level sweep could reveal edge-touching overlays not crossing the centroid (untested \u2014 see open questions)."
+    },
+    {
+      "id": "S5",
+      "title": "Philadelphia Zoning Code Base Districts Quick Guide (February 2026)",
+      "publisher": "Philadelphia City Planning Commission",
+      "url": "https://www.phila.gov/media/20260213170558/ZONING-QUICK-GUIDE_feb-2026.pdf",
+      "authorityLevel": "OFFICIAL_CITY_REFERENCE",
+      "retrievedAt": "2026-10-04T04:10:00Z",
+      "purpose": "RM-1 dimensional standards (Table 14-701-2) and use permissions (Table 14-602-1); density formula note [1]; bonus summary",
+      "rawEvidence": "raw/quick-guide-rm1.md",
+      "notes": "Release date February 13, 2026 per phila.gov document page. City disclaimer quoted verbatim in raw excerpt: 'It is not intended as a substitute for any adopted ordinances or codes... If these guides conflict with any adopted ordinance or code, including the Zoning Code, the latter shall govern.' Table values were extracted twice (pdftotext -layout and a rendered-image cell-level read) after a text-extraction row-assignment ambiguity; the recorded mapping is the one confirmed by the image read."
+    },
+    {
+      "id": "S6",
+      "title": "The Philadelphia Code \u00a7 14-548 /SIX, Sixth District Overlay District (American Legal Publishing code library)",
+      "publisher": "City of Philadelphia (codified by American Legal Publishing)",
+      "url": "https://codelibrary.amlegal.com/codes/philadelphia/latest/philadelphia_pa/0-0-0-308864",
+      "authorityLevel": "ADOPTED_CODE",
+      "retrievedAt": "2026-10-04T04:20:00Z",
+      "purpose": "Adopted overlay text: applicability and accessory dwelling unit prohibition",
+      "rawEvidence": "raw/code-14-548-excerpt.md",
+      "notes": "Captured live via a rendering fetcher; the host blocks plain HTTP clients (HTTP 403 / Cloudflare). Host disclaimer noted in raw excerpt: 'may not reflect the most recent legislation' \u2014 see open questions for re-verification policy."
+    },
+    {
+      "id": "S7",
+      "title": "The Philadelphia Code \u00a7 14-802 Motor Vehicle Parking Ratios incl. \u00a7 14-802(2) Required Parking in Residential Districts (American Legal Publishing code library)",
+      "publisher": "City of Philadelphia (codified by American Legal Publishing)",
+      "url": "https://codelibrary.amlegal.com/codes/philadelphia/latest/philadelphia_pa/0-0-0-293741",
+      "authorityLevel": "ADOPTED_CODE",
+      "retrievedAt": "2026-10-04T04:21:00Z",
+      "purpose": "Adopted parking ratio table (Table 14-802-1), RM-1 column",
+      "rawEvidence": "raw/code-14-802-excerpt.md",
+      "notes": "Captured live via a rendering fetcher; the host blocks plain HTTP clients (HTTP 403 / Cloudflare). Section head at node 0-0-0-293733; the residential parking table (Table 14-802-1) renders at node 0-0-0-293741. Table note 879 records amendments by Bill No. 210075 (March 29, 2021), Bill No. 210078-A (April 28, 2021), Bill No. 250525 (approved June 13, 2025). Neighboring-cell values re-verified live 2026-10-04T12:11:00Z during PR review."
+    },
+    {
+      "id": "S8",
+      "title": "building_footprints (City GIS layer)",
+      "publisher": "City of Philadelphia",
+      "url": "https://services.arcgis.com/fLeGjb7u4uXqeF9q/arcgis/rest/services/building_footprints/FeatureServer/0/query?geometry=-75.056429177,40.043767556&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&f=json",
+      "authorityLevel": "OFFICIAL_GIS",
+      "retrievedAt": "2026-10-04T04:30:00Z",
+      "purpose": "Existing structure footprint, height attribute, building identity",
+      "rawEvidence": "raw/building-footprints.json",
+      "notes": "One feature: BIN 1282177, building_name 'Calvary Memorial Church', square_ft 31272, approx_hgt 29 (ft), max_hgt 57.02. A polygon-level intersect confirmed exactly one building on the parcel with 100% of footprint vertices inside the parcel boundary. First captured 2026-10-04T04:08:00Z."
+    },
+    {
+      "id": "S9",
+      "title": "fema_floodplain_2023 (City GIS layer)",
+      "publisher": "City of Philadelphia (republication of FEMA data)",
+      "url": "https://services.arcgis.com/fLeGjb7u4uXqeF9q/arcgis/rest/services/fema_floodplain_2023/FeatureServer/0/query?geometry=-75.056429177,40.043767556&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&f=json",
+      "authorityLevel": "OFFICIAL_GIS",
+      "retrievedAt": "2026-10-04T04:30:00Z",
+      "purpose": "Flood hazard status at the parcel",
+      "rawEvidence": "raw/flood.json",
+      "notes": "fld_zone 'X', zone_subty 'AREA OF MINIMAL FLOOD HAZARD', sfha_tf 'F' at the centroid."
+    },
+    {
+      "id": "S10",
+      "title": "HistoricDistricts_Local + Landmark_Poly (City GIS layers)",
+      "publisher": "City of Philadelphia",
+      "url": "https://services.arcgis.com/fLeGjb7u4uXqeF9q/arcgis/rest/services/HistoricDistricts_Local/FeatureServer/0/query?geometry=-75.056429177,40.043767556&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&f=json",
+      "authorityLevel": "OFFICIAL_GIS",
+      "retrievedAt": "2026-10-04T04:30:00Z",
+      "purpose": "Historic district and landmark-layer screening at the parcel",
+      "rawEvidence": "raw/historic.json, raw/landmark.json",
+      "notes": "HistoricDistricts_Local: 0 features at the parcel. Landmark_Poly: 1 feature ('Calvary Memorial Church', SUBTYPE 'Place of Worship') \u2014 per the layer's own item description this is an Office of Innovation & Technology BASEMAP label layer ('landmarks... for use in city maps', crowdsource-updated), NOT the Philadelphia Register of Historic Places. Individual historic-register status is therefore NOT verified either way \u2014 see open questions."
+    },
+    {
+      "id": "S11",
+      "title": "Zoning_RCO (Registered Community Organizations, L&I GIS layer)",
+      "publisher": "City of Philadelphia",
+      "url": "https://services.arcgis.com/fLeGjb7u4uXqeF9q/arcgis/rest/services/Zoning_RCO/FeatureServer/0/query?geometry=-75.056429177,40.043767556&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&f=json",
+      "authorityLevel": "OFFICIAL_GIS",
+      "retrievedAt": "2026-10-04T04:30:00Z",
+      "purpose": "Registered Community Organizations covering the parcel (civic review pathway)",
+      "rawEvidence": "raw/rco.json",
+      "notes": "Three RCOs, registration expiration year 2027: Take Back Your Neighborhood; Community on the Rise; Northeast Philadelphia Development Corporation (which lists a zoning-specific contact email)."
+    },
+    {
+      "id": "S12",
+      "title": "Calvary Memorial Church website",
+      "publisher": "Calvary Memorial Church",
+      "url": "https://calvarymemorialchurch.org/",
+      "authorityLevel": "PROPERTY_SELF_REPORTED",
+      "retrievedAt": "2026-10-04T04:23:00Z",
+      "purpose": "Identity cross-check: name, address, phone, email, ministries, school affiliation",
+      "notes": "Confirms '7200 Roosevelt Blvd Philadelphia, PA 19149', phone (215) 332-1676, email info@calvarymemorialchurch.org, 9:15 a.m. Sunday School, 10:30 a.m. service, affiliated Northeast Central Christian School. The site does NOT mention a parking lot \u2014 no parking claim is made anywhere in this benchmark."
+    },
+    {
+      "id": "S13",
+      "title": "L&I Zoning Summary Generator (application shell + bundle inspection)",
+      "publisher": "City of Philadelphia, Licenses & Inspections",
+      "url": "https://li.phila.gov/zoningsummary",
+      "authorityLevel": "OFFICIAL_CITY_TOOL",
+      "retrievedAt": "2026-10-04T04:09:00Z",
+      "purpose": "Official parcel-specific zoning interpretation tool (hierarchy level between GIS and guides)",
+      "notes": "Browser-only Vue application; its rendered output could not be captured without a browser. Bundle inspection shows it composes the same underlying sources already queried directly in this benchmark (opa_properties_public, zoning layers, Zoning_RCO, AIS, zoning document PDFs). Recorded for the hierarchy and for future capture."
+    }
+  ]
+}

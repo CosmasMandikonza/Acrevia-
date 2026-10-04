@@ -1,0 +1,106 @@
+{
+  "schema": "acrevia.benchmark.openquestions.v1",
+  "property": "calvary-memorial-philadelphia",
+  "generatedAt": "2026-10-04T04:30:00Z",
+  "purpose": "What Acrevia cannot know from public zoning data alone. These entries are the honest boundary of this benchmark: UNKNOWN means the answer was not retrievable from authoritative public sources in this research pass; EXPERT_REQUIRED means the question needs professional or official judgment that Acrevia must not simulate.",
+  "questions": [
+    {
+      "id": "oq-title-review",
+      "category": "title",
+      "kind": "EXPERT_REQUIRED",
+      "question": "Title and deed review (OPA book/page 0880322): easements, restrictive covenants, denominational trust clauses, or disposition constraints on the parcel. OPA's owner string is an assessment record, not a title opinion.",
+      "whyItMatters": "A ground lease, sale, or development structure depends on unencumbered title; invisible covenants can prohibit residential use outright."
+    },
+    {
+      "id": "oq-historic-register",
+      "category": "site-condition",
+      "kind": "EXPERT_REQUIRED",
+      "question": "Is the building or parcel listed on the Philadelphia Register of Historic Places? The local historic-district GIS layer shows no district here and the Landmark_Poly feature is a basemap label, but the Historical Commission's register was not queryable this session.",
+      "whyItMatters": "Register listing would add Historical Commission design review to any demolition or alteration scenario."
+    },
+    {
+      "id": "oq-existing-use-status",
+      "category": "use-permission",
+      "kind": "EXPERT_REQUIRED",
+      "question": "Does the existing religious assembly use hold a special exception, or is it a legal nonconforming use? Requires permit-history research (L&I records / Zoning Archive).",
+      "whyItMatters": "Determines whether expanding or modifying the worship use triggers new approval, and what happens if the use lapses."
+    },
+    {
+      "id": "oq-far-confirmation",
+      "category": "far",
+      "kind": "UNKNOWN",
+      "question": "Does Title 14 impose any floor-area-ratio regulation in RM-1? The official guide's Table 14-701-2 prints no FAR value for RM-1, and adopted-text capture of that table was blocked by the code host.",
+      "whyItMatters": "A solver must know whether FAR is a constraint class at all in this district."
+    },
+    {
+      "id": "oq-bonus-geo-restrictions",
+      "category": "bonus",
+      "kind": "UNKNOWN",
+      "question": "Do any geographic bonus restrictions apply to this parcel? The guide says 'For bonus restrictions in select geographic areas, see page 49', but the printed page 49 contains no such list \u2014 the pointer could not be resolved within the guide.",
+      "whyItMatters": "The 25%/50% mixed-income unit bonuses may be unavailable in restricted areas; assuming they apply could overstate capacity."
+    },
+    {
+      "id": "oq-parking-inventory",
+      "category": "parking",
+      "kind": "UNKNOWN",
+      "question": "How many off-street parking spaces exist today, and what is Sunday utilization? The church's website does not mention a parking lot; no public source inventories stalls.",
+      "whyItMatters": "Any mission constraint like 'keep Sunday parking' needs a baseline count; zoning requires 0 spaces for new multi-family, so parking retention would be a mission choice, not a code minimum."
+    },
+    {
+      "id": "oq-sanctuary-seats",
+      "category": "parking",
+      "kind": "UNKNOWN",
+      "question": "Sanctuary seat count (worship parking ratio is 1 per 10 seats or 1 per 1,000 sq ft, whichever is greater).",
+      "whyItMatters": "Required parking for the continuing worship use scales with seats; unknown until surveyed."
+    },
+    {
+      "id": "oq-environmental",
+      "category": "environmental",
+      "kind": "EXPERT_REQUIRED",
+      "question": "Phase I Environmental Site Assessment for the portion of the parcel not covered by the mapped building footprint (potential fill, tanks, historic uses) has not been performed.",
+      "whyItMatters": "Environmental conditions can determine buildability and cost more than zoning does."
+    },
+    {
+      "id": "oq-access-permits",
+      "category": "access",
+      "kind": "EXPERT_REQUIRED",
+      "question": "Curb-cut / driveway permits and access control along the Roosevelt Boulevard frontage; which agency's jurisdiction applies (city Streets Department vs state) was not verified.",
+      "whyItMatters": "Access points constrain site layout; boulevard frontage may have dedicated-access rules."
+    },
+    {
+      "id": "oq-utilities",
+      "category": "utilities",
+      "kind": "EXPERT_REQUIRED",
+      "question": "Water, sewer, and electric capacity for significant new development on this block.",
+      "whyItMatters": "Utility capacity is a classic silent feasibility constraint invisible in zoning data."
+    },
+    {
+      "id": "oq-overlay-edge-sweep",
+      "category": "overlay",
+      "kind": "UNKNOWN",
+      "question": "Overlay identification used a centroid point-intersect. A polygon-level sweep across the full parcel boundary for edge-touching overlays was not run for the overlay layer (it WAS run for buildings).",
+      "whyItMatters": "An overlay crossing only a parcel corner could be missed by a centroid test."
+    },
+    {
+      "id": "oq-zoning-currency",
+      "category": "zoning-district",
+      "kind": "UNKNOWN",
+      "question": "Zoning layers reported pending 'No' at retrieval, and the code host notes its text may lag recent legislation. Councilmatic rezoning activity after 2026-10-04 is outside this benchmark.",
+      "whyItMatters": "Zoning can change; this is the Watch issue's (#17) re-verification responsibility, and any real submission must re-check."
+    },
+    {
+      "id": "oq-mission-priorities",
+      "category": "governance",
+      "kind": "UNKNOWN",
+      "question": "The congregation's actual priorities (preserve sanctuary? keep the school? retain parking? ownership structure? income goals?) have not been gathered.",
+      "whyItMatters": "Mission constraints are first-class solver inputs in Acrevia; they must come from the church, not be invented. Feeds issues #6 and #20."
+    },
+    {
+      "id": "oq-site-layout",
+      "category": "site-condition",
+      "kind": "UNKNOWN",
+      "question": "Exact layout, surfacing, tree cover, and drainage of the ~74% of the parcel not covered by the mapped building footprint; no imagery analysis or survey was performed.",
+      "whyItMatters": "Usable-area and placement logic depend on real site conditions."
+    }
+  ]
+}

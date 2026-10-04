@@ -1,0 +1,75 @@
+{
+  "schema": "acrevia.benchmark.sources.v1",
+  "property": "wesley-seminary-dc",
+  "authorityHierarchy": [
+    "ADOPTED_CODE",
+    "OFFICIAL_GIS",
+    "OFFICIAL_CITY_TOOL",
+    "OFFICIAL_CITY_REFERENCE",
+    "PROPERTY_SELF_REPORTED",
+    "SECONDARY"
+  ],
+  "timestampPolicy": "UTC, ISO 8601, recorded at fetch time.",
+  "sources": [
+    {
+      "id": "S1",
+      "title": "Owner Polygons (Common Ownership Layer) — DCGIS_DATA/Property_and_Land/MapServer/40",
+      "publisher": "Government of the District of Columbia (OTR data via DC GIS)",
+      "url": "https://maps2.dcgis.dc.gov/dcgis/rest/services/DCGIS_DATA/Property_and_Land/MapServer/40/query?where=SSL='1600    0819'&outFields=SSL,OWNERNAME,PREMISEADD,LANDAREA,PROPTYPE,USECODE,NEWLAND,NEWIMPR,EXTRACTDAT&returnGeometry=true&outSR=4326&f=json",
+      "authorityLevel": "OFFICIAL_GIS",
+      "retrievedAt": "2026-10-04T04:23:00Z",
+      "purpose": "Ownership of record, land area, vacancy classification, parcel geometry",
+      "notes": "OWNERNAME 'WESLEY THE THEOLOGICAL SEMINARY OF METHODIST CHURCH'; LANDAREA 113,758 sq ft; PROPTYPE 'Vacant-False-Abutting'; NEWIMPR 0; EXTRACTDAT epoch 1785729600000 (= 2026-08-03T04:00Z)."
+    },
+    {
+      "id": "S2",
+      "title": "Zoning 2016 layer — DCGIS_DATA/Planning_Landuse_and_Zoning_WebMercator/MapServer/3",
+      "publisher": "DC Office of Planning",
+      "url": "https://maps2.dcgis.dc.gov/dcgis/rest/services/DCGIS_DATA/Planning_Landuse_and_Zoning_WebMercator/MapServer/3/query?geometry=-77.0901315,38.9391215&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=ZONING,ZONING_LABEL,ZR16,IZ_DESIGNATION&returnGeometry=false&f=json",
+      "authorityLevel": "OFFICIAL_GIS",
+      "retrievedAt": "2026-10-04T04:23:00Z",
+      "purpose": "Parcel zoning assignment",
+      "notes": "ZONING 'RA-1'; IZ_DESIGNATION null."
+    },
+    {
+      "id": "S3",
+      "title": "Zoning Regulations of 2016 (ZR16) — consolidated export, last updated 10/1/2025",
+      "publisher": "DC Office of Zoning",
+      "url": "https://dcoz.dc.gov/sites/default/files/dc/sites/dcoz/page_content/attachments/ZR16_unoff_export_10012025.pdf",
+      "authorityLevel": "OFFICIAL_CITY_REFERENCE",
+      "retrievedAt": "2026-10-04T04:24:00Z",
+      "purpose": "RA-1 development standards (FAR, height, yards, occupancy, parking, IZ)",
+      "notes": "DCOZ labels this consolidated PDF an unofficial export; the official text is Title 11 DCMR on the Office of Documents site (JS-rendered, no deep links). Internal SOURCE lines cite amendments through Final Rulemaking & Order No. 23-17 (72 DCR 1514, Feb 14, 2025). Section numbers cited in rules are Subtitle F / Subtitle C section numbers as printed."
+    },
+    {
+      "id": "S4",
+      "title": "Planned Unit Development (PUDs) layer — DCGIS_DATA/Planning_Landuse_and_Zoning_WebMercator/MapServer/9",
+      "publisher": "DC Office of Planning / Office of Zoning",
+      "url": "https://maps2.dcgis.dc.gov/dcgis/rest/services/DCGIS_DATA/Planning_Landuse_and_Zoning_WebMercator/MapServer/9/query?geometry=-77.0901315,38.9391215&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&f=json",
+      "authorityLevel": "OFFICIAL_GIS",
+      "retrievedAt": "2026-10-04T04:32:00Z",
+      "purpose": "Pending PUD record at the parcel — solver calibration data",
+      "notes": "PUD_STATUS 'Pending'; PUD_FAR '1.07'; PUD_HEIGHT '75.6'; UNITS_TOTAL '735 beds'; PARKING '394'; narrative 'Consolidated PUD for 2022-2032 Campus Plan, 4500 Massachusetts Ave. NW'."
+    },
+    {
+      "id": "S5",
+      "title": "Wesley Theological Seminary — contact page",
+      "publisher": "Wesley Theological Seminary",
+      "url": "https://www.wesleyseminary.edu/about/contact-us/",
+      "authorityLevel": "PROPERTY_SELF_REPORTED",
+      "retrievedAt": "2026-10-04T03:17:00Z",
+      "purpose": "Identity and outreach path",
+      "notes": "Research-pass fetch (window 03:17Z-03:31Z): '4500 Massachusetts Avenue NW Washington, DC 20016', '(202) 885-8600'. Not re-fetched by the benchmark author."
+    },
+    {
+      "id": "S6",
+      "title": "Enterprise Community Partners — Mid-Atlantic / Faith-Based Development Initiative",
+      "publisher": "Enterprise Community Partners",
+      "url": "https://enterprisecommunity.org/where-we-work/mid-atlantic",
+      "authorityLevel": "SECONDARY",
+      "retrievedAt": "2026-10-04T03:17:00Z",
+      "purpose": "Regional faith-based housing pathway (context for validation planning)",
+      "notes": "Research-pass fetch: 'Provides technical and financial assistance to help houses of worship leverage their land'; DC office and named senior advisor listed. Context only — not a property fact."
+    }
+  ]
+}

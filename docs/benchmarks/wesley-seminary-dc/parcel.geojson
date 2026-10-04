@@ -1,0 +1,59 @@
+{
+  "type": "Feature",
+  "properties": {
+    "benchmarkRole": "secondary",
+    "slug": "wesley-seminary-dc",
+    "parcelNumber": "1600    0819",
+    "parcelIdSystem": "DC SSL (square/lot)",
+    "address": "4500 MASSACHUSETTS AVE NW, Washington, DC 20016",
+    "jurisdiction": "Washington, DC",
+    "ownerOfRecord": "WESLEY THE THEOLOGICAL SEMINARY OF METHODIST CHURCH",
+    "recordedAreaSqFt": 113758,
+    "recordedAreaField": "LANDAREA (OTR extract; EXTRACTDAT epoch 1785729600000 = 2026-08-03T04:00Z)",
+    "crs": "EPSG:4326 (requested outSR=4326 from DC ArcGIS)",
+    "sourceRef": "S2",
+    "retrievedAt": "2026-10-04T04:23:00Z",
+    "equirectAreaSqFtCheck": 110608,
+    "areaMethod": "recorded = source layer field; equirect = local projection cross-check",
+    "areaNote": "Source ring is simplified (8 vertices); equirectangular check runs 2.8% below recorded LANDAREA, consistent with polygon generalization. Recorded LANDAREA is kept as authoritative."
+  },
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [
+          -77.08932258150239,
+          38.939322737457566
+        ],
+        [
+          -77.08996846862993,
+          38.93852317347632
+        ],
+        [
+          -77.09032361863673,
+          38.93877833082738
+        ],
+        [
+          -77.09043926609658,
+          38.93864055223717
+        ],
+        [
+          -77.090793165166,
+          38.938835489541056
+        ],
+        [
+          -77.09094032049715,
+          38.9389165462312
+        ],
+        [
+          -77.09046903715863,
+          38.93972000992953
+        ],
+        [
+          -77.08932258150239,
+          38.939322737457566
+        ]
+      ]
+    ]
+  }
+}

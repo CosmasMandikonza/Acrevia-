@@ -1,0 +1,57 @@
+{
+  "schema": "acrevia.benchmark.openquestions.v1",
+  "property": "central-nazarene-portland",
+  "generatedAt": "2026-10-04T04:40:00Z",
+  "purpose": "Honest boundaries of this secondary fixture.",
+  "questions": [
+    {
+      "id": "oq-pdx-use-table",
+      "category": "use-permission",
+      "kind": "UNKNOWN",
+      "question": "Table 120-1 use-permission rows for multi-dwelling development in RM2: the section text (33.120.100.A — uses allowed per Table 120-1 with a 'Y') was verified, but the table's row values were not reliably extracted from the chapter PDF.",
+      "whyItMatters": "Confirms the by-right use path the dimensional standards assume."
+    },
+    {
+      "id": "oq-pdx-floodway-extent",
+      "category": "environmental",
+      "kind": "UNKNOWN",
+      "question": "How much of the 10.97-acre site lies within the Johnson Creek floodway or combined flood hazard area? FEMA/Map 537-1 mapping not pulled. The floodway prohibition (33.537.100.A) and the plan district's site-wide trigger (33.537.020, per research pass) can materially reduce developable area.",
+      "whyItMatters": "This is the single biggest unknown on the site — it could gut or barely touch capacity."
+    },
+    {
+      "id": "oq-pdx-zone-split",
+      "category": "zoning-district",
+      "kind": "UNKNOWN",
+      "question": "Area-weighted split of the site across RM2, RM2 with environmental overlays ('p'/'c'), RM1 slivers, and OS (research-pass polygon intersect found all four).",
+      "whyItMatters": "Minimum density, FAR, and environmental-zone deductions all depend on the split."
+    },
+    {
+      "id": "oq-pdx-code-currency",
+      "category": "jurisdiction",
+      "kind": "EXPERT_REQUIRED",
+      "question": "Chapter PDFs carry 2024-2025 revision dates (33.120: 3/1/25; 33.266: 1/1/25; 33.537: 3/1/24) while the consolidated Title 33 is 'effective July 1, 2026'. Reconcile chapter values against the consolidated code before reliance.",
+      "whyItMatters": "Values may be stale relative to the consolidated code."
+    },
+    {
+      "id": "oq-pdx-corridor-status",
+      "category": "occupied-area",
+      "kind": "UNKNOWN",
+      "question": "Is SE Powell Blvd a Civic or Neighborhood Corridor per Map 120-1 (which would set coverage at 70% rather than 60%)?",
+      "whyItMatters": "10-point coverage difference on a 10.97-acre site."
+    },
+    {
+      "id": "oq-pdx-land-division",
+      "category": "jurisdiction",
+      "kind": "EXPERT_REQUIRED",
+      "question": "The site is a single legal lot; segregating a housing site from the operating church/shelter campus requires land division review (Title 33.600s/700s — not captured).",
+      "whyItMatters": "Phasing and disposition structure depend on it."
+    },
+    {
+      "id": "oq-pdx-shelter-tenancy",
+      "category": "site-condition",
+      "kind": "UNKNOWN",
+      "question": "Research-pass leads (not primary-verified) indicate a shelter/micro-village operates on site. Current tenancy and operational constraints are unknown.",
+      "whyItMatters": "Relocation and phasing obligations; the church's mission commitments."
+    }
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "schema": "acrevia.benchmark.sources.v1",
+  "property": "central-lutheran-minneapolis",
+  "authorityHierarchy": [
+    "ADOPTED_CODE",
+    "OFFICIAL_GIS",
+    "OFFICIAL_CITY_TOOL",
+    "OFFICIAL_CITY_REFERENCE",
+    "PROPERTY_SELF_REPORTED",
+    "SECONDARY"
+  ],
+  "timestampPolicy": "UTC, ISO 8601, recorded at fetch time.",
+  "sources": [
+    {
+      "id": "S1",
+      "title": "County Parcels — HennepinData/LAND_PROPERTY/MapServer/1",
+      "publisher": "Hennepin County, MN",
+      "url": "https://gis.hennepin.us/arcgis/rest/services/HennepinData/LAND_PROPERTY/MapServer/1/query?where=PID='2702924410124'&outFields=*&returnGeometry=true&outSR=4326&f=json",
+      "authorityLevel": "OFFICIAL_GIS",
+      "retrievedAt": "2026-10-04T04:23:00Z",
+      "purpose": "Ownership, land area, property type, geometry",
+      "notes": "OWNER_NM 'CENTRAL LUTHERAN CHURCH'; PARCEL_AREA 118,599.27 sq ft; PR_TYP_NM1 'LAND-COMMERCIAL'; BUILD_YR '0000' (no improvements recorded). Situs 328 16TH ST E."
+    },
+    {
+      "id": "S2",
+      "title": "Planning_Primary_Zoning FeatureServer",
+      "publisher": "City of Minneapolis (CPED)",
+      "url": "https://services.arcgis.com/afSMGVsC7QlRK1kZ/arcgis/rest/services/Planning_Primary_Zoning/FeatureServer/0/query?geometry=-93.270875,44.967961&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&f=json",
+      "authorityLevel": "OFFICIAL_GIS",
+      "retrievedAt": "2026-10-04T04:23:00Z",
+      "purpose": "Primary zoning district assignment",
+      "notes": "Land_Use 'Residence and Institutional' (code RM3)."
+    },
+    {
+      "id": "S3",
+      "title": "Planning_Zoning_Built_Form FeatureServer",
+      "publisher": "City of Minneapolis (CPED)",
+      "url": "https://services.arcgis.com/afSMGVsC7QlRK1kZ/arcgis/rest/services/Planning_Zoning_Built_Form/FeatureServer/0/query?geometry=-93.270875,44.967961&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&f=json",
+      "authorityLevel": "OFFICIAL_GIS",
+      "retrievedAt": "2026-10-04T04:23:00Z",
+      "purpose": "Built form overlay assignment",
+      "notes": "Built_Form 'Transit 10' (BFT10)."
+    },
+    {
+      "id": "S4",
+      "title": "Built Form Districts Handbook (last updated 3/17/26)",
+      "publisher": "City of Minneapolis, Community Planning and Economic Development",
+      "url": "https://www.minneapolismn.gov/media/-www-content-assets/documents/planning-and-zoning/Built-Form-Districts-Handbook.pdf",
+      "authorityLevel": "OFFICIAL_CITY_REFERENCE",
+      "retrievedAt": "2026-10-04T04:24:00Z",
+      "purpose": "Transit 10 built form standards (height, FAR, lot coverage)",
+      "notes": "The handbook cites zoning code Chapter 540 tables and states: 'This handbook... is a quick reference guide, but is not necessarily a complete picture of all the City's built form regulations.' The adopted code text (Municode Title 20) is JS-only and was NOT captured. Table values below were confirmed by rendered-image reads; the handbook's own disclaimer applies."
+    },
+    {
+      "id": "S5",
+      "title": "Central Lutheran Church — directions/parking page and contact page",
+      "publisher": "Central Lutheran Church",
+      "url": "https://www.centralmpls.org/new-here/directions-parking/",
+      "authorityLevel": "PROPERTY_SELF_REPORTED",
+      "retrievedAt": "2026-10-04T03:16:00Z",
+      "purpose": "Identity, parking-lot operation, contact path",
+      "notes": "Research-pass fetch (window 03:16Z-03:31Z): church describes its own lot and ramp, monthly parking contracts advertised; phone 612-870-4416, info@centralmpls.org; leadership page names facilities and operations directors. Not re-fetched by the benchmark author."
+    },
+    {
+      "id": "S6",
+      "title": "Beacon Interfaith Housing Collaborative",
+      "publisher": "Beacon Interfaith Housing Collaborative",
+      "url": "https://www.beaconinterfaith.org/",
+      "authorityLevel": "SECONDARY",
+      "retrievedAt": "2026-10-04T03:16:00Z",
+      "purpose": "Twin Cities faith-based housing pathway (validation context)",
+      "notes": "Research-pass fetch: 'a collaborative of congregations committed to making sure all people have a home'; 70+ faith communities; office contact published. Context only."
+    }
+  ]
+}
