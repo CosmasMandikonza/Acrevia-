@@ -74,6 +74,9 @@ export function recordBalanceScenario(
     label?: string;
     homes?: number;
     certificateId?: string;
+    /** Result ids are globally unique; a second scenario must not reuse the
+     *  first scenario's base result ids (generated ids must be unused). */
+    resultIdPrefix?: string;
   } = {},
 ): void {
   const scenarioId = overrides.scenarioId ?? SCENARIO_ID;
@@ -95,7 +98,7 @@ export function recordBalanceScenario(
     parcelId: PARCEL_ID,
     results: [
       {
-        resultId: "result:parking",
+        resultId: `${overrides.resultIdPrefix ?? ""}result:parking`,
         constraintId: PARKING_CONSTRAINT_ID,
         status: "SATISFIED",
         actual: { value: 0, unit: "spaces" },
@@ -103,7 +106,7 @@ export function recordBalanceScenario(
         explanation: "Multi-family requires 0 spaces in RM-1 (Table 14-802-1, group 2).",
       },
       {
-        resultId: "result:height",
+        resultId: `${overrides.resultIdPrefix ?? ""}result:height`,
         constraintId: HEIGHT_CONSTRAINT_ID,
         status: "SATISFIED",
         actual: { value: 38, unit: "ft" },

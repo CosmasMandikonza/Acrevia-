@@ -303,6 +303,7 @@ describe("review hardening: explainMetric is scenario-explicit", () => {
       label: "Community",
       homes: 41,
       certificateId: "scenario:community:certificate",
+      resultIdPrefix: "community-",
     });
 
     const community = explainMetric(project, "scenario:community", "homes");

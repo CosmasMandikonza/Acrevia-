@@ -42,6 +42,16 @@ export type CommandContext = {
 };
 
 
+/** Generated ids (certificates, versioned results) must be UNUSED regardless
+ *  of the existing node's kind — same-kind collision would overwrite history. */
+function requireUnusedNodeId(project: Project, nodeId: string, label: string): void {
+  if (project.nodes[nodeId]) {
+    throw new Error(
+      `${label}: node id ${nodeId} already exists; generated ids must be unused`,
+    );
+  }
+}
+
 /** Node ids are globally unique and never change semantic kind. Create paths
  *  require an unused id; update paths require the expected kind. */
 function rejectKindCollision(
@@ -341,10 +351,18 @@ export function recordScenario(
   // node id (v1 uses the base id; later versions are suffixed).
   const certificateId =
     certificateVersion === 1 ? certificateBase : `${certificateBase}:v${certificateVersion}`;
-  rejectKindCollision(ctx.project, certificateId, "scenario-certificate", "recordScenario certificate id");
+  const generatedIds = new Set<string>();
+  const claimGeneratedId = (nodeId: string, label: string): void => {
+    if (generatedIds.has(nodeId)) {
+      throw new Error(`${label}: duplicate generated id ${nodeId} within the same recording`);
+    }
+    generatedIds.add(nodeId);
+    requireUnusedNodeId(ctx.project, nodeId, label);
+  };
+  claimGeneratedId(certificateId, "recordScenario certificate id");
   for (const result of parsed.results) {
     const stored = certificateVersion === 1 ? result.resultId : `${result.resultId}@v${certificateVersion}`;
-    rejectKindCollision(ctx.project, stored, "constraint-result", "recordScenario result id");
+    claimGeneratedId(stored, "recordScenario result id");
   }
 
   apply(

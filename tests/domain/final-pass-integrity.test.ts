@@ -145,13 +145,14 @@ describe("final pass: node-id kind integrity", () => {
     ).toThrow(/never change semantic kind/i);
 
     // v1 result ids exist; a scenario whose v1 result id collides with an
-    // existing unrelated node must fail instead of overwriting it.
+    // existing unrelated node must fail instead of overwriting it. Generated
+    // ids must be UNUSED regardless of kind (stronger than the kind guard).
     const fresh = seedWithBalanceScenario();
     expect(() =>
       recordScenario(contextFor(fresh), { ...base, scenarioId: "scenario:evil", results: [
         { ...base.results[0], resultId: "phl:claim:far" },
       ] }),
-    ).toThrow(/never change semantic kind/i);
+    ).toThrow(/generated ids must be unused/i);
 
     // Certificate id collision (base id already used by an unrelated node).
     const fresh2 = seedWithBalanceScenario();
@@ -161,7 +162,7 @@ describe("final pass: node-id kind integrity", () => {
         scenarioId: "scenario:evil2",
         certificateId: "phl:claim:far",
       }),
-    ).toThrow(/never change semantic kind/i);
+    ).toThrow(/generated ids must be unused/i);
   });
 });
 
@@ -246,5 +247,94 @@ describe("final pass: encode-side integrity validation", () => {
     await repository.save(project, project.revision);
     const loaded = await repository.get(project.projectId);
     expect(loaded?.revision).toBe(project.revision);
+  });
+});
+
+describe("final pass: generated-id collisions in recordScenario", () => {
+  const baseInput = (scenarioId: string, overrides: Record<string, unknown> = {}) => ({
+    scenarioId,
+    label: "Other",
+    solverVersion: "test-double@0",
+    status: "COMPUTED" as const,
+    metrics: [{ metricId: "homes", label: "Homes", value: { value: 12, unit: "dwelling_units" as const } }],
+    constraintIds: [PARKING_CONSTRAINT_ID],
+    missionIds: [],
+    assumptionIds: [],
+    parcelId: PARCEL_ID,
+    results: [
+      {
+        resultId: "result:other-parking",
+        constraintId: PARKING_CONSTRAINT_ID,
+        status: "SATISFIED" as const,
+        actual: { value: 0, unit: "spaces" as const },
+        limit: { value: 0, unit: "spaces" as const },
+        explanation: "x",
+      },
+    ],
+    ...overrides,
+  });
+
+  it("a new scenario cannot reuse an existing ScenarioCertificate id from another scenario", () => {
+    const project = seedWithBalanceScenario(); // owns scenario:balance:certificate
+    expect(() =>
+      recordScenario(
+        contextFor(project),
+        baseInput("scenario:other", { certificateId: "scenario:balance:certificate" }),
+      ),
+    ).toThrow(/generated ids must be unused/i);
+    // The historical certificate is untouched.
+    expect(requireNode(project, "scenario:balance:certificate", "scenario-certificate").meta.revision).toBe(1);
+  });
+
+  it("a new scenario cannot reuse an existing ConstraintResult id from another scenario", () => {
+    const project = seedWithBalanceScenario(); // owns result:parking (v1 base id)
+    expect(() =>
+      recordScenario(
+        contextFor(project),
+        baseInput("scenario:other2", {
+          results: [
+            {
+              resultId: "result:parking",
+              constraintId: PARKING_CONSTRAINT_ID,
+              status: "SATISFIED" as const,
+              actual: { value: 0, unit: "spaces" as const },
+              limit: { value: 0, unit: "spaces" as const },
+              explanation: "x",
+            },
+          ],
+        }),
+      ),
+    ).toThrow(/generated ids must be unused/i);
+    // The other scenario's result is untouched.
+    expect(requireNode(project, "result:parking", "constraint-result").meta.revision).toBe(1);
+  });
+
+  it("duplicate generated result ids within one recording are rejected", () => {
+    const project = seedWithBalanceScenario();
+    expect(() =>
+      recordScenario(
+        contextFor(project),
+        baseInput("scenario:other3", {
+          results: [
+            {
+              resultId: "result:dupe",
+              constraintId: PARKING_CONSTRAINT_ID,
+              status: "SATISFIED" as const,
+              actual: { value: 0, unit: "spaces" as const },
+              limit: { value: 0, unit: "spaces" as const },
+              explanation: "x",
+            },
+            {
+              resultId: "result:dupe",
+              constraintId: PARKING_CONSTRAINT_ID,
+              status: "SATISFIED" as const,
+              actual: { value: 0, unit: "spaces" as const },
+              limit: { value: 0, unit: "spaces" as const },
+              explanation: "x",
+            },
+          ],
+        }),
+      ),
+    ).toThrow(/duplicate generated id result:dupe within the same recording/i);
   });
 });
