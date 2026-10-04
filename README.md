@@ -804,12 +804,16 @@ The product should communicate possibility without hiding uncertainty.
 
 # Current status
 
-**Phase:** Application foundation + product architecture + real-property benchmark.
+**Phase:** Application foundation + real-property benchmark + Development Graph core.
 
-The repository includes a runnable landing and workspace shell and a real-property benchmark
-pack (`docs/benchmarks/`) grounding future analysis in four real faith-owned properties.
-Property lookup, the Development Graph, calculations, map/3D rendering, and AI tools remain
-unimplemented; the workflows above describe the intended product.
+The repository includes a runnable landing and workspace shell, a real-property benchmark
+pack (`docs/benchmarks/`) grounding future analysis in four real faith-owned properties, and
+the Development Graph (`src/domain/`, ADR 0003): typed causal project state with
+source → claim → regulation → constraint separation, provenance, dependency-aware
+invalidation, deterministic hashing, and a benchmark adapter that maps the canonical
+Philadelphia fixture into canonical project state. Property lookup, scenario computation,
+map/3D rendering, and AI tools remain unimplemented; the graph is not yet connected to the
+workspace UI, which is intentional until downstream issues consume it.
 
 The goal is not to build a flashy demo around one happy path.
 
@@ -892,7 +896,15 @@ accessibility checks. Screenshots and failure traces live in `test-results/`;
 - `src/app/`: landing page, workspace route, route boundaries, and global design tokens.
 - `src/components/ui/`: shared button and loading/empty/error/stale primitives.
 - `src/components/workspace/`: workspace composition and accessible Copilot rail.
-- `src/lib/`: UI navigation and address validation; no domain model yet.
+- `src/lib/`: UI navigation and address validation.
+- `src/domain/`: the Development Graph (ADR 0003) — framework-independent typed project
+  state, evidence/constraint/scenario contracts, traversal, and serialization. Public
+  surface is `src/domain/index.ts`.
+- `src/commands/`: typed mutation commands over the graph (validation, events,
+  revisions, dependency-aware invalidation).
+- `src/adapters/`: benchmark adapter (fixtures → graph, isolated from the domain) and the
+  persistence boundary (`ProjectCodec`, `ProjectRepository`, in-memory implementation;
+  PostgreSQL/PostGIS deferred).
 - `tests/`: component, production-browser, and benchmark-structure checks.
 - `docs/benchmarks/`: real-property benchmark pack (issue #2) — one canonical property
   (Calvary Memorial Church, Philadelphia) with cached raw evidence plus three secondary
@@ -902,6 +914,7 @@ accessibility checks. Screenshots and failure traces live in `test-results/`;
 - `docs/adr/0001-foundation-shell.md`: scope and future service/model boundaries.
 - `docs/adr/0002-benchmark-fixture-format.md`: benchmark-local fixture format and
   source-authority hierarchy.
+- `docs/adr/0003-development-graph.md`: Development Graph architecture decisions.
 
 The Development Graph belongs to #3; the renderer decision belongs to #8.
 
