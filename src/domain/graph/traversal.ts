@@ -17,7 +17,9 @@ export function getDependents(project: Project, nodeId: string): Edge[] {
 
 export type EvidenceChainNode = {
   nodeId: string;
-  kind: AnyNode["kind"];
+  kind: AnyNode["kind"] | null;
+  /** True when the referenced node no longer exists. Never invent a kind. */
+  missing?: boolean;
   role?: Edge["role"];
   rawEvidenceRef?: string;
   children: EvidenceChainNode[];
@@ -32,14 +34,17 @@ export function getEvidenceChain(project: Project, nodeId: string): EvidenceChai
   const walk = (id: string, role: Edge["role"] | undefined): EvidenceChainNode => {
     const node = project.nodes[id];
     if (!node) {
-      return { nodeId: id, kind: "claim", role, children: [] }; // missing node: surfaced by staleness
+      // Explicit missing marker — Proof must never invent a node kind.
+      return { nodeId: id, kind: null, missing: true, role, children: [] };
     }
     const current: EvidenceChainNode = {
       nodeId: id,
       kind: node.kind,
       role,
       rawEvidenceRef:
-        node.kind === "source-artifact" ? (node as { rawEvidenceRef?: string }).rawEvidenceRef : undefined,
+        node.kind === "source-artifact"
+          ? (node as unknown as { rawEvidenceRef?: string }).rawEvidenceRef
+          : undefined,
       children: [],
     };
     if (node.kind === "source-artifact" || seen.has(id)) return current;
@@ -128,30 +133,45 @@ export type FreshnessGrade = {
  *   inputs were retracted, so recomputing from them is not allowed.
  * STALE — a pinned revision/semanticHash drifted: recompute may restore trust.
  * CURRENT — every pinned dependency matches exactly.
+ *
+ * Freshness itself is derived cache state: it is excluded from semanticHash
+ * and mutating it never touches node metadata.
  */
 export function gradeCertificate(project: Project, certificateId: string): FreshnessGrade {
   const node = project.nodes[certificateId];
   if (!node || node.kind !== "scenario-certificate") {
     throw new Error(`not a scenario certificate: ${certificateId}`);
   }
-  const certificate = node as unknown as { dependencies: DependencyRef[]; freshness: FreshnessState };
+  const certificate = node as unknown as { dependencies: DependencyRef[] };
   const reasons: string[] = [];
+  let invalidated = false;
 
   for (const ref of certificate.dependencies) {
     const current = project.nodes[ref.nodeId];
     if (!current) {
-      return { freshness: "INVALIDATED", reasons: [`dependency ${ref.nodeId} no longer exists`] };
+      return {
+        freshness: "INVALIDATED",
+        reasons: [`dependency ${ref.nodeId} no longer exists`],
+      };
     }
-    if (current.kind === "source-artifact" && "supersededBy" in current && current.supersededBy) {
-      reasons.push(`source artifact ${ref.nodeId} superseded by ${current.supersededBy}`);
+    if (current.kind === "source-artifact") {
+      const artifact = current as unknown as { supersededBy?: string };
+      if (artifact.supersededBy) {
+        reasons.push(`source artifact ${ref.nodeId} superseded by ${artifact.supersededBy}`);
+        invalidated = true;
+      }
     }
     if (current.kind === "regulation") {
       const regulation = current as unknown as { conflictRefs: string[]; supersededBy?: string };
       if (regulation.conflictRefs.length > 0) {
-        reasons.push(`regulation ${ref.nodeId} in conflict with ${regulation.conflictRefs.join(", ")}`);
+        reasons.push(
+          `regulation ${ref.nodeId} in conflict with ${regulation.conflictRefs.join(", ")}`,
+        );
+        invalidated = true;
       }
       if (regulation.supersededBy) {
         reasons.push(`regulation ${ref.nodeId} superseded by ${regulation.supersededBy}`);
+        invalidated = true;
       }
     }
     if (current.meta.revision !== ref.revision || current.meta.semanticHash !== ref.semanticHash) {
@@ -162,17 +182,12 @@ export function gradeCertificate(project: Project, certificateId: string): Fresh
     }
   }
 
-  if (reasons.some((reason) => reason.includes("superseded") || reason.includes("conflict") || reason.includes("no longer exists"))) {
-    return { freshness: "INVALIDATED", reasons };
-  }
+  if (invalidated) return { freshness: "INVALIDATED", reasons };
   if (reasons.length > 0) return { freshness: "STALE", reasons };
   return { freshness: "CURRENT", reasons };
 }
 
-export function isArtifactStale(
-  project: Project,
-  certificate: { id: string },
-): boolean {
+export function isArtifactStale(project: Project, certificate: { id: string }): boolean {
   const grade = gradeCertificate(project, certificate.id);
   return grade.freshness !== "CURRENT";
 }
@@ -189,37 +204,62 @@ export function refreshStaleness(project: Project): void {
 
 export type MetricExplanation = {
   metricId: string;
-  scenarioId?: string;
+  scenarioId: string;
   certificateId?: string;
   certificateFreshness?: FreshnessState;
+  /** Immutable output snapshot frozen into the certificate at computation time. */
+  metricsSnapshot: Array<{ metricId: string; label: string; value: unknown }>;
   contributions: EvidenceChainNode[];
 };
 
-/** metric -> scenario -> certificate -> constraints -> ... -> sources. */
-export function explainMetric(project: Project, metricId: string): MetricExplanation {
-  for (const node of Object.values(project.nodes)) {
-    if (node.kind !== "scenario") continue;
-    const scenario = node as unknown as {
-      id: string;
-      metrics: Array<{ metricId: string }>;
-      certificateId?: string;
-    };
-    if (!scenario.metrics.some((metric) => metric.metricId === metricId)) continue;
+/** metric -> scenario -> certificate -> constraints -> ... -> sources.
+ *  The scenario is an explicit argument: metric ids (e.g. "homes") repeat
+ *  across scenarios by design, so a scenario-less lookup would be ambiguous. */
+export function explainMetric(
+  project: Project,
+  scenarioId: string,
+  metricId: string,
+): MetricExplanation {
+  const scenarioNode = project.nodes[scenarioId];
+  if (!scenarioNode || scenarioNode.kind !== "scenario") {
+    throw new Error(`scenario not found: ${scenarioId}`);
+  }
+  const scenario = scenarioNode as unknown as {
+    id: string;
+    metrics: Array<{ metricId: string }>;
+    certificateId?: string;
+  };
+  if (!scenario.metrics.some((metric) => metric.metricId === metricId)) {
+    throw new Error(`metric not found: ${metricId} on scenario ${scenarioId}`);
+  }
 
-    const explanation: MetricExplanation = { metricId, scenarioId: scenario.id, contributions: [] };
-    if (scenario.certificateId) {
-      explanation.certificateId = scenario.certificateId;
-      const cert = project.nodes[scenario.certificateId];
-      if (cert && cert.kind === "scenario-certificate") {
-        explanation.certificateFreshness = (cert as unknown as ScenarioCertificateSemantic).freshness;
-        for (const ref of (cert as unknown as ScenarioCertificateSemantic).dependencies) {
-          if (ref.nodeKind === "constraint" || ref.nodeKind === "mission-constraint" || ref.nodeKind === "parcel") {
-            explanation.contributions.push(getEvidenceChain(project, ref.nodeId));
-          }
+  const explanation: MetricExplanation = {
+    metricId,
+    scenarioId,
+    metricsSnapshot: [],
+    contributions: [],
+  };
+  if (scenario.certificateId) {
+    explanation.certificateId = scenario.certificateId;
+    const cert = project.nodes[scenario.certificateId];
+    if (cert && cert.kind === "scenario-certificate") {
+      const typedCert = cert as unknown as ScenarioCertificateSemantic;
+      explanation.certificateFreshness = typedCert.freshness;
+      explanation.metricsSnapshot = typedCert.metricsSnapshot as unknown as Array<{
+        metricId: string;
+        label: string;
+        value: unknown;
+      }>;
+      for (const ref of typedCert.dependencies) {
+        if (
+          ref.nodeKind === "constraint" ||
+          ref.nodeKind === "mission-constraint" ||
+          ref.nodeKind === "parcel"
+        ) {
+          explanation.contributions.push(getEvidenceChain(project, ref.nodeId));
         }
       }
     }
-    return explanation;
   }
-  throw new Error(`metric not found: ${metricId}`);
+  return explanation;
 }

@@ -67,13 +67,28 @@ export function setAverageUnitSizeAssumption(project: Project, sqFt: number): vo
   });
 }
 
-export function recordBalanceScenario(project: Project): void {
+export function recordBalanceScenario(
+  project: Project,
+  overrides: {
+    scenarioId?: string;
+    label?: string;
+    homes?: number;
+    certificateId?: string;
+  } = {},
+): void {
+  const scenarioId = overrides.scenarioId ?? SCENARIO_ID;
   recordScenario(contextFor(project), {
-    scenarioId: SCENARIO_ID,
-    label: "Balance",
+    scenarioId,
+    label: overrides.label ?? "Balance",
     solverVersion: "test-double@0",
     status: "COMPUTED",
-    metrics: [{ metricId: "homes", label: "Homes", value: { value: 34, unit: "dwelling_units" } }],
+    metrics: [
+      {
+        metricId: "homes",
+        label: "Homes",
+        value: { value: overrides.homes ?? 34, unit: "dwelling_units" },
+      },
+    ],
     constraintIds: [PARKING_CONSTRAINT_ID, HEIGHT_CONSTRAINT_ID],
     missionIds: [MISSION_PARKING_ID],
     assumptionIds: ["assumption:average-unit-size"],
@@ -96,7 +111,7 @@ export function recordBalanceScenario(project: Project): void {
         explanation: "Massing at the 38 ft RM-1 maximum.",
       },
     ],
-    certificateId: CERTIFICATE_ID,
+    certificateId: overrides.certificateId ?? `${scenarioId}:certificate`,
   });
 }
 

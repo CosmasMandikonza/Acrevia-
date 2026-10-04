@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Quantity, QuantityRange } from "../units/quantity";
+import { FeetQuantity, QuantityRange, SpacesQuantity } from "../units/quantity";
 
 /**
  * The executable computational restriction layer. A discriminated union — never
@@ -34,7 +34,7 @@ export const heightVariant = z
   .object({
     ...base,
     constraintKind: z.literal("height"),
-    limit: Quantity,
+    limit: FeetQuantity,
     appliesTo: z.string().default("principal-structure"),
   })
   .strict();
@@ -45,7 +45,7 @@ export const setbackVariant = z
     constraintKind: z.literal("setback"),
     face: z.enum(["front", "side", "rear"]),
     spec: z.discriminatedUnion("type", [
-      z.object({ type: z.literal("numeric"), min: Quantity }).strict(),
+      z.object({ type: z.literal("numeric"), min: FeetQuantity }).strict(),
       z.object({ type: z.literal("range"), range: QuantityRange }).strict(),
       z
         .object({
@@ -101,7 +101,7 @@ export const parkingRequirementVariant = z
     constraintKind: z.literal("parking-requirement"),
     use: z.string(),
     requirement: z.discriminatedUnion("type", [
-      z.object({ type: z.literal("fixed"), spaces: Quantity }).strict(),
+      z.object({ type: z.literal("fixed"), spaces: SpacesQuantity }).strict(),
       z
         .object({
           type: z.literal("formula"),

@@ -22,7 +22,7 @@ import {
   addEdge,
   type Project,
 } from "../../domain/graph/project";
-import { nodeWithMeta } from "../../domain/graph/node";
+import { nodeWithMeta, touchNode } from "../../domain/graph/node";
 import { createSha256 } from "../../domain/graph/hashing";
 import { validatePropertyRules, type ParcelSemantic, type PropertySemantic } from "../../domain/property/entities";
 import type { ClaimValue } from "../../domain/evidence/claim";
@@ -487,6 +487,7 @@ export function mapBenchmarkToProject(input: {
         recordClaim(ctx, baseClaim(rule, value, { predicate: PREDICATE_FOR_RULE[rule.id] }));
         if (rule.id === "phl-site-parcel-area") {
           (project.nodes[parcelId] as unknown as { claimIds: string[] }).claimIds.push(claimIdFor(rule.id));
+          touchNode(project.nodes[parcelId], nowFn());
         }
         break;
       }
@@ -513,6 +514,7 @@ export function mapBenchmarkToProject(input: {
     });
     addEdge(project, { dependentId: parcelId, dependencyId: geometryClaimId, role: "grounded-in" });
     (project.nodes[parcelId] as unknown as { claimIds: string[] }).claimIds.push(geometryClaimId);
+    touchNode(project.nodes[parcelId], nowFn());
 
     recordClaim(ctx, {
       id: "phl:claim:owner-of-record",
@@ -527,14 +529,17 @@ export function mapBenchmarkToProject(input: {
     });
     (project.nodes[propertyId] as unknown as { ownerOfRecordClaimId?: string }).ownerOfRecordClaimId =
       "phl:claim:owner-of-record";
+    touchNode(project.nodes[propertyId], nowFn());
   }
 
   (project.nodes[structureId] as unknown as { attributeClaimIds: string[] }).attributeClaimIds.push(
     ...structureClaimIds,
   );
+  touchNode(project.nodes[structureId], nowFn());
   (project.nodes[jurisdictionId] as unknown as { claimIds: string[] }).claimIds.push(
     ...jurisdictionClaimIds,
   );
+  touchNode(project.nodes[jurisdictionId], nowFn());
 
   // --- Open questions -> expert review items -------------------------------
   const farRule = rulesById.get("phl-far");

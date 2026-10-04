@@ -72,5 +72,8 @@ export function validateClaimRules(claim: ClaimSemantic): string[] {
   } else if (claim.sourceIds.length > 0) {
     problems.push("declared claims must not reference source artifacts");
   }
+  if (claim.origin.kind !== "SOURCE_DERIVED" && claim.evidenceState) {
+    problems.push("declared claims must not carry an evidence state (origin is not evidence)");
+  }
   return problems;
 }

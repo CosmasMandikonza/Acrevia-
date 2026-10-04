@@ -1,7 +1,9 @@
 import { z } from "zod";
-import { Project, addEdge, requireNode } from "../domain/graph/project";
+import { Project, addEdge, removeEdgesWhere, requireNode } from "../domain/graph/project";
 import { nodeWithMeta, touchNode } from "../domain/graph/node";
 import { buildCertificateDependencies, refreshStaleness } from "../domain/graph/traversal";
+import { canonicalJson } from "../domain/graph/serialization";
+import { stripVolatile } from "../domain/graph/node";
 import { ProjectEvent, ProjectEventType } from "../domain/events/project-event";
 import { SourceArtifactSemantic } from "../domain/evidence/source-artifact";
 import { ClaimSemantic, validateClaimRules } from "../domain/evidence/claim";
@@ -81,6 +83,17 @@ export function addSourceArtifact(
   input: z.infer<typeof AddSourceArtifactInput>,
 ): void {
   const parsed = AddSourceArtifactInput.parse(input);
+  const existing = ctx.project.nodes[parsed.id];
+  if (existing) {
+    // Historical captures are immutable. Exact replay is an idempotent no-op;
+    // anything else (changed content under the same version id) fails loudly.
+    if (canonicalJson(stripVolatile(existing)) !== canonicalJson(stripVolatile(parsed))) {
+      throw new Error(
+        `source artifact ${parsed.id} already exists; historical captures and rawContentHash are immutable (add a new version instead)`,
+      );
+    }
+    return;
+  }
   apply(
     ctx,
     "source.artifact.added",
@@ -102,6 +115,9 @@ export function recordClaim(ctx: CommandContext, input: z.infer<typeof RecordCla
   }
   for (const sourceId of parsed.sourceIds) {
     requireNode(ctx.project, sourceId, "source-artifact");
+  }
+  if (ctx.project.nodes[parsed.id]) {
+    throw new Error(`node already exists: ${parsed.id} (claims are create-only; add a new claim id)`);
   }
   apply(
     ctx,
@@ -139,6 +155,12 @@ export function upsertRegulation(
       } else {
         ctx.project.nodes[parsed.id] = nodeWithMeta(parsed, now);
       }
+      // Replace role edges so the graph always agrees with the canonical
+      // claimIds list — no stale evidence edges survive an upsert.
+      removeEdgesWhere(
+        ctx.project,
+        (edge) => edge.dependentId === parsed.id && edge.role === "interpreted-from",
+      );
       for (const claimId of parsed.claimIds) {
         addEdge(ctx.project, { dependentId: parsed.id, dependencyId: claimId, role: "interpreted-from" });
       }
@@ -153,6 +175,9 @@ export function materializeConstraint(
 ): void {
   const parsed = MaterializeConstraintInput.parse(input);
   requireNode(ctx.project, parsed.regulationId, "regulation");
+  if (ctx.project.nodes[parsed.id]) {
+    throw new Error(`node already exists: ${parsed.id} (constraints are create-only; materialize a new id)`);
+  }
   apply(
     ctx,
     "constraint.materialized",
@@ -307,9 +332,15 @@ export function recordScenario(
       // node id (v1 uses the base id; later versions are suffixed).
       const certificateId = certificateVersion === 1 ? certificateBase : `${certificateBase}:v${certificateVersion}`;
 
+      // Results are versioned per recording: v1 keeps the base id, later
+      // recordings get @v2, @v3... so historical certificates keep resolving
+      // the results they were issued against (immutable proof history).
+      const storedResultId = (baseId: string) =>
+        certificateVersion === 1 ? baseId : `${baseId}@v${certificateVersion}`;
       for (const result of parsed.results) {
+        const resultId = storedResultId(result.resultId);
         const resultNode = {
-          id: result.resultId,
+          id: resultId,
           kind: "constraint-result" as const,
           constraintId: result.constraintId,
           scenarioId: parsed.scenarioId,
@@ -319,8 +350,8 @@ export function recordScenario(
           explanation: result.explanation,
           origin: { kind: "SYSTEM_DERIVED" as const },
         };
-        project.nodes[result.resultId] = nodeWithMeta(resultNode, now);
-        addEdge(project, { dependentId: result.resultId, dependencyId: result.constraintId, role: "evaluated-under" });
+        project.nodes[resultId] = nodeWithMeta(resultNode, now);
+        addEdge(project, { dependentId: resultId, dependencyId: result.constraintId, role: "evaluated-under" });
       }
 
       const scenarioNode = {
@@ -330,7 +361,7 @@ export function recordScenario(
         status: parsed.status,
         solverVersion: parsed.solverVersion,
         metrics: parsed.metrics,
-        constraintResultIds: parsed.results.map((result) => result.resultId),
+        constraintResultIds: parsed.results.map((result) => storedResultId(result.resultId)),
         assumptionIds: parsed.assumptionIds,
         certificateId,
       };
@@ -342,7 +373,7 @@ export function recordScenario(
         project.nodes[parsed.scenarioId] = nodeWithMeta(scenarioNode, now);
       }
       for (const result of parsed.results) {
-        addEdge(project, { dependentId: parsed.scenarioId, dependencyId: result.resultId, role: "scenario-input" });
+        addEdge(project, { dependentId: parsed.scenarioId, dependencyId: storedResultId(result.resultId), role: "scenario-input" });
       }
       for (const constraintId of parsed.constraintIds) {
         addEdge(project, { dependentId: parsed.scenarioId, dependencyId: constraintId, role: "scenario-input" });
@@ -364,7 +395,8 @@ export function recordScenario(
         solverVersion: parsed.solverVersion,
         dependencies,
         assumptionIds: parsed.assumptionIds,
-        constraintResultIds: parsed.results.map((result) => result.resultId),
+        constraintResultIds: parsed.results.map((result) => storedResultId(result.resultId)),
+        metricsSnapshot: parsed.metrics,
         generatedAt: now,
         certificateHash: "pending",
         freshness: "CURRENT",
@@ -386,6 +418,9 @@ export function openExpertReviewItem(
   input: z.infer<typeof OpenExpertReviewInput>,
 ): void {
   const parsed = OpenExpertReviewInput.parse(input);
+  if (ctx.project.nodes[parsed.id]) {
+    throw new Error(`node already exists: ${parsed.id} (expert reviews are create-only; use updateExpertReviewItem)`);
+  }
   apply(
     ctx,
     "expert-review.opened",
@@ -451,6 +486,10 @@ export function updateStakeholderView(
       } else {
         ctx.project.nodes[parsed.id] = nodeWithMeta(parsed, now);
       }
+      removeEdgesWhere(
+        ctx.project,
+        (edge) => edge.dependentId === parsed.id && edge.role === "presents",
+      );
       if (parsed.selectedScenarioId) {
         addEdge(ctx.project, { dependentId: parsed.id, dependencyId: parsed.selectedScenarioId, role: "presents" });
       }
@@ -481,7 +520,17 @@ export function supersedeSourceArtifact(
 ): void {
   const parsed = SupersedeSourceArtifactInput.parse(input);
   const oldArtifact = requireNode(ctx.project, parsed.sourceId, "source-artifact");
-  requireNode(ctx.project, parsed.supersededBySourceId, "source-artifact");
+  const newArtifact = requireNode(ctx.project, parsed.supersededBySourceId, "source-artifact");
+  if (oldArtifact.logicalSourceKey !== newArtifact.logicalSourceKey) {
+    throw new Error(
+      `cannot supersede across logical sources: ${parsed.sourceId} (${oldArtifact.logicalSourceKey}) vs ${parsed.supersededBySourceId} (${newArtifact.logicalSourceKey})`,
+    );
+  }
+  if (newArtifact.version <= oldArtifact.version) {
+    throw new Error(
+      `superseding version must be strictly newer: ${newArtifact.version} <= ${oldArtifact.version}`,
+    );
+  }
   for (const regulationId of parsed.conflictedRegulationIds) {
     requireNode(ctx.project, regulationId, "regulation");
   }

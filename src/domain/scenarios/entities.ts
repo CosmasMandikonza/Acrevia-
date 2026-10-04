@@ -80,6 +80,9 @@ export const ScenarioCertificateSemantic = z
     dependencies: z.array(DependencyRef).min(1),
     assumptionIds: z.array(z.string()),
     constraintResultIds: z.array(z.string()),
+    /** Immutable output snapshot frozen at computation time, so a historical
+     *  certificate keeps resolving its ORIGINAL metrics after recomputation. */
+    metricsSnapshot: z.array(ScenarioMetric),
     generatedAt: z.string(), // timestamp: never semantic
     certificateHash: z.string().min(1),
     freshness: FreshnessState,
@@ -87,7 +90,9 @@ export const ScenarioCertificateSemantic = z
   .strict();
 export type ScenarioCertificateSemantic = z.infer<typeof ScenarioCertificateSemantic>;
 
-/** certificateHash covers exactly the proof content; generatedAt is excluded. */
+/** certificateHash covers exactly the proof content; generatedAt and
+ *  freshness are excluded (timestamps are never semantic; freshness is
+ *  derived cache state). */
 export function computeCertificateHash(input: {
   id: string;
   scenarioId: string;
@@ -96,6 +101,7 @@ export function computeCertificateHash(input: {
   dependencies: DependencyRef[];
   assumptionIds: string[];
   constraintResultIds: string[];
+  metricsSnapshot: ScenarioMetric[];
 }): string {
   return createSha256(
     canonicalJson({
@@ -106,6 +112,7 @@ export function computeCertificateHash(input: {
       dependencies: input.dependencies,
       assumptionIds: input.assumptionIds,
       constraintResultIds: input.constraintResultIds,
+      metricsSnapshot: input.metricsSnapshot,
     }),
   );
 }

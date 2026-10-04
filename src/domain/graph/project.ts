@@ -173,3 +173,9 @@ export function addEdge(project: Project, edge: Edge): void {
   );
   if (!duplicate) project.edges.push(edge);
 }
+
+/** Remove matching edges — used by upserts so role edges always agree with
+ *  canonical reference lists on the nodes. */
+export function removeEdgesWhere(project: Project, predicate: (edge: Edge) => boolean): void {
+  project.edges = project.edges.filter((edge) => !predicate(edge));
+}

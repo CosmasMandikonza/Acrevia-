@@ -12,10 +12,11 @@ import { NodeKind } from "../enums";
  *   createdAt       — ISO-8601 UTC
  *   lastModifiedAt  — ISO-8601 UTC
  *
- * TIMESTAMPS ARE NEVER SEMANTIC. In addition to `meta`, the following key
- * names are stripped at any depth before hashing, by convention enforced here
- * and by tests:
- *   retrievedAt, generatedAt, declaredAt, occurredAt, createdAt, lastModifiedAt
+ * TIMESTAMPS AND DERIVED STATE ARE NEVER SEMANTIC. In addition to `meta`,
+ * the following key names are stripped at any depth before hashing, by
+ * convention enforced here and by tests:
+ *   retrievedAt, generatedAt, declaredAt, occurredAt, createdAt, updatedAt,
+ *   lastModifiedAt, freshness (certificate freshness is derived cache state)
  *
  * Consequence: changing only a capture/declaration timestamp never changes a
  * node's semanticHash. Node identity and drift are decided by semantic content
@@ -43,6 +44,7 @@ const VOLATILE_KEYS = new Set([
   "createdAt",
   "updatedAt",
   "lastModifiedAt",
+  "freshness",
 ]);
 
 export type SemanticNodeFields = Record<string, unknown> & {

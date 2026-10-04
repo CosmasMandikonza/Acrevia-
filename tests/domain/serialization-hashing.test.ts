@@ -7,11 +7,15 @@ import {
 } from "../../src/domain";
 import { canonicalSemanticJson } from "../../src/domain/graph/node";
 import { mapBenchmarkToProject } from "../../src/adapters/benchmarks";
-import { PHILADELPHIA_FIXTURE_DIR } from "./helpers";
-import { seedWithBalanceScenario, seedPhiladelphiaProject } from "./helpers";
-import { supersedeSourceArtifact } from "../../src/commands";
+import { addSourceArtifact, supersedeSourceArtifact } from "../../src/commands";
 import { requireNode } from "../../src/domain";
-import { contextFor } from "./helpers";
+import {
+  seedWithBalanceScenario,
+  seedPhiladelphiaProject,
+  confirmMissionParking,
+  contextFor,
+  PHILADELPHIA_FIXTURE_DIR,
+} from "./helpers";
 
 describe("canonical serialization and hashing", () => {
   it("identical semantic project state serializes identically", () => {
@@ -36,13 +40,19 @@ describe("canonical serialization and hashing", () => {
     const project = seedPhiladelphiaProject();
     const artifact = requireNode(project, "phl:src:S7@v1", "source-artifact");
     const hashBefore = artifact.meta.semanticHash;
-    // Directly mutate the timestamp on the node (bypassing commands) to prove
-    // the hashing rule, then restore.
-    const originalRetrievedAt = artifact.retrievedAt;
     artifact.retrievedAt = "2099-01-01T00:00:00.000Z";
     expect(computeSemanticHash(artifact)).toBe(hashBefore);
-    artifact.retrievedAt = originalRetrievedAt;
+    artifact.retrievedAt = "2026-10-04T04:30:00.000Z";
     expect(computeSemanticHash(artifact)).toBe(hashBefore);
+  });
+
+  it("refreshing staleness never creates a semantic-hash mismatch (freshness is derived)", () => {
+    const project = seedWithBalanceScenario();
+    const certificate = requireNode(project, "scenario:balance:certificate", "scenario-certificate");
+    confirmMissionParking(project, 100);
+    expect(certificate.freshness).toBe("STALE");
+    expect(computeSemanticHash(certificate)).toBe(certificate.meta.semanticHash);
+    expect(certificate.meta.revision).toBe(1); // derived mutation does not bump revisions
   });
 
   it("semanticHash and rawContentHash are distinct concepts on SourceArtifact", () => {
@@ -51,8 +61,6 @@ describe("canonical serialization and hashing", () => {
     expect(artifact.rawContentHash).toBeDefined();
     expect(artifact.meta.semanticHash).toBeDefined();
     expect(artifact.rawContentHash).not.toBe(artifact.meta.semanticHash);
-    // rawContentHash answers "did the captured bytes change?" — it is stable
-    // across imports of the same fixture:
     const again = seedPhiladelphiaProject();
     expect(requireNode(again, "phl:src:S7@v1", "source-artifact").rawContentHash).toBe(
       artifact.rawContentHash,
@@ -61,27 +69,37 @@ describe("canonical serialization and hashing", () => {
 
   it("supersededBy IS semantic: supersession changes the artifact's semanticHash", () => {
     const project = seedPhiladelphiaProject();
+    addSourceArtifact(contextFor(project), {
+      id: "phl:src:S6@v2",
+      kind: "source-artifact",
+      logicalSourceKey: "phl:src:S6",
+      version: 2,
+      sourceType: "adopted_code",
+      title: "The Philadelphia Code § 14-548 (later retrieval)",
+      publisher: "City of Philadelphia",
+      canonicalUrl: "https://codelibrary.amlegal.com/codes/philadelphia/latest/philadelphia_pa/0-0-0-308864",
+      authority: "ADOPTED_CODE",
+      retrievedAt: "2026-12-01T00:00:00.000Z",
+      rawContentHash: "abc456abc456abc456abc456abc456abc456abc456abc456abc456abc456abc4",
+      versionNote: "re-verification capture",
+    });
     const artifact = requireNode(project, "phl:src:S6@v1", "source-artifact");
     const hashBefore = artifact.meta.semanticHash;
     supersedeSourceArtifact(contextFor(project), {
       sourceId: "phl:src:S6@v1",
-      supersededBySourceId: "phl:src:S7@v1",
+      supersededBySourceId: "phl:src:S6@v2",
       conflictedRegulationIds: [],
-      note: "parking supersedes overlay for this test",
+      note: "later retrieval of the same logical source",
     });
     expect(artifact.meta.semanticHash).not.toBe(hashBefore);
     expect(artifact.meta.revision).toBe(2);
   });
 
-  it("certificateHash excludes generatedAt", () => {
+  it("certificateHash excludes generatedAt and freshness", () => {
     const project = seedWithBalanceScenario();
-    const certificate = requireNode(
-      project,
-      "scenario:balance:certificate",
-      "scenario-certificate",
-    );
-    const recompute = (cert: typeof certificate) => {
-      return computeCertificateHash({
+    const certificate = requireNode(project, "scenario:balance:certificate", "scenario-certificate");
+    const recompute = (cert: typeof certificate) =>
+      computeCertificateHash({
         id: cert.id,
         scenarioId: cert.scenarioId,
         certificateVersion: cert.certificateVersion,
@@ -89,21 +107,26 @@ describe("canonical serialization and hashing", () => {
         dependencies: cert.dependencies,
         assumptionIds: cert.assumptionIds,
         constraintResultIds: cert.constraintResultIds,
+        metricsSnapshot: cert.metricsSnapshot,
       });
-    };
     const before = recompute(certificate);
     certificate.generatedAt = "2099-01-01T00:00:00.000Z";
+    certificate.freshness = "STALE";
     expect(recompute(certificate)).toBe(before);
   });
 });
 
 describe("recovery critique: semantic determinism across build times", () => {
   it("projects built at different wall-clock times are semantically identical", () => {
-    const morning = mapBenchmarkToProject({ fixtureDir: PHILADELPHIA_FIXTURE_DIR, now: () => "2026-10-04T08:00:00.000Z" });
-    const night = mapBenchmarkToProject({ fixtureDir: PHILADELPHIA_FIXTURE_DIR, now: () => "2026-10-04T23:59:59.999Z" });
-    // Audit timestamps differ, so lossless encodings differ...
+    const morning = mapBenchmarkToProject({
+      fixtureDir: PHILADELPHIA_FIXTURE_DIR,
+      now: () => "2026-10-04T08:00:00.000Z",
+    });
+    const night = mapBenchmarkToProject({
+      fixtureDir: PHILADELPHIA_FIXTURE_DIR,
+      now: () => "2026-10-04T23:59:59.999Z",
+    });
     expect(canonicalJson(morning) === canonicalJson(night)).toBe(false);
-    // ...but the semantic states are identical.
     expect(canonicalSemanticJson(morning)).toBe(canonicalSemanticJson(night));
   });
 });

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Quantity } from "../units/quantity";
+import { FeetQuantity, SpacesQuantity, StoriesQuantity } from "../units/quantity";
 import { Origin } from "../evidence/claim";
 
 /**
@@ -10,11 +10,11 @@ import { Origin } from "../evidence/claim";
  */
 
 export const MissionNormalized = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("min-parking"), spaces: Quantity }).strict(),
+  z.object({ type: z.literal("min-parking"), spaces: SpacesQuantity }).strict(),
   z.object({ type: z.literal("preserve-structure"), structureId: z.string() }).strict(),
-  z.object({ type: z.literal("max-stories"), stories: Quantity }).strict(),
+  z.object({ type: z.literal("max-stories"), stories: StoriesQuantity }).strict(),
   z.object({ type: z.literal("retain-ownership") }).strict(),
-  z.object({ type: z.literal("max-height"), limit: Quantity }).strict(),
+  z.object({ type: z.literal("max-height"), limit: FeetQuantity }).strict(),
 ]);
 export type MissionNormalized = z.infer<typeof MissionNormalized>;
 

@@ -84,6 +84,33 @@ serialization/hashing (7), persistence round trip + optimistic concurrency (6),
 traversal/explainMetric (5), units/enums/commands/audit (7), architecture
 isolation (3). Pre-existing benchmark and foundation suites continue to pass.
 
+## Review-round corrections (2026-10-04, PR review)
+
+1. Certificate `freshness` is derived cache state: excluded from
+   `semanticHash` and `canonicalSemanticJson`; refreshing staleness never
+   touches node metadata. (Blocking 1)
+2. Historical proofs are real: `recordScenario` versions result ids per
+   recording (`@v2`, `@v3` ...), snapshots scenario metrics into the
+   certificate, and covers the snapshot in `certificateHash`. Old
+   certificates keep resolving their original metrics and results. (Blocking 2)
+3. Source-version immutability enforced: duplicate ids reject changed content
+   (exact replay is an idempotent no-op); supersession requires the same
+   `logicalSourceKey` and a strictly newer version. (Blocking 3)
+4. Create vs update is explicit: `recordClaim` / `materializeConstraint` /
+   `openExpertReviewItem` reject existing ids; `upsertRegulation` and view
+   updates replace their role edges so the graph always agrees with canonical
+   reference lists; revisions stay monotonic. (Blocking 4)
+5. Dimensional nonsense is unrepresentable: FeetQuantity / SpacesQuantity /
+   StoriesQuantity (+ `stories` unit) where the domain knows the dimension;
+   `QuantityRange` requires a bound and min <= max; declared claims cannot
+   carry evidence states. (Blocking 5)
+6. `explainMetric(project, scenarioId, metricId)` — metric ids repeat across
+   scenarios by design, so the scenario is explicit. (Blocking 6)
+7. `ProjectCodec.decode` runs an integrity pass (map-key/id agreement,
+   semanticHash + certificateHash recompute, edge endpoint existence,
+   propertyId resolution); `getEvidenceChain` returns an explicit
+   `{ missing: true, kind: null }` marker instead of inventing a kind.
+
 ## Consequences
 
 - Downstream issues consume `src/domain` (public barrel) and commands — never
