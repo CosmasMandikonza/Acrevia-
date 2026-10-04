@@ -34,7 +34,7 @@ fact below traces to an official source fetched during this research.
 | /SIX ADU prohibition | "(2)(c) Accessory dwelling units shall not be permitted." | S6 (adopted § 14-548, live) | **VERIFIED** |
 | Building | One building (BIN 1282177), 31,272 sq ft, ~29 ft | S8 (city footprints) | SOURCE_CONFIRMED |
 | Flood | FEMA Zone X, minimal hazard | S9 | SOURCE_CONFIRMED |
-| Historic | No local historic district; basemap landmark label only; register status unverified | S10 | SOURCE_CONFIRMED / open question |
+| Historic | Queried local historic-district layer returned no feature at the sampled location; basemap landmark label only; register status unresolved | S10 | SOURCE_CONFIRMED / open question |
 | Civic review | 3 RCOs cover the parcel (exp. 2027) | S11 | SOURCE_CONFIRMED |
 | Church identity | Website confirms address, phone, email, Sunday school, school | S12 | PROPERTY_SELF_REPORTED |
 

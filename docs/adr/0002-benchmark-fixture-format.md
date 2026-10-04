@@ -54,8 +54,10 @@ input. It contains no code, no computed feasibility, and no legal conclusions.
 directory: manifest/rule cross-reference integrity, status and authority enums, ISO-8601
 timestamps, GeoJSON ring closure and coordinate sanity, computed-vs-recorded area
 tolerance, category coverage (each required zoning dimension appears as a rule or an
-open question), VERIFIED/SOURCE_CONFIRMED records carry quotes and code sections, and
-the canonical pack keeps unresolved items and raw evidence present.
+open question), verbatim quotes required on both VERIFIED and SOURCE_CONFIRMED records
+with a code section additionally required for VERIFIED, raw-vs-fixture-vs-prose area
+agreement for the canonical parcel, and the canonical pack keeping unresolved items
+and raw evidence present.
 
 ## Consequences
 

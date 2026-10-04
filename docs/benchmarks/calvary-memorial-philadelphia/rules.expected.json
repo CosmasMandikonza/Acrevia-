@@ -383,7 +383,7 @@
     {
       "id": "phl-site-historic-screen",
       "category": "site-condition",
-      "statement": "No local historic district polygon intersects the parcel (HistoricDistricts_Local: 0 features). The city's basemap Landmark_Poly layer labels the building 'Calvary Memorial Church / Place of Worship' \u2014 that layer is a map-labeling inventory, not the Philadelphia Register of Historic Places. Individual historic-register status is NOT verified either way.",
+      "statement": "The queried local historic-district layer (HistoricDistricts_Local) returned no feature at the sampled location (parcel centroid). The city's basemap Landmark_Poly layer labels the building 'Calvary Memorial Church / Place of Worship' \u2014 that layer is a map-labeling inventory, not the Philadelphia Register of Historic Places. Individual historic-register status is NOT verified either way.",
       "value": null,
       "unit": null,
       "sourceRef": "S10",

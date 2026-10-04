@@ -14,6 +14,41 @@ logs are summarized in each property README and in the PR description.
 **Calvary Memorial Church, 7200 Roosevelt Blvd, Philadelphia, PA 19149**
 (`calvary-memorial-philadelphia/`)
 
+## Canonical readiness gates
+
+Weighted scores rank opportunity and complexity; they do not decide readiness.
+Issue #2 sets mandatory selection criteria (public parcel geometry; public,
+machine-readable or clean zoning sources; clear current code; enough complexity
+without making the benchmark impossible). A candidate is eligible to serve as
+the **first** canonical gold fixture only when every load-bearing source,
+currentness, and geometric prerequisite for those criteria is actually in hand —
+so another engineer can reproduce every consequential value today. Gates are
+pass (✓) / open, not weighted preferences.
+
+| Gate | NYC | Seattle | Portland | Denver | Philadelphia | DC | Minneapolis |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| G1 parcel geometry retrieved & committed | OPEN — MapPLUTO unreachable in-session | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| G2 zoning assignment from official layer | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| G3 dimensional rules captured from official sources | ✓ | OPEN — code text unreadable to automated clients | ✓ | PARTIAL — PDF tables scramble under extraction | ✓ | ✓ | PARTIAL — handbook only (self-described incomplete) |
+| G4 clear current code | ✓ | OPEN | OPEN — chapter revision dates vs consolidated code effective 2026-07-01 unreconciled | ✓ | ✓ [a] | ✓ — consolidated export with stated currency [b] | OPEN — adopted text JS-only |
+| G5 binding constraints resolvable without unfetched layers | ✓ | ✓ | OPEN — floodway layer unfetched; developable fraction unknown | ✓ | ✓ | ✓ | OPEN — parking, yards, density rules uncaptured |
+
+[a] Philadelphia: adopted text captured live for § 14-802(2) and § 14-548; the
+dimensional table is captured via the official PCPC Quick Guide (February 2026)
+with currency documented; adopted-table capture itself is an open question in
+the fixture. [b] DC: DCOZ's consolidated export is labeled unofficial; the
+official register is JS-only — caveat recorded in the fixture.
+
+**Gate-closed candidates: Philadelphia and DC.** Among them the maintainer's
+matrix ranks Philadelphia first (4.50 vs 4.48), and the decision layer
+(congregation vs institutional seminary owner; pending PUD already advancing the
+site) also favors Philadelphia. **Portland is the highest-scoring candidate
+overall (4.60) and is deferred as canonical, not rejected** — until its two open
+gates close (floodway mapping; code-currency reconciliation), after which
+re-cutting the canonical designation is a documentation change, not new
+research, because its fixture already exists. This is how Philadelphia becomes
+canonical without hand-waving away Portland's higher weighted score.
+
 ## Weighted selection matrix
 
 **Weighting correction (2026-10-04, PR review).** The first version of this document
@@ -55,15 +90,16 @@ invented demo copy):
 **Under the maintainer's weights, Portland scores highest (4.60), with
 Philadelphia second (4.50), DC (4.48), and Minneapolis (4.45) effectively tied.**
 The 0.10 spread across the top four is within the noise of one-point subjective
-scores, so the decision layer below remains the decisive justification — now
-stated more precisely: Philadelphia is recommended as the FIRST canonical gold
-fixture on completeness-of-evidence grounds (three adopted-code live captures;
-every load-bearing value already closed), while Portland's flagship number
-(developable fraction of 10.97 acres) depends on an unfetched floodway layer and
-its chapter PDFs lag the consolidated code. If the maintainer prefers strict
-matrix ordering, Portland is the defensible canonical choice — all four fixtures
-already exist, so re-cutting the canonical designation is a documentation change,
-not new research.
+scores. The canonical choice is therefore decided by the readiness gates above,
+not by overriding the matrix: among gate-closed candidates, Philadelphia leads
+on both the weighted score and the decision layer, while carrying the **highest
+evidence completeness for the initial benchmark** — adopted-code live captures
+for the two sections that bind feasibility hardest, an official city
+dimensional reference, and first-hand capture of every load-bearing input the
+fixture asserts. That is not a claim of zero unresolved questions: the
+Philadelphia fixture itself records open items (FAR applicability, geographic
+bonus restrictions, the overlay edge sweep, contextual/site questions, and
+historic-register status), and those unknowns are content, not gaps.
 
 ## Finalist tradeoffs
 
@@ -109,8 +145,9 @@ not new research.
   subtracted from density calculations; without FEMA floodway mapping the truly
   developable fraction of the 10.97 acres is **unknown** and could be small. Code
   currency is ambiguous: the per-chapter PDFs carry 2024–2025 revision dates while
-  the consolidated code is "effective July 1, 2026". Both issues are honest
-  real-world mess, but too much unresolved risk for the first gold fixture.
+  the consolidated code is "effective July 1, 2026". These two issues are recorded
+  as **open readiness gates (G4, G5)** in the table above — Portland is the
+  highest-scoring candidate and is deferred, not rejected, until they close.
 - **Kept as:** secondary fixture (best complexity case).
 
 ### Minneapolis — Central Lutheran Church (333 S 12th St / 328 E 16th St)
@@ -151,9 +188,11 @@ not new research.
   1. **Most complete and redundant verified evidence chain in the study** —
      adopted-code live captures for the two sections that bind feasibility
      hardest (parking, overlay), an official city dimensional reference, official
-     GIS for zoning assignment, PostGIS parcel polygons, building footprints,
-     flood/historic negatives, and RCO data — each item fetched first-hand by the
-     benchmark author, not accepted from a secondary report.
+     GIS for zoning assignment, PostGIS parcel polygons, building footprints, a
+     FEMA Zone X result at the sampled location, no feature in the queried local
+     historic-district layer at the sampled location (individual Philadelphia
+     Register status remains an open question), and RCO data — each item fetched
+     first-hand by the benchmark author, not accepted from a secondary report.
   2. **Exact Mission Compiler shape:** one parcel, one congregation, sanctuary +
      Sunday school + affiliated school + a large area not covered by any mapped building.
      The things Acrevia's
