@@ -1,6 +1,6 @@
 # ADR 0002 — Benchmark fixture format and source-authority hierarchy
 
-Status: proposed for review with issue #2.
+Status: accepted with issue #2.
 
 ## Outcome and scope
 
