@@ -807,7 +807,7 @@ The product should communicate possibility without hiding uncertainty.
 **Phase:** Application foundation + product architecture + real-property benchmark.
 
 The repository includes a runnable landing and workspace shell and a real-property benchmark
-pack (`docs/benchmarks/`) grounding future analysis in four verified church-owned properties.
+pack (`docs/benchmarks/`) grounding future analysis in four real faith-owned properties.
 Property lookup, the Development Graph, calculations, map/3D rendering, and AI tools remain
 unimplemented; the workflows above describe the intended product.
 
