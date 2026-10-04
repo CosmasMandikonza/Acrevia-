@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 test("canonical Philadelphia resolution flow renders progressively", async ({ page }) => {
-  await page.goto("http://localhost:3114/workspace?address=7200%20Roosevelt%20Blvd%2C%20Philadelphia%2C%20PA&view=site");
+  await page.goto("http://localhost:3120/workspace?address=7200%20Roosevelt%20Blvd%2C%20Philadelphia%2C%20PA&view=site");
   await expect(page.getByRole("textbox")).toBeVisible();
 
   // One click resolves the pre-filled address.

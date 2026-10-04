@@ -7,8 +7,9 @@ import {
   ProviderFailure,
   type AddressCandidate,
   type ParcelCandidate,
+  type ResolvedParcelContext,
 } from "../../adapters/gis";
-import { checkValidity } from "../../adapters/gis/geometry";
+import { centroidOf, checkValidity } from "../../adapters/gis/geometry";
 import type { ResolutionSession, StageFailure } from "./state";
 
 /**
@@ -17,6 +18,11 @@ import type { ResolutionSession, StageFailure } from "./state";
  * server-side. The Census point is a candidate HINT: parcel candidacy comes
  * from the official PWD service (registry match + labeled geometry ranking),
  * and ambiguity is first-class — the pipeline never silently picks a parcel.
+ *
+ * Per-parcel context: each CONFIRMED parcel gets its own zoning, structures,
+ * and site-context resolution, preserving campus-level differences. Context
+ * failures are ADDITIVE (allSettled): successful sibling results survive and
+ * typed failures are recorded per capability.
  */
 
 export type Providers = {
@@ -38,7 +44,7 @@ export function newSession(sessionId: string, query: string, now: string): Resol
     parcelCandidates: [],
     confirmedParcelIds: [],
     userConfirmedProperty: false,
-    structures: [],
+    parcelContexts: [],
     captures: [],
   };
 }
@@ -54,6 +60,14 @@ function toStageFailure(error: unknown): StageFailure {
   };
 }
 
+function toCapabilityFailure(
+  capability: ResolvedParcelContext["failures"][number]["capability"],
+  error: unknown,
+): ResolvedParcelContext["failures"][number] {
+  const failure = toStageFailure(error);
+  return { capability, code: failure.code, message: failure.message };
+}
+
 export async function resolveAddress(
   session: ResolutionSession,
   providers: Providers,
@@ -66,8 +80,6 @@ export async function resolveAddress(
       return { ...next, addressStage: "FAILED", addressFailure: { code: "NO_MATCH", message: "no address candidates for this query", providerId: providers.geocoder.providerId } };
     }
     if (candidates.length === 1) {
-      // Single candidate: auto-advance the ADDRESS stage, but the property
-      // still requires confirmation later. The Census point remains a hint.
       return { ...next, addressStage: "RESOLVED", selectedAddress: candidates[0] };
     }
     return { ...next, addressStage: "CONFIRMATION_REQUIRED" };
@@ -91,14 +103,11 @@ export async function resolveParcels(
   if (!address) throw new Error("resolveParcels requires a selected address candidate");
   let next: ResolutionSession = { ...session, parcelStage: "SEARCHING" };
   try {
-    // Two labeled discovery modes against the official parcel service:
     const registry = address.houseNumber && address.street
       ? await providers.parcels.findByAddress(address.houseNumber, address.street)
       : [];
     const near = await providers.parcels.findNearPoint(address.point);
 
-    // Merge by parcel id, unioning match reasons (registry evidence outranks
-    // proximity; both are recorded, neither is silent).
     const byId = new Map<string, ParcelCandidate>();
     for (const candidate of [...registry, ...near]) {
       const key = candidate.brtId ?? candidate.parcelId;
@@ -134,14 +143,6 @@ export async function resolveParcels(
       };
     }
 
-    // Mark invalid-geometry candidates explicitly — they stay visible with a
-    // warning; committing them requires an explicit override decision later.
-    for (const candidate of all) {
-      checkValidity(candidate.geometry); // recorded via candidate validity below
-    }
-
-    // Auto-resolve ONLY when there is exactly one registry match AND no other
-    // plausible candidate contains the geocode point. Otherwise confirm.
     const registryMatches = all.filter((candidate) =>
       candidate.matchReasons.includes("ADDRESS_REGISTRY_MATCH"),
     );
@@ -155,13 +156,7 @@ export async function resolveParcels(
           (pointContainment[0].brtId ?? pointContainment[0].parcelId) ===
             (registryMatches[0].brtId ?? registryMatches[0].parcelId)))
     ) {
-      void registryMatches[0];
-      return {
-        ...next,
-        parcelStage: "RESOLVED",
-        confirmedParcelIds: [],
-        parcelCandidates: all,
-      };
+      return { ...next, parcelStage: "RESOLVED", confirmedParcelIds: [], parcelCandidates: all };
     }
     if (all.length === 1) {
       return { ...next, parcelStage: "RESOLVED" };
@@ -172,39 +167,110 @@ export async function resolveParcels(
   }
 }
 
-export async function resolveSiteContext(
+/**
+ * Resolve site context for EACH confirmed parcel independently. Uses
+ * allSettled so one failing provider never discards sibling successes —
+ * failures are recorded per-capability in the parcel context.
+ */
+export async function resolveParcelContexts(
   session: ResolutionSession,
   providers: Providers,
-  parcelGeometryCentroid: [number, number],
 ): Promise<ResolutionSession> {
-  try {
-    const [zoning, structures, context] = await Promise.all([
-      providers.zoning.assignAtPoint(parcelGeometryCentroid),
-      providers.structures.findByParcelPoint(parcelGeometryCentroid),
-      providers.context.contextAtPoint(parcelGeometryCentroid),
-    ]);
-    return {
-      ...session,
-      zoning,
-      structures,
-      context,
-      captures: [...session.captures, zoning.capture, ...structures.map((s) => s.capture), context.capture],
+  const chosen = session.parcelCandidates.filter((candidate) =>
+    session.confirmedParcelIds.includes(candidate.brtId ?? candidate.parcelId),
+  );
+  if (chosen.length === 0) return session;
+
+  const contexts: ResolvedParcelContext[] = [];
+  const newCaptures: ResolutionSession["captures"] = [];
+
+  for (const parcel of chosen) {
+    const centroid = centroidOf(parcel.geometry);
+    const context: ResolvedParcelContext = {
+      parcelId: parcel.brtId ?? parcel.parcelId,
+      structures: [],
+      failures: [],
     };
-  } catch {
-    // Context is enrichment: a failure here is PARTIAL, not fatal — recorded.
-    return session;
+
+    const [zoningBase, zoningOverlays, structures, flood, historic, rco] = await Promise.allSettled([
+      providers.zoning.baseDistrictAtPoint(centroid),
+      providers.zoning.overlaysAtPoint(centroid),
+      providers.structures.findByParcel({
+        parcelId: parcel.pwdParcelNum ?? parcel.parcelId,
+        geometry: parcel.geometry,
+      }),
+      providers.context.floodAtPoint(centroid),
+      providers.context.historicAtPoint(centroid),
+      providers.context.rcoAtPoint(centroid),
+    ]);
+
+    if (zoningBase.status === "fulfilled") {
+      context.zoningBase = zoningBase.value;
+      newCaptures.push(zoningBase.value.capture);
+    } else {
+      context.failures.push(toCapabilityFailure("zoning-base", zoningBase.reason));
+    }
+    if (zoningOverlays.status === "fulfilled") {
+      context.zoningOverlays = zoningOverlays.value;
+      newCaptures.push(zoningOverlays.value.capture);
+    } else {
+      context.failures.push(toCapabilityFailure("zoning-overlays", zoningOverlays.reason));
+    }
+    if (structures.status === "fulfilled") {
+      context.structures = structures.value;
+      for (const structure of structures.value) newCaptures.push(structure.capture);
+    } else {
+      context.failures.push(toCapabilityFailure("structures", structures.reason));
+    }
+    if (flood.status === "fulfilled") {
+      context.flood = flood.value;
+      newCaptures.push(flood.value.capture);
+    } else {
+      context.failures.push(toCapabilityFailure("flood", flood.reason));
+    }
+    if (historic.status === "fulfilled") {
+      context.historic = historic.value;
+      newCaptures.push(historic.value.capture);
+    } else {
+      context.failures.push(toCapabilityFailure("historic", historic.reason));
+    }
+    if (rco.status === "fulfilled") {
+      context.rco = rco.value;
+      newCaptures.push(rco.value.capture);
+    } else {
+      context.failures.push(toCapabilityFailure("rco", rco.reason));
+    }
+
+    contexts.push(context);
   }
+
+  return {
+    ...session,
+    parcelContexts: contexts,
+    captures: [...session.captures, ...newCaptures],
+  };
 }
 
 export function confirmParcels(
   session: ResolutionSession,
   parcelIds: string[],
+  options?: { allowInvalidGeometry?: boolean },
 ): ResolutionSession {
   const chosen = session.parcelCandidates.filter((candidate) =>
     parcelIds.includes(candidate.brtId ?? candidate.parcelId),
   );
   if (chosen.length !== parcelIds.length) {
     throw new Error("confirmParcels: unknown parcel id in selection");
+  }
+  if (!options?.allowInvalidGeometry) {
+    for (const parcel of chosen) {
+      const verdict = checkValidity(parcel.geometry);
+      if (verdict.validity === "invalid") {
+        throw new Error(
+          `confirmParcels: parcel ${parcel.brtId ?? parcel.parcelId} has invalid geometry (${verdict.problems.join("; ")}). Ordinary confirmation cannot commit invalid geometry — an explicit override is required.`,
+        );
+      }
+    }
   }
   return {
     ...session,

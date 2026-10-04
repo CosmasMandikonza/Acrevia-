@@ -23,7 +23,7 @@ type Phase =
   | "committed"
   | "failed";
 
-type ApiResult = { session: ResolutionSession; rollup: string };
+type ApiResult = { envelope: { session: ResolutionSession; signature: string }; rollup: string };
 
 const MODE_LABEL: Record<string, string> = {
   LIVE: "Live",
@@ -33,13 +33,15 @@ const MODE_LABEL: Record<string, string> = {
 
 export function SiteResolution({ initialQuery = "" }: { initialQuery?: string }) {
   const [query, setQuery] = useState(initialQuery);
-  const [session, setSession] = useState<ResolutionSession | null>(null);
+  const [envelope, setEnvelope] = useState<ApiResult["envelope"] | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
   const [selectedParcels, setSelectedParcels] = useState<Set<string>>(new Set());
   const [commitSummary, setCommitSummary] = useState<string | null>(null);
 
   const [sessionId] = useState(() => `session-${Date.now()}`);
+  // Derived: current session from the server-signed envelope.
+  const session = envelope?.session ?? null;
 
   const call = useCallback(
     async (body: Record<string, unknown>): Promise<ApiResult | null> => {
@@ -72,8 +74,8 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
     setCommitSummary(null);
     const result = await call({ action: "resolve", sessionId, query: query.trim() });
     if (!result) return;
-    setSession(result.session);
-    const s = result.session;
+    setEnvelope(result.envelope);
+    const s = result.envelope.session;
     if (s.addressStage === "CONFIRMATION_REQUIRED") setPhase("candidates");
     else if (s.addressStage === "FAILED") setPhase("failed");
     else if (s.parcelStage === "CONFIRMATION_REQUIRED") setPhase("parcel-candidates");
@@ -89,12 +91,12 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
 
   const selectCandidate = useCallback(
     async (index: number) => {
-      if (!session) return;
+      if (!envelope) return;
       setPhase("searching");
-      const result = await call({ action: "select", session, candidateIndex: index });
+      const result = await call({ action: "select", envelope, candidateIndex: index });
       if (!result) return;
-      setSession(result.session);
-      const s = result.session;
+      setEnvelope(result.envelope);
+      const s = result.envelope.session;
       if (s.parcelStage === "CONFIRMATION_REQUIRED") setPhase("parcel-candidates");
       else if (s.parcelStage === "RESOLVED") {
         setPhase("awaiting-property");
@@ -102,30 +104,30 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
         if (primary) setSelectedParcels(new Set([primary.brtId ?? primary.parcelId]));
       } else if (s.parcelStage === "PARCEL_NONE") setPhase("failed");
     },
-    [call, session],
+    [call, envelope],
   );
 
   const confirmParcels = useCallback(async () => {
-    if (!session || selectedParcels.size === 0) return;
+    if (!envelope || selectedParcels.size === 0) return;
     setPhase("searching");
     const result = await call({
       action: "confirm",
-      session,
+      envelope,
       parcelIds: [...selectedParcels],
     });
     if (!result) return;
-    setSession(result.session);
+    setEnvelope(result.envelope);
     setPhase("awaiting-property");
-  }, [call, selectedParcels, session]);
+  }, [call, selectedParcels, envelope]);
 
   const acceptAndCommit = useCallback(async () => {
-    if (!session) return;
+    if (!envelope) return;
     setPhase("searching");
+    let currentEnvelope = envelope;
     // If parcels aren't user-confirmed yet, confirm the primary parcel first
-    // (this also resolves zoning/structures/context at the parcel centroid).
-    let current = session;
-    if (!current.userConfirmedProperty) {
-      const primary = current.parcelCandidates[0];
+    // (this also resolves per-parcel zoning/structures/context).
+    if (!currentEnvelope.session.userConfirmedProperty) {
+      const primary = currentEnvelope.session.parcelCandidates[0];
       if (!primary) {
         setError("No parcel to confirm");
         setPhase("failed");
@@ -133,12 +135,12 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
       }
       const confirmed = await call({
         action: "confirm",
-        session: current,
+        envelope: currentEnvelope,
         parcelIds: [primary.brtId ?? primary.parcelId],
       });
       if (!confirmed) return;
-      current = confirmed.session;
-      setSession(current);
+      currentEnvelope = confirmed.envelope;
+      setEnvelope(currentEnvelope);
     }
     // Now commit the confirmed session.
     try {
@@ -146,9 +148,9 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          session: current,
-          projectId: `gis:${current.confirmedParcelIds[0]}`,
-          propertyId: `gis:property:${current.confirmedParcelIds[0]}`,
+          envelope: currentEnvelope,
+          projectId: `gis:${currentEnvelope.session.confirmedParcelIds[0]}`,
+          propertyId: `gis:property:${currentEnvelope.session.confirmedParcelIds[0]}`,
         }),
       });
       const payload = await response.json();
@@ -165,36 +167,7 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
       setError(cause instanceof Error ? cause.message : "commit failed");
       setPhase("failed");
     }
-  }, [call, session]);
-
-  const commit = useCallback(async () => {
-    if (!session) return;
-    setPhase("searching");
-    try {
-      const response = await fetch("/api/gis/commit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          session,
-          projectId: `gis:${session.confirmedParcelIds[0]}`,
-          propertyId: `gis:property:${session.confirmedParcelIds[0]}`,
-        }),
-      });
-      const payload = await response.json();
-      if (!response.ok) {
-        setError(payload.error ?? "commit failed");
-        setPhase("failed");
-        return;
-      }
-      setCommitSummary(
-        `Accepted as Development Graph project — ${payload.nodeCount} nodes, ${payload.eventCount} audited events, revision ${payload.revision}. Every fact traces to its source.`,
-      );
-      setPhase("committed");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "commit failed");
-      setPhase("failed");
-    }
-  }, [session]);
+  }, [call, envelope]);
 
   const toggleParcel = useCallback((id: string) => {
     setSelectedParcels((current) => {
@@ -215,10 +188,12 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
         geometry: candidate.geometry,
         selected: selectedParcels.has(candidate.brtId ?? candidate.parcelId),
       })),
-      structures: session.structures.map((structure) => ({
-        id: structure.structureId,
-        geometry: structure.footprint,
-      })),
+      structures: (session?.parcelContexts ?? []).flatMap((ctx) =>
+        ctx.structures.map((structure) => ({
+          id: structure.structureId,
+          geometry: structure.footprint,
+        })),
+      ),
     };
   }, [selectedParcels, session]);
 
@@ -269,11 +244,11 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
               Searching public records…
             </div>
           ) : null}
-          {session?.selectedAddress && phase !== "idle" ? (
+          {envelope?.session?.selectedAddress && phase !== "idle" ? (
             <div className="pointer-events-none absolute bottom-4 left-4 rounded-md bg-white/95 px-3 py-2 text-xs text-stone-800 shadow">
-              <p className="font-medium">{session.selectedAddress.matchedAddress}</p>
+              <p className="font-medium">{envelope.session.selectedAddress.matchedAddress}</p>
               <p className="text-stone-500">
-                Geocode hint — {session.selectedAddress.geocodeType}. Parcel from the city&apos;s
+                Geocode hint — {envelope.session.selectedAddress.geocodeType}. Parcel from the city&apos;s
                 official registry.
               </p>
             </div>
@@ -364,23 +339,23 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
                 <h3 className="font-semibold text-stone-900">
                   {session.parcelCandidates.length > 1
                     ? "Confirm this property"
-                    : session.zoning
+                    : session.parcelContexts.length > 0
                       ? "One strong match — confirm to continue"
                       : "Resolving…"}
                 </h3>
                 <dl className="mt-2 space-y-1 text-xs text-stone-700">
-                  {session.zoning ? (
-                    <div className="flex justify-between gap-2">
-                      <dt>Zoning</dt>
+                  {session.parcelContexts.map((ctx) => (
+                    <div key={ctx.parcelId} className="flex justify-between gap-2">
+                      <dt>Zoning ({ctx.parcelId.slice(-4)})</dt>
                       <dd className="font-medium">
-                        {session.zoning.baseDistrictLong ?? session.zoning.baseDistrict}
-                        {session.zoning.overlays.length > 0
-                          ? ` +${session.zoning.overlays.length} overlays`
+                        {ctx.zoningBase?.districtLong ?? ctx.zoningBase?.district ?? "—"}
+                        {ctx.zoningOverlays && ctx.zoningOverlays.overlays.length > 0
+                          ? ` +${ctx.zoningOverlays.overlays.length} overlays`
                           : ""}
                       </dd>
                     </div>
-                  ) : null}
-                  {session.structures.map((structure) => (
+                  ))}
+                  {session.parcelContexts.flatMap((ctx) => ctx.structures).map((structure) => (
                     <div key={structure.structureId} className="flex justify-between gap-2">
                       <dt>Structure</dt>
                       <dd className="font-medium">
@@ -389,16 +364,16 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
                       </dd>
                     </div>
                   ))}
-                  {session.context?.floodZone ? (
+                  {session.parcelContexts.some((ctx) => ctx.flood?.zone) ? (
                     <div className="flex justify-between gap-2">
                       <dt>Flood</dt>
-                      <dd className="font-medium">FEMA zone {session.context.floodZone}</dd>
+                      <dd className="font-medium">FEMA zone {session.parcelContexts[0]?.flood?.zone}</dd>
                     </div>
                   ) : null}
-                  {session.context && session.context.rcoNames.length > 0 ? (
+                  {session.parcelContexts.some((ctx) => ctx.rco && ctx.rco.names.length > 0) ? (
                     <div className="flex justify-between gap-2">
                       <dt>Community orgs</dt>
-                      <dd className="font-medium">{session.context.rcoNames.length} registered</dd>
+                      <dd className="font-medium">{session.parcelContexts[0]?.rco?.names.length ?? 0} registered</dd>
                     </div>
                   ) : null}
                 </dl>
@@ -417,18 +392,20 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
             <section className="rounded-md border border-olive-600 bg-olive-50 p-3 text-sm text-stone-800">
               <h3 className="font-semibold">Property accepted</h3>
               <p className="mt-0.5 font-medium">
-                {session?.parcelCandidates.find((c) =>
-                  (c.brtId ?? c.parcelId) === session?.confirmedParcelIds[0],
-                )?.ownerName ?? session?.selectedAddress?.matchedAddress}
+                {envelope?.session?.parcelCandidates.find((c) =>
+                  (c.brtId ?? c.parcelId) === envelope?.session?.confirmedParcelIds[0],
+                )?.ownerName ?? envelope?.session?.selectedAddress?.matchedAddress}
               </p>
-              {session?.zoning ? (
+              {envelope?.session?.parcelContexts.length ?? 0 > 0 ? (
                 <p className="mt-0.5 text-xs text-stone-600">
-                  Zoning {session.zoning.baseDistrictLong ?? session.zoning.baseDistrict}
-                  {session.zoning.overlays.length > 0
-                    ? ` + ${session.zoning.overlays.length} overlays`
+                  {envelope?.session?.parcelContexts.map((ctx) =>
+                    ctx.zoningBase?.districtLong ?? ctx.zoningBase?.district ?? "—",
+                  ).join(", ")}
+                  {envelope?.session?.parcelContexts.some((ctx) => ctx.zoningOverlays && ctx.zoningOverlays.overlays.length > 0)
+                    ? " + overlays"
                     : ""}
-                  {session.structures.length > 0
-                    ? ` · ${session.structures.length} structure${session.structures.length === 1 ? "" : "s"}`
+                  {envelope?.session?.parcelContexts.flatMap((ctx) => ctx.structures).length ?? 0 > 0
+                    ? ` · ${envelope?.session?.parcelContexts.flatMap((ctx) => ctx.structures).length} structure${envelope?.session?.parcelContexts.flatMap((ctx) => ctx.structures).length === 1 ? "" : "s"}`
                     : ""}
                 </p>
               ) : null}

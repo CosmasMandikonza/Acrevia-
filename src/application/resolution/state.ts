@@ -4,9 +4,7 @@ import {
   CaptureMetadata,
   ParcelCandidate,
   ProviderFailureCode,
-  SiteContextResult,
-  StructureRecord,
-  ZoningAssignmentResult,
+  ResolvedParcelContext,
 } from "../../adapters/gis";
 
 /**
@@ -72,9 +70,8 @@ export const ResolutionSession = z
     confirmedParcelIds: z.array(z.string()).default([]),
     /** True only after an explicit user confirmation action. */
     userConfirmedProperty: z.boolean().default(false),
-    zoning: ZoningAssignmentResult.optional(),
-    structures: z.array(StructureRecord).default([]),
-    context: SiteContextResult.optional(),
+    /** Per-parcel resolved context — each confirmed parcel resolved independently. */
+    parcelContexts: z.array(ResolvedParcelContext).default([]),
     captures: z.array(CaptureMetadata).default([]),
   })
   .strict();
@@ -94,14 +91,12 @@ export type SessionRollupState = z.infer<typeof SessionRollupState>;
 
 export function rollupState(session: ResolutionSession): SessionRollupState {
   if (session.addressStage === "FAILED" && session.parcelStage !== "RESOLVED") return "FAILED";
-  if (session.parcelStage === "RESOLVED" && session.userConfirmedProperty && session.zoning) {
+  const hasContext = session.parcelContexts.length > 0;
+  const hasAnyFailure = session.parcelContexts.some((c) => c.failures.length > 0);
+  if (session.parcelStage === "RESOLVED" && session.userConfirmedProperty && hasContext && !hasAnyFailure) {
     return "READY_TO_COMMIT";
   }
-  if (
-    session.parcelStage === "RESOLVED" &&
-    session.userConfirmedProperty &&
-    !session.zoning
-  ) {
+  if (session.parcelStage === "RESOLVED" && session.userConfirmedProperty && (!hasContext || hasAnyFailure)) {
     return "PARTIAL";
   }
   if (session.parcelStage === "RESOLVED" && !session.userConfirmedProperty) {

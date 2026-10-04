@@ -7,7 +7,6 @@ import {
 import { sha256Of } from "../capture-store";
 import {
   centroidOf,
-  computedAreaSqFt,
   distanceMeters,
   ensureWgs84,
   pointInGeometry,
@@ -53,7 +52,7 @@ export class PwdParcelProvider implements ParcelProvider {
     );
     const features = this.parseFeatures(body);
     return features.map((feature) =>
-      this.toCandidate(feature, { mode, retrievedAt, url, body, rawEvidenceRef }, [
+      this.toCandidate(feature, { mode, retrievedAt, url, body, rawEvidenceRef, captureKind: `address-registry:${houseNumber}-${street}` }, [
         "ADDRESS_REGISTRY_MATCH",
       ]),
     );
@@ -102,7 +101,7 @@ export class PwdParcelProvider implements ParcelProvider {
     return ranked.map(({ feature, contains, dist }) =>
       this.toCandidate(
         feature,
-        { mode, retrievedAt, url, body, rawEvidenceRef },
+        { mode, retrievedAt, url, body, rawEvidenceRef, captureKind: `envelope:${point[0].toFixed(5)},${point[1].toFixed(5)}` },
         contains ? ["CONTAINS_GEOCODE_POINT", "NEAREST"] : ["NEAREST"],
         contains ? 0 : dist,
       ),
@@ -135,6 +134,7 @@ export class PwdParcelProvider implements ParcelProvider {
       url: string;
       body: string;
       rawEvidenceRef?: string;
+      captureKind: string;
     },
     matchReasons: ParcelCandidate["matchReasons"],
     distanceMetersValue?: number,
@@ -157,6 +157,7 @@ export class PwdParcelProvider implements ParcelProvider {
         rawContentHash: sha256Of(captureInfo.body),
         rawEvidenceRef: captureInfo.rawEvidenceRef,
         authority: "OFFICIAL_GIS",
+        logicalCaptureKey: `${PROVIDER_ID}:${captureInfo.captureKind}`,
         note:
           captureInfo.mode === "FIXTURE"
             ? "committed fixture evidence (captured 2026-10-04); not a live retrieval"
@@ -170,7 +171,8 @@ export class PwdParcelProvider implements ParcelProvider {
       recordedAreaSqFt: props.gross_area,
       geometry,
       matchReasons,
-      distanceMeters: distanceMetersValue ?? computedAreaSqFt(geometry) === 0 ? distanceMetersValue : distanceMetersValue,
+      distanceMeters: distanceMetersValue,
+      pwdParcelNum: props.parcelid ? String(props.parcelid) : undefined,
     });
   }
 }

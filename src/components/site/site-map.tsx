@@ -11,6 +11,10 @@ import "maplibre-gl/dist/maplibre-gl.css";
  * canvas and the parcel/structure/evidence layers still render. Geometry
  * arrives as plain GeoJSON sources — the same WGS84 polygons that live in the
  * Development Graph, never decorative pins.
+ *
+ * Acrevia data layers are re-synced on EVERY style load (including the
+ * neutral-basemap fallback), so the spatial product state survives basemap
+ * failure. This is the centralized layer synchronization the review demanded.
  */
 
 const OSM_STYLE: StyleSpecification = {
@@ -46,10 +50,122 @@ export type SiteMapLayers = {
   structures?: Array<{ id: string; geometry: unknown }>;
 };
 
+const ACREVIA_LAYER_IDS = [
+  "structure-outline",
+  "structure-fill",
+  "parcel-outline",
+  "parcel-fill",
+  "hint-point",
+];
+
+/** Centralized: remove all Acrevia layers/sources, then re-add them from the
+ *  current data. Called on every style load and every data change, so the
+ *  spatial product state survives any basemap fallback. */
+function syncAcreviaLayers(map: MapLibreMap, layers: SiteMapLayers): void {
+  for (const id of ACREVIA_LAYER_IDS) {
+    if (map.getLayer(id)) map.removeLayer(id);
+    const sourceId = id === "hint-point" ? "hint" : id.replace(/-(fill|outline|point)$/, "");
+    if (map.getSource(sourceId)) map.removeSource(sourceId);
+  }
+
+  if (layers.hintPoint) {
+    map.addSource("hint", {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            properties: {},
+            geometry: { type: "Point", coordinates: [layers.hintPoint.lon, layers.hintPoint.lat] },
+          },
+        ],
+      },
+    });
+    map.addLayer({
+      id: "hint-point",
+      type: "circle",
+      source: "hint",
+      paint: {
+        "circle-radius": 7,
+        "circle-color": "#b8860b",
+        "circle-stroke-color": "#ffffff",
+        "circle-stroke-width": 2,
+      },
+    });
+  }
+
+  if (layers.parcels && layers.parcels.length > 0) {
+    map.addSource("parcels", {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: layers.parcels.map((parcel) => ({
+          type: "Feature",
+          properties: { id: parcel.id, selected: parcel.selected ? "yes" : "no" },
+          geometry: parcel.geometry as never,
+        })),
+      },
+    });
+    map.addLayer({
+      id: "parcel-fill",
+      type: "fill",
+      source: "parcels",
+      paint: {
+        "fill-color": ["case", ["==", ["get", "selected"], "yes"], "#5a7d4f", "#8ea487"],
+        "fill-opacity": ["case", ["==", ["get", "selected"], "yes"], 0.35, 0.16],
+      },
+    });
+    map.addLayer({
+      id: "parcel-outline",
+      type: "line",
+      source: "parcels",
+      paint: {
+        "line-color": ["case", ["==", ["get", "selected"], "yes"], "#3f5c37", "#6f7f6a"],
+        "line-width": ["case", ["==", ["get", "selected"], "yes"], 3, 1.6],
+      },
+    });
+  }
+
+  if (layers.structures && layers.structures.length > 0) {
+    map.addSource("structures", {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: layers.structures.map((structure) => ({
+          type: "Feature",
+          properties: { id: structure.id },
+          geometry: structure.geometry as never,
+        })),
+      },
+    });
+    map.addLayer({
+      id: "structure-fill",
+      type: "fill",
+      source: "structures",
+      paint: { "fill-color": "#7a5c3e", "fill-opacity": 0.85 },
+    });
+    map.addLayer({
+      id: "structure-outline",
+      type: "line",
+      source: "structures",
+      paint: { "line-color": "#4b3423", "line-width": 1 },
+    });
+  }
+}
+
 export function SiteMap({ layers }: { layers: SiteMapLayers }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  const layersRef = useRef<SiteMapLayers>(layers);
   const basemapFailedRef = useRef(false);
+  const styleReadyRef = useRef(false);
+
+  // Keep layers ref in sync via effect (not during render) so the
+  // style-load handler always re-syncs the latest data.
+  useEffect(() => {
+    layersRef.current = layers;
+  }, [layers]);
 
   useEffect(() => {
     let disposed = false;
@@ -66,14 +182,29 @@ export function SiteMap({ layers }: { layers: SiteMapLayers }) {
         attributionControl: { compact: true },
       });
       mapRef.current = map;
+
+      // Re-sync Acrevia layers on EVERY style load, including the neutral
+      // fallback. This is the centralized synchronization that prevents the
+      // "blank canvas after basemap failure" bug the review identified.
+      map.on("style.load", () => {
+        styleReadyRef.current = true;
+        syncAcreviaLayers(map!, layersRef.current);
+      });
+
       map.on("error", (event) => {
         const target = event.error as { message?: string } | undefined;
-        // Basemap tile/style failures degrade to the neutral canvas; the
-        // product data layers are unaffected (non-negotiable).
-        if (!basemapFailedRef.current && target?.message?.toLowerCase().includes("tile")) {
+        if (
+          !basemapFailedRef.current &&
+          target?.message &&
+          (target.message.toLowerCase().includes("tile") ||
+            target.message.toLowerCase().includes("style"))
+        ) {
           basemapFailedRef.current = true;
-          const target = mapRef.current ?? map;
-          target?.setStyle(NEUTRAL_STYLE, { diff: false });
+          const mapInstance = mapRef.current ?? map;
+          if (mapInstance) {
+            mapInstance.setStyle(NEUTRAL_STYLE, { diff: false });
+            // style.load fires after setStyle, re-syncing layers there.
+          }
         }
       });
     })();
@@ -82,119 +213,20 @@ export function SiteMap({ layers }: { layers: SiteMapLayers }) {
       disposed = true;
       map?.remove();
       mapRef.current = null;
+      styleReadyRef.current = false;
     };
   }, []);
 
-  // Data layers: re-derived whenever the resolution layers change. These are
-  // added on top of whatever style is active, so they survive a basemap swap.
+  // Data change: re-sync if the style is already loaded. If not, the
+  // style.load handler above will pick up the latest layersRef data.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    const render = () => {
-      // hint point (geocode HINT — visually distinct from confirmed geometry)
-      if (layers.hintPoint) {
-        map.addSource("hint", {
-          type: "geojson",
-          data: {
-            type: "FeatureCollection",
-            features: [
-              {
-                type: "Feature",
-                properties: {},
-                geometry: { type: "Point", coordinates: [layers.hintPoint.lon, layers.hintPoint.lat] },
-              },
-            ],
-          },
-        });
-        map.addLayer({
-          id: "hint-point",
-          type: "circle",
-          source: "hint",
-          paint: {
-            "circle-radius": 7,
-            "circle-color": "#b8860b",
-            "circle-stroke-color": "#ffffff",
-            "circle-stroke-width": 2,
-          },
-        });
-      }
-
-      if (layers.parcels && layers.parcels.length > 0) {
-        map.addSource("parcels", {
-          type: "geojson",
-          data: {
-            type: "FeatureCollection",
-            features: layers.parcels.map((parcel) => ({
-              type: "Feature",
-              properties: { id: parcel.id, selected: parcel.selected ? "yes" : "no" },
-              geometry: parcel.geometry as never,
-            })),
-          },
-        });
-        map.addLayer({
-          id: "parcel-fill",
-          type: "fill",
-          source: "parcels",
-          paint: {
-            "fill-color": ["case", ["==", ["get", "selected"], "yes"], "#5a7d4f", "#8ea487"],
-            "fill-opacity": ["case", ["==", ["get", "selected"], "yes"], 0.35, 0.16],
-          },
-        });
-        map.addLayer({
-          id: "parcel-outline",
-          type: "line",
-          source: "parcels",
-          paint: {
-            "line-color": ["case", ["==", ["get", "selected"], "yes"], "#3f5c37", "#6f7f6a"],
-            "line-width": ["case", ["==", ["get", "selected"], "yes"], 3, 1.6],
-          },
-        });
-      }
-
-      if (layers.structures && layers.structures.length > 0) {
-        map.addSource("structures", {
-          type: "geojson",
-          data: {
-            type: "FeatureCollection",
-            features: layers.structures.map((structure) => ({
-              type: "Feature",
-              properties: { id: structure.id },
-              geometry: structure.geometry as never,
-            })),
-          },
-        });
-        map.addLayer({
-          id: "structure-fill",
-          type: "fill",
-          source: "structures",
-          paint: { "fill-color": "#7a5c3e", "fill-opacity": 0.85 },
-        });
-        map.addLayer({
-          id: "structure-outline",
-          type: "line",
-          source: "structures",
-          paint: { "line-color": "#4b3423", "line-width": 1 },
-        });
-      }
-    };
-
-    const cleanup = () => {
-      for (const id of ["structure-outline", "structure-fill", "parcel-outline", "parcel-fill", "hint-point"]) {
-        if (map.getLayer(id)) map.removeLayer(id);
-        if (map.getSource(id)) map.removeSource(id);
-      }
-    };
-
-    if (map.isStyleLoaded()) {
-      cleanup();
-      render();
-    } else {
-      map.once("load", () => {
-        cleanup();
-        render();
-      });
+    if (styleReadyRef.current && map.isStyleLoaded()) {
+      syncAcreviaLayers(map, layers);
     }
-    return cleanup;
+    // If style not yet loaded, the style.load handler will call syncAcreviaLayers
+    // with layersRef.current which is already updated.
   }, [layers]);
 
   return (

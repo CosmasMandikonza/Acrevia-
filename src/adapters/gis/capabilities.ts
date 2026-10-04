@@ -7,6 +7,11 @@ import { z } from "zod";
  *
  * Canonical geometry: EPSG:4326 / RFC 7946, [lon, lat]. A provider response in
  * any other CRS is a typed UNSUPPORTED_CRS failure — never silently reprojected.
+ *
+ * Per-parcel context: structures and zoning are resolved PER confirmed parcel
+ * (not at one centroid), preserving parcel-level differences on a campus.
+ * Every fact gets its OWN capture — base zoning, overlays, flood, historic,
+ * and RCO are separate provider responses with separate source artifacts.
  */
 
 export const CaptureMode = z.enum(["LIVE", "CACHED", "FIXTURE"]);
@@ -35,6 +40,8 @@ export const CaptureMetadata = z
     ]),
     /** Human-readable note when mode is CACHED/FIXTURE. */
     note: z.string().optional(),
+    /** Stable logical capture identity: providerId + query fingerprint. */
+    logicalCaptureKey: z.string().min(1),
   })
   .strict();
 export type CaptureMetadata = z.infer<typeof CaptureMetadata>;
@@ -72,15 +79,11 @@ export const AddressCandidate = z
   .object({
     capture: CaptureMetadata,
     matchedAddress: z.string().min(1),
-    /** Census/TIGER points are street-range interpolations: a HINT, never
-     *  parcel identity. Downstream code must never treat this as a parcel. */
     point: z.tuple([z.number(), z.number()]),
-    /** e.g. "tiger-interpolated" | "exact" | ... provider-labeled. */
     geocodeType: z.string().min(1),
     houseNumber: z.string().optional(),
     street: z.string().optional(),
     zip: z.string().optional(),
-    /** Extra jurisdiction cross-evidence the geocoder returned, if any. */
     jurisdictions: z
       .array(z.object({ layer: z.string(), name: z.string(), geoid: z.string().optional() }).strict())
       .default([]),
@@ -98,11 +101,12 @@ export const ParcelCandidate = z
     ownerName: z.string().optional(),
     recordedAreaSqFt: z.number().finite().optional(),
     geometry: Wgs84Geometry,
-    /** Why this parcel is a candidate — the anti-silent-pick paper trail. */
     matchReasons: z
       .array(z.enum(["ADDRESS_REGISTRY_MATCH", "CONTAINS_GEOCODE_POINT", "NEAREST"]))
       .min(1),
     distanceMeters: z.number().finite().optional(),
+    /** PWD parcel_id_num for structure cross-lookup where available. */
+    pwdParcelNum: z.string().optional(),
   })
   .strict();
 export type ParcelCandidate = z.infer<typeof ParcelCandidate>;
@@ -121,36 +125,83 @@ export const StructureRecord = z
   .strict();
 export type StructureRecord = z.infer<typeof StructureRecord>;
 
-export const ZoningAssignmentResult = z
+/** Zoning base district — its OWN capture, separate from overlays. */
+export const ZoningBaseResult = z
   .object({
     capture: CaptureMetadata,
-    baseDistrict: z.string().min(1),
-    baseDistrictLong: z.string().optional(),
+    district: z.string().min(1),
+    districtLong: z.string().optional(),
+    method: z.string().min(1),
+  })
+  .strict();
+export type ZoningBaseResult = z.infer<typeof ZoningBaseResult>;
+
+/** Zoning overlays — its OWN capture, separate from the base district. */
+export const ZoningOverlaysResult = z
+  .object({
+    capture: CaptureMetadata,
     overlays: z
-      .array(
-        z
-          .object({
-            name: z.string().min(1),
-            codeSection: z.string().optional(),
-          })
-          .strict(),
-      )
+      .array(z.object({ name: z.string().min(1), codeSection: z.string().optional() }).strict())
       .default([]),
     method: z.string().min(1),
   })
   .strict();
-export type ZoningAssignmentResult = z.infer<typeof ZoningAssignmentResult>;
+export type ZoningOverlaysResult = z.infer<typeof ZoningOverlaysResult>;
 
-export const SiteContextResult = z
+export const FloodResult = z
   .object({
     capture: CaptureMetadata,
-    floodZone: z.string().optional(),
-    floodZoneDescription: z.string().optional(),
-    historicDistrict: z.string().optional(),
-    rcoNames: z.array(z.string()).default([]),
+    zone: z.string().optional(),
+    description: z.string().optional(),
+    method: z.string().min(1),
   })
   .strict();
-export type SiteContextResult = z.infer<typeof SiteContextResult>;
+export type FloodResult = z.infer<typeof FloodResult>;
+
+export const HistoricResult = z
+  .object({
+    capture: CaptureMetadata,
+    districtFeature: z.string().optional(),
+    method: z.string().min(1),
+  })
+  .strict();
+export type HistoricResult = z.infer<typeof HistoricResult>;
+
+export const RcoResult = z
+  .object({
+    capture: CaptureMetadata,
+    names: z.array(z.string()).default([]),
+    method: z.string().min(1),
+  })
+  .strict();
+export type RcoResult = z.infer<typeof RcoResult>;
+
+/** Per-parcel resolved context — each confirmed parcel gets its own zoning,
+ *  structures, and site context, preserving campus-level differences. */
+export const ResolvedParcelContext = z
+  .object({
+    parcelId: z.string().min(1),
+    zoningBase: ZoningBaseResult.optional(),
+    zoningOverlays: ZoningOverlaysResult.optional(),
+    structures: z.array(StructureRecord).default([]),
+    flood: FloodResult.optional(),
+    historic: HistoricResult.optional(),
+    rco: RcoResult.optional(),
+    /** Typed capability failures for THIS parcel (additive, not silent). */
+    failures: z
+      .array(
+        z
+          .object({
+            capability: z.enum(["zoning-base", "zoning-overlays", "structures", "flood", "historic", "rco"]),
+            code: ProviderFailureCode,
+            message: z.string().min(1),
+          })
+          .strict(),
+      )
+      .default([]),
+  })
+  .strict();
+export type ResolvedParcelContext = z.infer<typeof ResolvedParcelContext>;
 
 export interface Geocoder {
   readonly providerId: string;
@@ -159,9 +210,7 @@ export interface Geocoder {
 
 export interface ParcelProvider {
   readonly providerId: string;
-  /** Parcels whose registry address matches the parsed address text. */
   findByAddress(houseNumber: string, street: string): Promise<ParcelCandidate[]>;
-  /** Parcels near a point: containment + nearest-K, ranked, reasons labeled. */
   findNearPoint(
     point: [number, number],
     options?: { maxCandidates?: number; radiusMeters?: number },
@@ -170,15 +219,20 @@ export interface ParcelProvider {
 
 export interface StructureProvider {
   readonly providerId: string;
-  findByParcelPoint(point: [number, number]): Promise<StructureRecord[]>;
+  /** Discover structures ON a parcel — by official parcel link where available,
+   *  otherwise by polygon/envelope intersection with spatial filtering. */
+  findByParcel(parcel: { parcelId: string; geometry: Wgs84Geometry }): Promise<StructureRecord[]>;
 }
 
 export interface ZoningProvider {
   readonly providerId: string;
-  assignAtPoint(point: [number, number]): Promise<ZoningAssignmentResult>;
+  baseDistrictAtPoint(point: [number, number]): Promise<ZoningBaseResult>;
+  overlaysAtPoint(point: [number, number]): Promise<ZoningOverlaysResult>;
 }
 
 export interface ContextProvider {
   readonly providerId: string;
-  contextAtPoint(point: [number, number]): Promise<SiteContextResult>;
+  floodAtPoint(point: [number, number]): Promise<FloodResult>;
+  historicAtPoint(point: [number, number]): Promise<HistoricResult>;
+  rcoAtPoint(point: [number, number]): Promise<RcoResult>;
 }

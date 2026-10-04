@@ -84,6 +84,7 @@ export class CensusGeocoder implements Geocoder {
           rawContentHash: sha256Of(body),
           rawEvidenceRef,
           authority: "OFFICIAL_GIS",
+          logicalCaptureKey: `${PROVIDER_ID}:geocode:${encodeURIComponent(query).slice(0, 60)}`,
           note:
             mode === "FIXTURE"
               ? "committed fixture evidence (captured 2026-10-04); not a live retrieval"

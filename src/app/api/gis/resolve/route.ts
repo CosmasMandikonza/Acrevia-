@@ -4,28 +4,25 @@ import {
   newSession,
   resolveAddress,
   resolveParcels,
-  resolveSiteContext,
+  resolveParcelContexts,
   confirmParcels,
+  selectAddress,
 } from "../../../../application/resolution/pipeline";
-import { rollupState, ResolutionSession } from "../../../../application/resolution/state";
-import { centroidOf } from "../../../../adapters/gis/geometry";
+import { rollupState } from "../../../../application/resolution/state";
+import {
+  createEnvelope,
+  verifyEnvelope,
+  type ResolutionEnvelope,
+} from "../../../../adapters/gis/resolution-envelope";
 
 export const dynamic = "force-dynamic";
 
-/**
- * POST /api/gis/resolve — stateless resolution endpoint. The client owns the
- * provisional session (it round-trips in the request/response); the server
- * never stores it. Actions:
- *   resolve   — address query → address stage + (auto) parcel discovery
- *   select    — user picks an address candidate → parcel discovery
- *   confirm   — user confirms parcel(s) → site context at primary centroid
- */
 export async function POST(request: Request) {
   let body: {
     action: "resolve" | "select" | "confirm";
     sessionId?: string;
     query?: string;
-    session?: unknown;
+    envelope?: ResolutionEnvelope;
     candidateIndex?: number;
     parcelIds?: string[];
   };
@@ -47,45 +44,45 @@ export async function POST(request: Request) {
       if (session.addressStage === "RESOLVED" && session.selectedAddress) {
         session = await resolveParcels(session, stack);
       }
-      return NextResponse.json({ session, rollup: rollupState(session) });
+      return NextResponse.json({ envelope: createEnvelope(session), rollup: rollupState(session) });
     }
 
     if (body.action === "select") {
-      const session = ResolutionSession.parse(body.session);
+      if (!body.envelope) {
+        return NextResponse.json({ error: "select requires envelope" }, { status: 400 });
+      }
+      const session = verifyEnvelope(body.envelope);
       if (typeof body.candidateIndex !== "number" || !session.addressCandidates[body.candidateIndex]) {
         return NextResponse.json({ error: "select requires a valid candidateIndex" }, { status: 400 });
       }
-      let next = await import("../../../../application/resolution/pipeline").then((m) =>
-        m.selectAddress(session, session.addressCandidates[body.candidateIndex!]),
-      );
+      let next = await selectAddress(session, session.addressCandidates[body.candidateIndex]);
       next = await resolveParcels(next, stack);
-      return NextResponse.json({ session: next, rollup: rollupState(next) });
+      return NextResponse.json({ envelope: createEnvelope(next), rollup: rollupState(next) });
     }
 
     if (body.action === "confirm") {
-      const session = ResolutionSession.parse(body.session);
+      if (!body.envelope) {
+        return NextResponse.json({ error: "confirm requires envelope" }, { status: 400 });
+      }
+      const session = verifyEnvelope(body.envelope);
       if (!Array.isArray(body.parcelIds) || body.parcelIds.length === 0) {
         return NextResponse.json({ error: "confirm requires parcelIds" }, { status: 400 });
       }
-      const next = confirmParcels(session, body.parcelIds);
-      const primary = next.parcelCandidates.find(
-        (candidate) => (candidate.brtId ?? candidate.parcelId) === next.confirmedParcelIds[0],
-      );
-      if (!primary) {
-        return NextResponse.json({ error: "confirmed primary parcel missing from candidates" }, { status: 400 });
-      }
-      const withContext = await resolveSiteContext(next, stack, centroidOf(primary.geometry));
-      return NextResponse.json({ session: withContext, rollup: rollupState(withContext) });
+      const confirmed = confirmParcels(session, body.parcelIds);
+      const withContext = await resolveParcelContexts(confirmed, stack);
+      return NextResponse.json({ envelope: createEnvelope(withContext), rollup: rollupState(withContext) });
     }
 
     return NextResponse.json({ error: `unknown action ${String(body.action)}` }, { status: 400 });
   } catch (error) {
+    const isSignatureError = error instanceof Error && error.name === "EnvelopeSignatureError";
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : "resolution failed",
         name: error instanceof Error ? error.name : "Error",
+        tampered: isSignatureError,
       },
-      { status: 502 },
+      { status: isSignatureError ? 403 : 502 },
     );
   }
 }
