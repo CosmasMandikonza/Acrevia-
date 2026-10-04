@@ -36,5 +36,11 @@ export const ProjectEventType = z.enum([
   "expert-review.opened",
   "expert-review.updated",
   "stakeholder-view.updated",
+  // GIS typed-commit events (issue #4)
+  "property.created",
+  "parcel.created",
+  "structure.created",
+  "jurisdiction.created",
+  "gis.site.resolved",
 ]);
 export type ProjectEventType = z.infer<typeof ProjectEventType>;
