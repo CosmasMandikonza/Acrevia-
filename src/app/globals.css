@@ -1057,3 +1057,14 @@ a:hover.text-link {
     transition: none !important;
   }
 }
+
+/* Issue #4: live site-resolution canvas fills the workspace grid. */
+.spatial-canvas-live {
+  display: flex;
+  min-height: 0;
+  padding: var(--space-3);
+}
+.spatial-canvas-live > :first-child {
+  flex: 1;
+  min-height: 0;
+}

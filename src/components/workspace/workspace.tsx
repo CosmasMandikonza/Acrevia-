@@ -16,6 +16,7 @@ import { Brand } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import { StatePanel } from "@/components/ui/state-panel";
 import { Copilot } from "./copilot";
+import nextDynamic from "next/dynamic";
 import { surfaces, getSurface } from "@/lib/surfaces";
 import { validateAddress } from "@/lib/address";
 const icons = {
@@ -26,7 +27,18 @@ const icons = {
   council: Users,
   evidence: BookOpen,
 };
+const SiteResolution = nextDynamic(
+  () => import("@/components/site/site-resolution").then((m) => m.SiteResolution),
+  {
+    ssr: false,
+    loading: () => (
+      <p className="text-sm text-stone-500">Preparing the spatial canvas…</p>
+    ),
+  },
+);
+
 export function Workspace() {
+  
   const params = useSearchParams();
   const rawAddress = params.get("address") ?? "";
   const addressError = rawAddress ? validateAddress(rawAddress) : null;
@@ -90,9 +102,18 @@ export function Workspace() {
             </div>
             <span className="toolbar-status">
               <span className="status-dot" />
-              Awaiting project data
+              {surface.id === "site" && !addressError
+                ? address
+                  ? "Public records connected"
+                  : "Enter a church address to begin"
+                : "Awaiting project data"}
             </span>
           </div>
+          {surface.id === "site" && !addressError ? (
+            <section className="spatial-canvas spatial-canvas-live" aria-label="Site resolution canvas">
+              <SiteResolution initialQuery={address} />
+            </section>
+          ) : (
           <section
             className="spatial-canvas"
             aria-label={`${surface.label} canvas placeholder`}
@@ -141,12 +162,19 @@ export function Workspace() {
               <span>No property geometry loaded</span>
             </div>
           </section>
+          )}
           <div className="evidence-strip" aria-label="Project evidence status">
             <BookOpen size={16} aria-hidden="true" />
             <strong>Evidence</strong>
-            <span>No sources checked</span>
+            {surface.id === "site" && !addressError ? (
+              <span>Public records resolve on the Site surface</span>
+            ) : (
+              <span>No sources checked</span>
+            )}
             <span className="evidence-note">
-              No feasibility conclusions available
+              {surface.id === "site" && !addressError
+                ? "Census · Philadelphia parcels · L&I zoning · building footprints"
+                : "No feasibility conclusions available"}
             </span>
             <Link href={href("evidence")}>
               Inspect evidence

@@ -804,16 +804,16 @@ The product should communicate possibility without hiding uncertainty.
 
 # Current status
 
-**Phase:** Application foundation + real-property benchmark + Development Graph core.
+**Phase:** Foundation + benchmark + Development Graph + GIS property resolution.
 
-The repository includes a runnable landing and workspace shell, a real-property benchmark
-pack (`docs/benchmarks/`) grounding future analysis in four real faith-owned properties, and
-the Development Graph (`src/domain/`, ADR 0003): typed causal project state with
-source → claim → regulation → constraint separation, provenance, dependency-aware
-invalidation, deterministic hashing, and a benchmark adapter that maps the canonical
-Philadelphia fixture into canonical project state. Property lookup, scenario computation,
-map/3D rendering, and AI tools remain unimplemented; the graph is not yet connected to the
-workspace UI, which is intentional until downstream issues consume it.
+The repository now resolves real properties: the Site surface turns a typed church
+address into an evidence-backed site — Census address candidate (hint, never parcel
+truth) → official Philadelphia PWD parcel geometry → building footprints → zoning
+assignment → an atomically committed Development Graph project, with ambiguity,
+LIVE/CACHED/FIXTURE capture modes, and failure states explicit (`src/adapters/gis/`,
+`src/application/resolution/`, ADR 0004; MapLibre canvas with a non-critical basemap).
+Scenario computation, regulatory interpretation, 3D, and AI tools remain unimplemented
+and belong to their issues.
 
 The goal is not to build a flashy demo around one happy path.
 
@@ -902,9 +902,14 @@ accessibility checks. Screenshots and failure traces live in `test-results/`;
   surface is `src/domain/index.ts`.
 - `src/commands/`: typed mutation commands over the graph (validation, events,
   revisions, dependency-aware invalidation).
-- `src/adapters/`: benchmark adapter (fixtures → graph, isolated from the domain) and the
-  persistence boundary (`ProjectCodec`, `ProjectRepository`, in-memory implementation;
-  PostgreSQL/PostGIS deferred).
+- `src/adapters/`: benchmark adapter (fixtures → graph), the persistence boundary
+  (`ProjectCodec`, `ProjectRepository`, in-memory implementation; PostgreSQL/PostGIS
+  deferred), and the GIS provider layer (Census geocoder, Philadelphia PWD parcels,
+  L&I zoning/footprints/context, capture-store tiers).
+- `src/application/resolution/`: the provisional resolution session and stateless
+  pipeline (address → parcels → site context) plus the confirmed-session commit planner.
+- `src/app/api/gis/`: stateless server routes for resolution and atomic commit.
+- `src/components/site/`: the map-first site-resolution experience (Site surface).
 - `tests/`: component, production-browser, and benchmark-structure checks.
 - `docs/benchmarks/`: real-property benchmark pack (issue #2) — one canonical property
   (Calvary Memorial Church, Philadelphia) with cached raw evidence plus three secondary
@@ -915,6 +920,7 @@ accessibility checks. Screenshots and failure traces live in `test-results/`;
 - `docs/adr/0002-benchmark-fixture-format.md`: benchmark-local fixture format and
   source-authority hierarchy.
 - `docs/adr/0003-development-graph.md`: Development Graph architecture decisions.
+- `docs/adr/0004-gis-resolution.md`: GIS providers, capture tiers, atomic site commit.
 
 The Development Graph belongs to #3; the renderer decision belongs to #8.
 

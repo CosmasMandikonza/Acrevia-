@@ -72,7 +72,7 @@ function timestamp(ctx: CommandContext): string {
   return ctx.now ? ctx.now() : new Date().toISOString();
 }
 
-function apply(
+export function apply(
   ctx: CommandContext,
   eventType: ProjectEventType,
   affectedNodeIds: string[],

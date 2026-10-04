@@ -120,5 +120,10 @@ export const ClaimPredicate = z.enum([
   "site-historic-screen",
   "owner-of-record",
   "rco-coverage",
+  // GIS resolution predicates (issue #4)
+  "geocoded-address",
+  "parcel-source-id",
+  "parcel-geometry",
+  "structure-footprint",
 ]);
 export type ClaimPredicate = z.infer<typeof ClaimPredicate>;
