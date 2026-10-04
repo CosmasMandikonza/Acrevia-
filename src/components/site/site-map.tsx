@@ -1,23 +1,211 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import type { Map as MapLibreMap, LngLatBoundsLike, StyleSpecification } from "maplibre-gl";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { Map as MapLibreMap, StyleSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 /**
- * Site canvas — the map is the hero (Design Constitution). MapLibre renders
- * the OSM raster basemap as NON-CRITICAL visual context: if the style fails
- * to load (offline venue, blocked tiles), the map falls back to a neutral
- * canvas and the parcel/structure/evidence layers still render.
+ * Site canvas — the map is the hero (Design Constitution).
  *
- * The camera fits to the resolved parcel bounds with padding, and the
- * parcel/structure contrast is high enough for a judge to identify them
- * without pixel analysis. Acrevia data layers are re-synced on EVERY style
- * load, surviving any basemap fallback.
+ * Two rendering paths over the SAME real WGS84 GeoJSON:
+ * 1. MapLibre (interactive) — the normal path when WebGL is available.
+ * 2. SVG fallback — deterministic projection of the same parcel/structure/hint
+ *    geometry when MapLibre cannot initialize or the neutral-basemap path is
+ *    active. The fallback is a renderer, not a data copy — it projects the
+ *    exact same coordinates into a viewBox. This guarantees the verified
+ *    church property is visibly there even when OSM tiles fail, WebGL fails,
+ *    or the headless browser cannot rasterize MapLibre at all.
  *
- * Browser-testable: a `data-acrevia-layers` attribute exposes the current
- * layer state (hint/parcel/structure) for Playwright assertions.
+ * Browser-testable: the SVG fallback renders data-testid elements
+ * (parcel-geometry, structure-geometry, geocode-hint) that Playwright
+ * asserts exist as real DOM geometry, not React intent.
  */
+
+export type SiteMapLayers = {
+  hintPoint?: { lon: number; lat: number } | null;
+  parcels?: Array<{
+    id: string;
+    geometry: unknown;
+    selected?: boolean;
+  }>;
+  structures?: Array<{ id: string; geometry: unknown }>;
+};
+
+// ---------------------------------------------------------------------------
+// SVG fallback renderer
+// ---------------------------------------------------------------------------
+
+type Ring = [number, number][];
+
+function extractRings(geometry: unknown): Ring[] {
+  const g = geometry as { type: string; coordinates: unknown };
+  if (!g || !g.type) return [];
+  if (g.type === "Polygon") return g.coordinates as Ring[];
+  if (g.type === "MultiPolygon") {
+    return (g.coordinates as Ring[][]).flat();
+  }
+  return [];
+}
+
+type Bounds = { minLon: number; minLat: number; maxLon: number; maxLat: number };
+
+function computeBounds(layers: SiteMapLayers): Bounds | null {
+  let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
+  const consider = (rings: Ring[]) => {
+    for (const ring of rings) {
+      for (const [lon, lat] of ring) {
+        if (lon < minLon) minLon = lon;
+        if (lon > maxLon) maxLon = lon;
+        if (lat < minLat) minLat = lat;
+        if (lat > maxLat) maxLat = lat;
+      }
+    }
+  };
+  for (const parcel of layers.parcels ?? []) consider(extractRings(parcel.geometry));
+  for (const structure of layers.structures ?? []) consider(extractRings(structure.geometry));
+  if (layers.hintPoint) {
+    minLon = Math.min(minLon, layers.hintPoint.lon);
+    maxLon = Math.max(maxLon, layers.hintPoint.lon);
+    minLat = Math.min(minLat, layers.hintPoint.lat);
+    maxLat = Math.max(maxLat, layers.hintPoint.lat);
+  }
+  if (minLon === Infinity) return null;
+  return { minLon, minLat, maxLon, maxLat };
+}
+
+/** Equirectangular projection into a viewBox with padding. */
+function projector(bounds: Bounds, width: number, height: number, padding: number) {
+  const spanLon = Math.max(bounds.maxLon - bounds.minLon, 1e-6);
+  const spanLat = Math.max(bounds.maxLat - bounds.minLat, 1e-6);
+  // Adjust for latitude compression so parcels aren't stretched.
+  const midLat = (bounds.minLat + bounds.maxLat) / 2;
+  const latScale = Math.cos((midLat * Math.PI) / 180);
+  const adjustedSpanLon = spanLon * latScale;
+
+  const availableW = width - padding * 2;
+  const availableH = height - padding * 2;
+  const scale = Math.min(availableW / adjustedSpanLon, availableH / spanLat);
+
+  return (lon: number, lat: number): [number, number] => {
+    const x = padding + (lon - bounds.minLon) * latScale * scale;
+    // Invert Y: SVG origin is top-left, north is up.
+    const y = height - padding - (lat - bounds.minLat) * scale;
+    return [x, y];
+  };
+}
+
+function ringToSvgPath(ring: Ring, project: (lon: number, lat: number) => [number, number]): string {
+  if (ring.length < 3) return "";
+  const points = ring.map(([lon, lat]) => {
+    const [x, y] = project(lon, lat);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  return `M ${points.join(" L ")} Z`;
+}
+
+function geometryToPaths(geometry: unknown, project: (lon: number, lat: number) => [number, number]): string[] {
+  return extractRings(geometry)
+    .map((ring) => ringToSvgPath(ring, project))
+    .filter((path) => path.length > 0);
+}
+
+function SvgFallback({ layers, note }: { layers: SiteMapLayers; note?: string }) {
+  const bounds = useMemo(() => computeBounds(layers), [layers]);
+  const W = 800;
+  const H = 600;
+  const PADDING = 50;
+  // Always call useMemo in the same order — compute projector even when bounds
+  // is null (returns identity in that case, unused).
+  const project = useMemo(
+    () => (bounds ? projector(bounds, W, H, PADDING) : (() => [0, 0] as [number, number])),
+    [bounds],
+  );
+  if (!bounds) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-[#e8e5de]">
+        <p className="text-sm text-stone-500">Waiting for property geometry…</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative h-full w-full bg-[#e8e5de]">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="h-full w-full"
+        preserveAspectRatio="xMidYMid meet"
+        role="img"
+        aria-label="Property parcel and building footprint (verified geometry)"
+        data-testid="spatial-fallback"
+      >
+        {/* Parcel polygons */}
+        {(layers.parcels ?? []).map((parcel) => {
+          const paths = geometryToPaths(parcel.geometry, project);
+          const isSel = parcel.selected ? "yes" : "no";
+          return paths.map((path, i) => (
+            <path
+              key={`${parcel.id}-${i}`}
+              data-testid="parcel-geometry"
+              data-parcel-id={parcel.id}
+              data-selected={isSel}
+              d={path}
+              fill={isSel === "yes" ? "#22c55e" : "#86efac"}
+              fillOpacity={isSel === "yes" ? 0.30 : 0.12}
+              stroke={isSel === "yes" ? "#166534" : "#4ade80"}
+              strokeWidth={isSel === "yes" ? 3 : 1.5}
+              strokeLinejoin="round"
+            />
+          ));
+        })}
+
+        {/* Structure footprints (drawn after parcels so they're on top) */}
+        {(layers.structures ?? []).map((structure) => {
+          const paths = geometryToPaths(structure.geometry, project);
+          return paths.map((path, i) => (
+            <path
+              key={`${structure.id}-${i}`}
+              data-testid="structure-geometry"
+              data-structure-id={structure.id}
+              d={path}
+              fill="#78350f"
+              fillOpacity={0.88}
+              stroke="#451a03"
+              strokeWidth={1.5}
+              strokeLinejoin="round"
+            />
+          ));
+        })}
+
+        {/* Census hint point */}
+        {layers.hintPoint ? (() => {
+          const [cx, cy] = project(layers.hintPoint.lon, layers.hintPoint.lat);
+          return (
+            <circle
+              data-testid="geocode-hint"
+              cx={cx}
+              cy={cy}
+              r={7}
+              fill="#d97706"
+              stroke="#ffffff"
+              strokeWidth={3}
+            />
+          );
+        })() : null}
+      </svg>
+
+      {/* Subtle fallback note */}
+      {note ? (
+        <div className="pointer-events-none absolute left-3 top-3 rounded-md bg-white/85 px-2 py-1 text-xs text-stone-600 shadow-sm">
+          {note}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// MapLibre interactive path (kept from before)
+// ---------------------------------------------------------------------------
 
 const OSM_STYLE: StyleSpecification = {
   version: 8,
@@ -36,24 +224,6 @@ const OSM_STYLE: StyleSpecification = {
   ],
 };
 
-const NEUTRAL_STYLE: StyleSpecification = {
-  version: 8,
-  sources: {},
-  layers: [{ id: "background", type: "background", paint: { "background-color": "#e8e5de" } }],
-};
-
-export type SiteMapLayers = {
-  hintPoint?: { lon: number; lat: number } | null;
-  parcels?: Array<{
-    id: string;
-    geometry: unknown;
-    selected?: boolean;
-  }>;
-  structures?: Array<{ id: string; geometry: unknown }>;
-  /** Force the neutral basemap (for deterministic fallback testing). */
-  forceNeutralBasemap?: boolean;
-};
-
 const ACREVIA_LAYER_IDS = [
   "structure-outline",
   "structure-fill",
@@ -62,40 +232,12 @@ const ACREVIA_LAYER_IDS = [
   "hint-point",
 ];
 
-/** Compute bounds from parcel geometries for camera fitting. */
-function boundsFromParcels(parcels: SiteMapLayers["parcels"]): LngLatBoundsLike | null {
-  if (!parcels || parcels.length === 0) return null;
-  let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
-  for (const parcel of parcels) {
-    const polys =
-      (parcel.geometry as { type: string; coordinates: unknown }).type === "Polygon"
-        ? [(parcel.geometry as { coordinates: number[][][] }).coordinates]
-        : (parcel.geometry as { coordinates: number[][][][] }).coordinates;
-    for (const poly of polys) {
-      for (const ring of poly) {
-        for (const [lon, lat] of ring) {
-          if (lon < minLon) minLon = lon;
-          if (lon > maxLon) maxLon = lon;
-          if (lat < minLat) minLat = lat;
-          if (lat > maxLat) maxLat = lat;
-        }
-      }
-    }
-  }
-  if (minLon === Infinity) return null;
-  return [
-    [minLon, minLat],
-    [maxLon, maxLat],
-  ];
-}
-
 function syncAcreviaLayers(map: MapLibreMap, layers: SiteMapLayers): void {
   for (const id of ACREVIA_LAYER_IDS) {
     if (map.getLayer(id)) map.removeLayer(id);
     const sourceId = id === "hint-point" ? "hint" : id.replace(/-(fill|outline|point)$/, "");
     if (map.getSource(sourceId)) map.removeSource(sourceId);
   }
-
   if (layers.hintPoint) {
     map.addSource("hint", {
       type: "geojson",
@@ -122,7 +264,6 @@ function syncAcreviaLayers(map: MapLibreMap, layers: SiteMapLayers): void {
       },
     });
   }
-
   if (layers.parcels && layers.parcels.length > 0) {
     map.addSource("parcels", {
       type: "geojson",
@@ -135,14 +276,13 @@ function syncAcreviaLayers(map: MapLibreMap, layers: SiteMapLayers): void {
         })),
       },
     });
-    // High-contrast parcel rendering: visible against both OSM and neutral basemaps.
     map.addLayer({
       id: "parcel-fill",
       type: "fill",
       source: "parcels",
       paint: {
         "fill-color": ["case", ["==", ["get", "selected"], "yes"], "#22c55e", "#86efac"],
-        "fill-opacity": ["case", ["==", ["get", "selected"], "yes"], 0.45, 0.20],
+        "fill-opacity": ["case", ["==", ["get", "selected"], "yes"], 0.35, 0.15],
       },
     });
     map.addLayer({
@@ -155,7 +295,6 @@ function syncAcreviaLayers(map: MapLibreMap, layers: SiteMapLayers): void {
       },
     });
   }
-
   if (layers.structures && layers.structures.length > 0) {
     map.addSource("structures", {
       type: "geojson",
@@ -168,7 +307,6 @@ function syncAcreviaLayers(map: MapLibreMap, layers: SiteMapLayers): void {
         })),
       },
     });
-    // Distinct warm brown — unmistakably "building" against the green parcel.
     map.addLayer({
       id: "structure-fill",
       type: "fill",
@@ -182,37 +320,28 @@ function syncAcreviaLayers(map: MapLibreMap, layers: SiteMapLayers): void {
       paint: { "line-color": "#451a03", "line-width": 2 },
     });
   }
-
-  // Fit camera to the resolved parcel bounds (only when parcels are present).
-  const bounds = boundsFromParcels(layers.parcels);
+  // Fit camera
+  const bounds = computeBounds(layers);
   if (bounds) {
-    map.fitBounds(bounds, { padding: 60, duration: 0, maxZoom: 18 });
+    map.fitBounds(
+      [
+        [bounds.minLon, bounds.minLat],
+        [bounds.maxLon, bounds.maxLat],
+      ],
+      { padding: 60, duration: 0, maxZoom: 18 },
+    );
   }
-
-  // Expose browser-testable layer state for Playwright. This reflects what
-  // Acrevia is trying to display (React state), not whether the headless
-  // browser's WebGL successfully rendered it — the test assertion proves the
-  // component has the right data, and the neutral-basemap attribute proves
-  // the fallback activated.
-  const container = map.getContainer();
-  const intended: string[] = [];
-  if (layers.hintPoint) intended.push("hint-point");
-  if (layers.parcels && layers.parcels.length > 0) intended.push("parcel-fill", "parcel-outline");
-  if (layers.structures && layers.structures.length > 0) intended.push("structure-fill", "structure-outline");
-  container.setAttribute("data-acrevia-layers", intended.join(","));
-  container.setAttribute(
-    "data-acrevia-basemap",
-    map.getSource("osm") ? "osm" : "neutral",
-  );
 }
+
+// ---------------------------------------------------------------------------
+// Main component: tries MapLibre, falls back to SVG on failure
+// ---------------------------------------------------------------------------
 
 export function SiteMap({ layers }: { layers: SiteMapLayers }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const layersRef = useRef<SiteMapLayers>(layers);
-  const basemapFailedRef = useRef(false);
-  const styleReadyRef = useRef(false);
-  const [basemapFailed, setBasemapFailed] = useState(false);
+  const [mapMode, setMapMode] = useState<"initializing" | "maplibre" | "fallback">("initializing");
 
   useEffect(() => {
     layersRef.current = layers;
@@ -220,98 +349,87 @@ export function SiteMap({ layers }: { layers: SiteMapLayers }) {
 
   useEffect(() => {
     let disposed = false;
-    let map: MapLibreMap | null = null;
-
     void (async () => {
       try {
         const maplibre = await import("maplibre-gl");
         if (disposed || !containerRef.current) return;
-        map = new maplibre.Map({
-        container: containerRef.current,
-        style: layers.forceNeutralBasemap ? NEUTRAL_STYLE : OSM_STYLE,
-        center: [-75.0564, 40.0438],
-        zoom: 16,
-        attributionControl: { compact: true },
-      });
-      mapRef.current = map;
-
-      // Immediately set the attribute (empty) so the element is addressable.
-      const container = map.getContainer();
-      container.setAttribute("data-acrevia-layers", "");
-      container.setAttribute("data-acrevia-basemap", layers.forceNeutralBasemap ? "neutral" : "loading");
-
-      map.on("style.load", () => {
-        styleReadyRef.current = true;
-        syncAcreviaLayers(map!, layersRef.current);
-      });
-
-      map.on("error", (event) => {
-        const target = event.error as { message?: string } | undefined;
-        if (
-          !basemapFailedRef.current &&
-          target?.message &&
-          (target.message.toLowerCase().includes("tile") ||
-            target.message.toLowerCase().includes("style"))
-        ) {
-          basemapFailedRef.current = true;
-          setBasemapFailed(true); // trigger re-render so the attribute updates
-          const mapInstance = mapRef.current ?? map;
-          if (mapInstance) {
-            mapInstance.setStyle(NEUTRAL_STYLE, { diff: false });
+        const map = new maplibre.Map({
+          container: containerRef.current,
+          style: OSM_STYLE,
+          center: [-75.0564, 40.0438],
+          zoom: 16,
+          attributionControl: { compact: true },
+        });
+        mapRef.current = map;
+        map.on("style.load", () => {
+          if (!disposed) {
+            setMapMode("maplibre");
+            syncAcreviaLayers(map, layersRef.current);
           }
-        }
-      });
+        });
+        map.on("error", (event) => {
+          const msg = (event.error as { message?: string })?.message ?? "";
+          if (msg.toLowerCase().includes("tile") || msg.toLowerCase().includes("style")) {
+            // Basemap tiles failed — geometry layers still render in MapLibre
+            // but also show the fallback SVG underneath for guaranteed visibility.
+            if (!disposed) setMapMode("fallback");
+          }
+        });
       } catch {
-        // MapLibre failed to initialize (headless WebGL, blocked worker, etc.).
-        // The component still renders — the React attribute still reflects the
-        // intended layers, and the resolution flow proceeds without the visual
-        // map (the evidence rail carries the product truth).
+        // MapLibre/WebGL failed to initialize — deterministic SVG fallback.
+        if (!disposed) setMapMode("fallback");
       }
     })();
 
     return () => {
       disposed = true;
-      map?.remove();
+      mapRef.current?.remove();
       mapRef.current = null;
-      styleReadyRef.current = false;
     };
-  }, [layers.forceNeutralBasemap]);
+  }, []);
 
+  // Re-sync MapLibre layers on data change (when MapLibre is active)
   useEffect(() => {
+    if (mapMode !== "maplibre") return;
     const map = mapRef.current;
     if (!map) return;
-    // Always attempt to sync on data change; MapLibre queues operations.
-    // If the style isn't ready, retry with increasing delays.
     const attempt = (delay: number): void => {
       const currentMap = mapRef.current;
       if (!currentMap) return;
       try {
         syncAcreviaLayers(currentMap, layersRef.current);
       } catch {
-        if (delay < 5000) {
-          setTimeout(() => attempt(delay * 2), delay);
-        }
+        if (delay < 5000) setTimeout(() => attempt(delay * 2), delay);
       }
     };
     attempt(100);
-  }, [layers]);
+  }, [layers, mapMode]);
 
-  // Compute intended layers for the React-rendered attribute (always present,
-  // even before the map initializes — this is the source of truth for tests).
-  const intendedLayers = [
-    ...(layers.hintPoint ? ["hint-point"] : []),
-    ...(layers.parcels && layers.parcels.length > 0 ? ["parcel-fill", "parcel-outline"] : []),
-    ...(layers.structures && layers.structures.length > 0 ? ["structure-fill", "structure-outline"] : []),
-  ].join(",");
+  // Timeout: if MapLibre hasn't initialized within 3s, switch to fallback
+  useEffect(() => {
+    if (mapMode !== "initializing") return;
+    const timer = setTimeout(() => {
+      setMapMode((current) => (current === "initializing" ? "fallback" : current));
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [mapMode]);
 
   return (
-    <div
-      ref={containerRef}
-      className="h-full w-full"
-      aria-label="Property resolution map. Parcel boundaries, building footprints, and evidence appear as they resolve."
-      role="img"
-      data-acrevia-layers={intendedLayers}
-      data-acrevia-basemap={basemapFailed || layers.forceNeutralBasemap ? "neutral" : "osm"}
-    />
+    <div className="relative h-full w-full">
+      {/* MapLibre container (hidden in fallback mode) */}
+      <div
+        ref={containerRef}
+        className={mapMode === "fallback" ? "hidden" : "h-full w-full"}
+        aria-label="Interactive property map"
+        role="img"
+      />
+      {/* Deterministic SVG fallback — always renders the same real geometry */}
+      {mapMode === "fallback" ? (
+        <SvgFallback
+          layers={layers}
+          note={mapMode === "fallback" ? "Basemap unavailable — verified property geometry still shown" : undefined}
+        />
+      ) : null}
+    </div>
   );
 }

@@ -104,7 +104,7 @@ export function Workspace() {
               <span className="status-dot" />
               {surface.id === "site" && !addressError
                 ? address
-                  ? "Resolving from public records"
+                  ? "Public records connected"
                   : "Enter a church address to begin"
                 : "Awaiting project data"}
             </span>
