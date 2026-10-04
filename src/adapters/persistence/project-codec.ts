@@ -19,7 +19,7 @@ import { computeCertificateHash } from "../../domain/scenarios/entities";
  * ADR 0001/0003; whatever persists later persists THIS representation.
  */
 
-function assertIntegrity(project: Project): void {
+export function assertProjectIntegrity(project: Project): void {
   for (const [key, node] of Object.entries(project.nodes)) {
     if (node.id !== key) {
       throw new Error(`integrity: node map key '${key}' does not match node.id '${node.id}'`);
@@ -62,12 +62,15 @@ function assertIntegrity(project: Project): void {
 }
 
 export const ProjectCodec = {
+  /** The persistence trust boundary validates in BOTH directions: malformed
+   *  in-memory state is rejected here rather than serialized and stored. */
   encode(project: Project): string {
+    assertProjectIntegrity(project);
     return canonicalJson(project);
   },
   decode(json: string): Project {
     const parsed = ProjectSchema.parse(JSON.parse(json)) as unknown as Project;
-    assertIntegrity(parsed);
+    assertProjectIntegrity(parsed);
     return parsed;
   },
 };

@@ -41,6 +41,23 @@ export type CommandContext = {
   now?: () => string;
 };
 
+
+/** Node ids are globally unique and never change semantic kind. Create paths
+ *  require an unused id; update paths require the expected kind. */
+function rejectKindCollision(
+  project: Project,
+  nodeId: string,
+  expectedKind: Project["nodes"][string]["kind"],
+  label: string,
+): void {
+  const existing = project.nodes[nodeId];
+  if (existing && existing.kind !== expectedKind) {
+    throw new Error(
+      `${label}: node id ${nodeId} already exists as ${existing.kind}; node ids never change semantic kind`,
+    );
+  }
+}
+
 function timestamp(ctx: CommandContext): string {
   return ctx.now ? ctx.now() : new Date().toISOString();
 }
@@ -142,6 +159,7 @@ export function upsertRegulation(
   for (const claimId of parsed.claimIds) {
     requireNode(ctx.project, claimId, "claim");
   }
+  rejectKindCollision(ctx.project, parsed.id, "regulation", "upsertRegulation");
   apply(
     ctx,
     "regulation.upserted",
@@ -203,6 +221,7 @@ export function confirmMissionConstraint(
   if (parsed.origin.kind !== "USER_DECLARED") {
     throw new Error("mission constraints must have USER_DECLARED origin");
   }
+  rejectKindCollision(ctx.project, parsed.id, "mission-constraint", "confirmMissionConstraint");
   apply(
     ctx,
     "mission.constraint.confirmed",
@@ -229,6 +248,7 @@ export function setAssumption(
   if (parsed.origin.kind !== "MODELER_DECLARED") {
     throw new Error("assumptions must have MODELER_DECLARED origin");
   }
+  rejectKindCollision(ctx.project, parsed.id, "assumption", "setAssumption");
   apply(
     ctx,
     "assumption.set",
@@ -309,6 +329,24 @@ export function recordScenario(
   }
   requireNode(project, parsed.parcelId, "parcel");
 
+  rejectKindCollision(ctx.project, parsed.scenarioId, "scenario", "recordScenario");
+  const certificateBase = parsed.certificateId ?? `${parsed.scenarioId}:certificate`;
+  const priorCertificates = Object.values(project.nodes).filter(
+    (node) =>
+      node.kind === "scenario-certificate" &&
+      (node as unknown as { scenarioId: string }).scenarioId === parsed.scenarioId,
+  );
+  const certificateVersion = priorCertificates.length + 1;
+  // Historical proofs are retained: each recording issues a NEW certificate
+  // node id (v1 uses the base id; later versions are suffixed).
+  const certificateId =
+    certificateVersion === 1 ? certificateBase : `${certificateBase}:v${certificateVersion}`;
+  rejectKindCollision(ctx.project, certificateId, "scenario-certificate", "recordScenario certificate id");
+  for (const result of parsed.results) {
+    const stored = certificateVersion === 1 ? result.resultId : `${result.resultId}@v${certificateVersion}`;
+    rejectKindCollision(ctx.project, stored, "constraint-result", "recordScenario result id");
+  }
+
   apply(
     ctx,
     "scenario.recorded",
@@ -321,17 +359,6 @@ export function recordScenario(
         ...parsed.assumptionIds,
         parsed.parcelId,
       ];
-      const certificateBase = parsed.certificateId ?? `${parsed.scenarioId}:certificate`;
-      const priorCertificates = Object.values(project.nodes).filter(
-        (node) =>
-          node.kind === "scenario-certificate" &&
-          (node as unknown as { scenarioId: string }).scenarioId === parsed.scenarioId,
-      );
-      const certificateVersion = priorCertificates.length + 1;
-      // Historical proofs are retained: each recording issues a NEW certificate
-      // node id (v1 uses the base id; later versions are suffixed).
-      const certificateId = certificateVersion === 1 ? certificateBase : `${certificateBase}:v${certificateVersion}`;
-
       // Results are versioned per recording: v1 keeps the base id, later
       // recordings get @v2, @v3... so historical certificates keep resolving
       // the results they were issued against (immutable proof history).
@@ -372,6 +399,13 @@ export function recordScenario(
       } else {
         project.nodes[parsed.scenarioId] = nodeWithMeta(scenarioNode, now);
       }
+      // The Scenario is the mutable current head: replace its scenario-input
+      // edge set so the graph always agrees with the head's actual inputs.
+      // Historical proofs are unaffected (certificates pin their own refs).
+      removeEdgesWhere(
+        project,
+        (edge) => edge.dependentId === parsed.scenarioId && edge.role === "scenario-input",
+      );
       for (const result of parsed.results) {
         addEdge(project, { dependentId: parsed.scenarioId, dependencyId: storedResultId(result.resultId), role: "scenario-input" });
       }
@@ -470,6 +504,7 @@ export function updateStakeholderView(
   input: z.infer<typeof UpdateStakeholderViewInput>,
 ): void {
   const parsed = UpdateStakeholderViewInput.parse(input);
+  rejectKindCollision(ctx.project, parsed.id, "stakeholder-view", "updateStakeholderView");
   if (parsed.selectedScenarioId) {
     requireNode(ctx.project, parsed.selectedScenarioId, "scenario");
   }
@@ -529,6 +564,13 @@ export function supersedeSourceArtifact(
   if (newArtifact.version <= oldArtifact.version) {
     throw new Error(
       `superseding version must be strictly newer: ${newArtifact.version} <= ${oldArtifact.version}`,
+    );
+  }
+  const existingTarget = (oldArtifact as unknown as { supersededBy?: string }).supersededBy;
+  if (existingTarget) {
+    if (existingTarget === parsed.supersededBySourceId) return; // idempotent replay
+    throw new Error(
+      `supersession history is immutable: ${parsed.sourceId} was already superseded by ${existingTarget}; to advance the chain, supersede ${existingTarget} instead`,
     );
   }
   for (const regulationId of parsed.conflictedRegulationIds) {
