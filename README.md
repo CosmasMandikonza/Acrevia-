@@ -804,9 +804,12 @@ The product should communicate possibility without hiding uncertainty.
 
 # Current status
 
-**Phase:** Application foundation + product architecture.
+**Phase:** Application foundation + product architecture + real-property benchmark.
 
-The repository includes a runnable landing and workspace shell. Property lookup, the Development Graph, calculations, map/3D rendering, and AI tools remain unimplemented; the workflows above describe the intended product.
+The repository includes a runnable landing and workspace shell and a real-property benchmark
+pack (`docs/benchmarks/`) grounding future analysis in four verified church-owned properties.
+Property lookup, the Development Graph, calculations, map/3D rendering, and AI tools remain
+unimplemented; the workflows above describe the intended product.
 
 The goal is not to build a flashy demo around one happy path.
 
@@ -890,8 +893,15 @@ accessibility checks. Screenshots and failure traces live in `test-results/`;
 - `src/components/ui/`: shared button and loading/empty/error/stale primitives.
 - `src/components/workspace/`: workspace composition and accessible Copilot rail.
 - `src/lib/`: UI navigation and address validation; no domain model yet.
-- `tests/`: component and production-browser checks.
+- `tests/`: component, production-browser, and benchmark-structure checks.
+- `docs/benchmarks/`: real-property benchmark pack (issue #2) — one canonical property
+  (Calvary Memorial Church, Philadelphia) with cached raw evidence plus three secondary
+  fixtures (DC, Minneapolis, Portland), each with a source manifest, parcel GeoJSON,
+  expected-rules fixture with provenance, and open questions. See
+  `docs/benchmarks/SELECTION.md` for how the canonical property was chosen.
 - `docs/adr/0001-foundation-shell.md`: scope and future service/model boundaries.
+- `docs/adr/0002-benchmark-fixture-format.md`: benchmark-local fixture format and
+  source-authority hierarchy.
 
 The Development Graph belongs to #3; the renderer decision belongs to #8.
 

@@ -1,0 +1,75 @@
+{
+  "schema": "acrevia.benchmark.sources.v1",
+  "property": "central-nazarene-portland",
+  "authorityHierarchy": [
+    "ADOPTED_CODE",
+    "OFFICIAL_GIS",
+    "OFFICIAL_CITY_TOOL",
+    "OFFICIAL_CITY_REFERENCE",
+    "PROPERTY_SELF_REPORTED",
+    "SECONDARY"
+  ],
+  "timestampPolicy": "UTC, ISO 8601, recorded at fetch time.",
+  "sources": [
+    {
+      "id": "S1",
+      "title": "Regional Taxlots — PortlandMaps ArcGIS (Public/Taxlots/MapServer/0)",
+      "publisher": "City of Portland / Metro regional land information (source: Multnomah County roll 2025-09-27)",
+      "url": "https://www.portlandmaps.com/arcgis/rest/services/Public/Taxlots/MapServer/0/query?where=RNO='R992090030'&outFields=*&returnGeometry=true&outSR=4326&f=json",
+      "authorityLevel": "OFFICIAL_GIS",
+      "retrievedAt": "2026-10-04T04:23:00Z",
+      "purpose": "Ownership, land area, building area, geometry",
+      "notes": "OWNER1 'CENTRAL CHURCH OF THE NAZARENE'; A_T_SQFT 477,884; BLDGSQFT 24,642; PRPCD_DESC 'CHURCH'; YEARBUILT 1997."
+    },
+    {
+      "id": "S2",
+      "title": "Zoning Designations — PortlandMaps ArcGIS (Public/Zoning/MapServer/0)",
+      "publisher": "City of Portland, Bureau of Planning and Sustainability",
+      "url": "https://www.portlandmaps.com/arcgis/rest/services/Public/Zoning/MapServer/0/query?geometry=-122.563669,45.4988665&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&f=json",
+      "authorityLevel": "OFFICIAL_GIS",
+      "retrievedAt": "2026-10-04T04:23:00Z",
+      "purpose": "Parcel zoning, overlay, plan district",
+      "notes": "ZONE 'RM2' (MAPLABEL 'RM2p'); OVRLY 'p' Environmental Protection at the centroid; PLDIST 'JC' Johnson Creek Plan District; CMP 'MD-C' Multi-Dwelling - Corridor."
+    },
+    {
+      "id": "S3",
+      "title": "Portland Zoning Code, Title 33, Chapter 33.120 (Multi-Dwelling Zones) — official chapter PDF",
+      "publisher": "City of Portland",
+      "url": "https://www.portland.gov/sites/default/files/code/120-md-zones_3.pdf",
+      "authorityLevel": "ADOPTED_CODE",
+      "retrievedAt": "2026-10-04T04:24:00Z",
+      "purpose": "RM2 dimensional standards (Table 120-4) and building coverage (33.120.225)",
+      "notes": "Chapter header states 'Title 33, Planning and Zoning Chapter 33.120 / 3/1/25'. Landing page (portland.gov/bps/planning/zoning-code-and-maps) lists a consolidated code 'effective July 1, 2026' — chapter PDFs may lag the consolidated code; see open questions."
+    },
+    {
+      "id": "S4",
+      "title": "Portland Zoning Code, Title 33, Chapter 33.266 (Parking) — official chapter PDF",
+      "publisher": "City of Portland",
+      "url": "https://www.portland.gov/sites/default/files/code/266-parking_3.pdf",
+      "authorityLevel": "ADOPTED_CODE",
+      "retrievedAt": "2026-10-04T04:38:00Z",
+      "purpose": "Parking maximums regime",
+      "notes": "Chapter header revision 1/1/25 per research pass."
+    },
+    {
+      "id": "S5",
+      "title": "Portland Zoning Code, Title 33, Chapter 33.537 (Johnson Creek Basin Plan District) — official chapter PDF",
+      "publisher": "City of Portland",
+      "url": "https://www.portland.gov/sites/default/files/code/537-johnson-creek-basin-pd_0.pdf",
+      "authorityLevel": "ADOPTED_CODE",
+      "retrievedAt": "2026-10-04T04:38:00Z",
+      "purpose": "Plan district constraints (floodway prohibitions, housing-type limits)",
+      "notes": "Chapter revision 3/1/24 per research pass."
+    },
+    {
+      "id": "S6",
+      "title": "Portland Central Church of the Nazarene website",
+      "publisher": "Portland Central Church of the Nazarene",
+      "url": "https://portlandcentralnaz.org/",
+      "authorityLevel": "PROPERTY_SELF_REPORTED",
+      "retrievedAt": "2026-10-04T03:16:00Z",
+      "purpose": "Identity and outreach path",
+      "notes": "Research-pass fetch (window 03:16Z-03:31Z): 'Pastor Matt Huff', office@portlandcentralnaz.org, (503) 760-6272, 9715 SE Powell Blvd. Not re-fetched by the benchmark author."
+    }
+  ]
+}

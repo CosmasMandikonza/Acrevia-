@@ -1,0 +1,98 @@
+{
+  "type": "Feature",
+  "properties": {
+    "benchmarkRole": "canonical",
+    "slug": "calvary-memorial-philadelphia",
+    "parcelNumber": "778273000",
+    "parcelIdSystem": "Philadelphia OPA / BRT parcel number",
+    "pwdParcelId": "494018",
+    "address": "7200-50 E ROOSEVELT BLVD, Philadelphia, PA 19149",
+    "jurisdiction": "Philadelphia, PA",
+    "ownerOfRecord": "CALVARY MEMORIAL CHURCH",
+    "recordedAreaSqFt": 119295,
+    "geodesicAreaSqFtPostGIS": 119300,
+    "equirectAreaSqFtCheck": 119441,
+    "areaMethod": "recorded = PWD pwd_parcels.gross_area; geodesic = PostGIS ST_Area(the_geom::geography) via phl.carto.com; equirect = local projection cross-check (documented in pack README)",
+    "crs": "OGC:CRS84 / EPSG:4326 (GeoJSON default); source table stores WGS84",
+    "sourceRef": "S2",
+    "retrievedAt": "2026-10-04T04:30:00Z",
+    "areaWarning": "OPA opa_properties_public.total_area reports 221,980 sq ft for this parcel \u2014 a frontage x depth rectangle artifact (483 x 459). Do not use. Use the recorded parcel polygon area."
+  },
+  "geometry": {
+    "type": "MultiPolygon",
+    "coordinates": [
+      [
+        [
+          [
+            -75.056046494,
+            40.044345566
+          ],
+          [
+            -75.055493352,
+            40.044037703
+          ],
+          [
+            -75.056487473,
+            40.043111044
+          ],
+          [
+            -75.057356851,
+            40.043596725
+          ],
+          [
+            -75.056663836,
+            40.044241494
+          ],
+          [
+            -75.056422424,
+            40.044106128
+          ],
+          [
+            -75.056386965,
+            40.044086372
+          ],
+          [
+            -75.056315416,
+            40.044152545
+          ],
+          [
+            -75.056337949,
+            40.044165066
+          ],
+          [
+            -75.056327432,
+            40.044174799
+          ],
+          [
+            -75.056291065,
+            40.04420854
+          ],
+          [
+            -75.056254367,
+            40.044241129
+          ],
+          [
+            -75.056216549,
+            40.044275465
+          ],
+          [
+            -75.056180542,
+            40.044309667
+          ],
+          [
+            -75.056144377,
+            40.044343606
+          ],
+          [
+            -75.05610636,
+            40.044378744
+          ],
+          [
+            -75.056046494,
+            40.044345566
+          ]
+        ]
+      ]
+    ]
+  }
+}

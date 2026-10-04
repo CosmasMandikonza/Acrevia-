@@ -1,0 +1,50 @@
+{
+  "schema": "acrevia.benchmark.openquestions.v1",
+  "property": "wesley-seminary-dc",
+  "generatedAt": "2026-10-04T04:32:00Z",
+  "purpose": "Honest boundaries of this secondary fixture.",
+  "questions": [
+    {
+      "id": "oq-dc-front-setback",
+      "category": "setback-front",
+      "kind": "UNKNOWN",
+      "question": "RA-1 front setback / build-to standards: the consolidated export's measurement chapters (§§ 313-316) define front setbacks and build-to lines generally, but no numeric RA-1 front-setback row was captured. Verify whether RA-1 imposes a numeric front setback, a build-to requirement, or neither.",
+      "whyItMatters": "Front placement shapes the buildable envelope and streetscape relationship."
+    },
+    {
+      "id": "oq-dc-official-text",
+      "category": "jurisdiction",
+      "kind": "EXPERT_REQUIRED",
+      "question": "The machine-readable regulations are DCOZ's consolidated 'unofficial export' (updated 10/1/2025). Official Title 11 DCMR text (Office of Documents) is JS-rendered without deep links. Confirm any legal-reliance value against the official register.",
+      "whyItMatters": "Authority chain for downstream claims."
+    },
+    {
+      "id": "oq-dc-transit-eligibility",
+      "category": "parking",
+      "kind": "UNKNOWN",
+      "question": "Is the parcel within 0.5 mi of an operating Metrorail station (50% parking reduction eligibility)? Distance not computed.",
+      "whyItMatters": "Changes required parking materially."
+    },
+    {
+      "id": "oq-dc-pud-outcome",
+      "category": "site-condition",
+      "kind": "UNKNOWN",
+      "question": "Outcome and final conditions of pending PUD case 23-08 (and related zoning cases 22-13 withdrawn, 23-08A campus plan, 24-09 text amendment per research pass).",
+      "whyItMatters": "The site's actual development path is already in motion; Acrevia must not present its scenarios as novel."
+    },
+    {
+      "id": "oq-dc-iz-parameters",
+      "category": "bonus",
+      "kind": "EXPERT_REQUIRED",
+      "question": "Inclusionary Zoning requirements (set-aside percentages, income tiers) for a project of this size, and the special-exception path for using the 1.08 FAR in RA-1.",
+      "whyItMatters": "Determines the realistic bonus economics."
+    },
+    {
+      "id": "oq-dc-ownership-control",
+      "category": "title",
+      "kind": "EXPERT_REQUIRED",
+      "question": "Denominational trust clauses, leases, or disposition constraints on United Methodist property; the OTR owner string is not a title opinion. News reports (leads, unverified) describe a 99-year ground-lease structure under the pending project.",
+      "whyItMatters": "Ownership structure shapes every capital scenario."
+    }
+  ]
+}

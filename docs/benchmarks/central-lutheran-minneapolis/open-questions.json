@@ -1,0 +1,71 @@
+{
+  "schema": "acrevia.benchmark.openquestions.v1",
+  "property": "central-lutheran-minneapolis",
+  "generatedAt": "2026-10-04T04:35:00Z",
+  "purpose": "Honest boundaries of this secondary fixture.",
+  "questions": [
+    {
+      "id": "oq-mke-density",
+      "category": "density",
+      "kind": "UNKNOWN",
+      "question": "Dwelling-unit density standards (units per lot/site, if any) for multi-family development in this district: the handbook covers FAR, height, and coverage; per-unit density rules in Title 20 were not captured.",
+      "whyItMatters": "FAR alone does not determine unit counts; density rules (or their absence) set the ceiling on homes."
+    },
+    {
+      "id": "oq-mke-use-permission",
+      "category": "use-permission",
+      "kind": "UNKNOWN",
+      "question": "Multi-family residential use permissions in the 'Residence and Institutional' primary district: the Built Form Handbook covers dimensions only; the use tables (Ch. 530 / Title 20) were not captured.",
+      "whyItMatters": "Everything else in this fixture is moot if multi-family is not a permitted use path."
+    },
+    {
+      "id": "oq-mke-adopted-text",
+      "category": "jurisdiction",
+      "kind": "EXPERT_REQUIRED",
+      "question": "The adopted Minneapolis zoning code (Municode Title 20) is JS-rendered and was not captured. All numeric standards come from the city's Built Form Handbook, which self-describes as 'not necessarily a complete picture'. Confirm against Ch. 530/540 text before solver reliance.",
+      "whyItMatters": "Authority chain for every numeric standard in this fixture."
+    },
+    {
+      "id": "oq-mke-yard-values",
+      "category": "setback-side",
+      "kind": "UNKNOWN",
+      "question": "Height-scaled yard/setback values for Transit 10 (Tables 540-19/540-21) — not reliably extractable from the handbook's table layout.",
+      "whyItMatters": "Setbacks shape the buildable envelope."
+    },
+    {
+      "id": "oq-mke-front-setback",
+      "category": "setback-front",
+      "kind": "UNKNOWN",
+      "question": "Front build-to/setback standards for Transit 10 (the handbook's yard tables cover interior side, corner side, and rear yards; front placement rules were not captured).",
+      "whyItMatters": "Street-edge placement shapes the massing and streetscape."
+    },
+    {
+      "id": "oq-mke-parking",
+      "category": "parking",
+      "kind": "UNKNOWN",
+      "question": "Motor-vehicle parking requirements (if any) for multi-family on this parcel under current Title 20.",
+      "whyItMatters": "Parking drives layout and feasibility."
+    },
+    {
+      "id": "oq-mke-2040-litigation",
+      "category": "zoning-district",
+      "kind": "EXPERT_REQUIRED",
+      "question": "Minneapolis 2040 / zoning-litigation status and any court-ordered re-verification obligations (news-level leads only this session; not verified).",
+      "whyItMatters": "Regime durability affects long-horizon projects."
+    },
+    {
+      "id": "oq-mke-parking-income",
+      "category": "site-condition",
+      "kind": "UNKNOWN",
+      "question": "The lot generates parking revenue (church-advertised monthly contracts); replacement-parking and revenue-loss terms for any development scenario are unknown.",
+      "whyItMatters": "Real mission/economics trade-off for the congregation."
+    },
+    {
+      "id": "oq-mke-far-grouping",
+      "category": "far",
+      "kind": "UNKNOWN",
+      "question": "Whether the 'Residence and Institutional' (RM3) primary district maps to the handbook's 'UN, RM' FAR/coverage group (5.0 FAR / 80%) or the 'all other' group (5.4 / 100%) — the handbook table groups primary districts and the mapping for RM3 was not confirmed from adopted text.",
+      "whyItMatters": "8% FAR and 20-point coverage differences change capacity materially; rules record the 'all other' reading as printed, flagged for confirmation."
+    }
+  ]
+}
