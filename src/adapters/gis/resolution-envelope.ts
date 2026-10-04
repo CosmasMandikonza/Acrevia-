@@ -3,22 +3,17 @@ import { canonicalJson } from "../../domain/graph/serialization";
 import type { ResolutionSession } from "../../application/resolution/state";
 
 /**
- * Server-signed ResolutionEnvelope (issue #4 blocking 5).
+ * Server-signed ResolutionEnvelope (issue #4).
  *
- * The browser owns a mutable ResolutionSession for the resolution UX, but
- * provider-derived official evidence must be tamper-evident: the client
- * cannot silently alter parcel geometry, zoning, owner, authority labels,
- * or capture hashes and have the server commit them as truth.
+ * The ENTIRE ResolutionSession is signed — no fields are excluded. User
+ * choices (parcel selections, confirmations) arrive separately as request
+ * inputs (candidateIndex, parcelIds); the server verifies the fully signed
+ * previous state, applies the allowed choice, then returns a newly fully
+ * signed envelope. There is no trust bypass.
  *
- * Design: the server canonicalizes the provider-derived session state and
- * signs it with HMAC-SHA256 using a server-only secret. The client stores
- * { session, signature }. Every select/confirm/commit request carries both;
- * the server verifies the signature BEFORE using any provider-derived data,
- * applies only the user's allowed choice (selection/confirmation flags),
- * and returns a newly signed envelope.
- *
- * User-mutable fields (selections, confirmations) are excluded from the
- * signed payload and applied server-side after verification.
+ * ACREVIA_RESOLUTION_SECRET is required in production (NODE_ENV=production)
+ * and the module fails closed if absent. A dev/test fallback is provided for
+ * local development and CI only.
  */
 
 export class EnvelopeSignatureError extends Error {
@@ -28,32 +23,33 @@ export class EnvelopeSignatureError extends Error {
   }
 }
 
-/** Fields the user may change without invalidating the signature. */
-const USER_MUTABLE_KEYS = new Set([
-  "userConfirmedProperty",
-  "confirmedParcelIds",
-  "parcelStage",
-]);
-
-function getSecret(): string {
-  const secret = process.env.ACREVIA_RESOLUTION_SECRET ?? "acrevia-dev-resolution-secret-do-not-use-in-prod";
-  return secret;
+export class MissingSecretError extends Error {
+  constructor() {
+    super(
+      "ACREVIA_RESOLUTION_SECRET is required in production. Refusing to sign resolution envelopes with a known fallback.",
+    );
+    this.name = "MissingSecretError";
+  }
 }
 
-/** Canonicalize the provider-derived session state (excluding user-mutable fields). */
-function providerDerivedPayload(session: ResolutionSession): string {
-  const filtered: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(session)) {
-    if (!USER_MUTABLE_KEYS.has(key)) {
-      filtered[key] = value;
-    }
+function getSecret(): string {
+  const secret = process.env.ACREVIA_RESOLUTION_SECRET;
+  if (secret && secret.length > 0) return secret;
+  if (process.env.NODE_ENV === "production") {
+    throw new MissingSecretError();
   }
-  return canonicalJson(filtered);
+  // Dev/test fallback — never used in production.
+  return "acrevia-dev-resolution-secret-do-not-use-in-prod";
+}
+
+/** Sign the ENTIRE session — no fields excluded. */
+function fullPayload(session: ResolutionSession): string {
+  return canonicalJson(session);
 }
 
 export function signSession(session: ResolutionSession): string {
   return createHmac("sha256", getSecret())
-    .update(providerDerivedPayload(session), "utf-8")
+    .update(fullPayload(session), "utf-8")
     .digest("hex");
 }
 
@@ -71,21 +67,8 @@ export function verifyEnvelope(envelope: ResolutionEnvelope): ResolutionSession 
   const provided = envelope.signature;
   if (provided.length !== expected.length || !timingSafeEqual(Buffer.from(provided), Buffer.from(expected))) {
     throw new EnvelopeSignatureError(
-      "resolution envelope signature mismatch: provider-derived state has been tampered with",
+      "resolution envelope signature mismatch: session state has been tampered with",
     );
   }
   return envelope.session;
-}
-
-/** Apply a user's selection/confirmation to a VERIFIED session and return a
- *  freshly signed envelope. Only USER_MUTABLE_KEYS may differ. */
-export function applyUserChoice(
-  verifiedSession: ResolutionSession,
-  choice: Partial<Pick<ResolutionSession, "userConfirmedProperty" | "confirmedParcelIds" | "parcelStage">>,
-): ResolutionEnvelope {
-  const updated: ResolutionSession = {
-    ...verifiedSession,
-    ...choice,
-  };
-  return createEnvelope(updated);
 }

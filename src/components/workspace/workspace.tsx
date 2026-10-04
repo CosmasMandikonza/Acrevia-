@@ -102,7 +102,11 @@ export function Workspace() {
             </div>
             <span className="toolbar-status">
               <span className="status-dot" />
-              Awaiting project data
+              {surface.id === "site" && !addressError
+                ? address
+                  ? "Resolving from public records"
+                  : "Enter a church address to begin"
+                : "Awaiting project data"}
             </span>
           </div>
           {surface.id === "site" && !addressError ? (
@@ -162,9 +166,15 @@ export function Workspace() {
           <div className="evidence-strip" aria-label="Project evidence status">
             <BookOpen size={16} aria-hidden="true" />
             <strong>Evidence</strong>
-            <span>No sources checked</span>
+            {surface.id === "site" && !addressError ? (
+              <span>Public records resolve on the Site surface</span>
+            ) : (
+              <span>No sources checked</span>
+            )}
             <span className="evidence-note">
-              No feasibility conclusions available
+              {surface.id === "site" && !addressError
+                ? "Census · Philadelphia parcels · L&I zoning · building footprints"
+                : "No feasibility conclusions available"}
             </span>
             <Link href={href("evidence")}>
               Inspect evidence

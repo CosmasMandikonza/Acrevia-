@@ -118,7 +118,7 @@ export function buildCommitPlan(
   // --- Parcels + per-parcel context ---
   const parcels: CommitResolvedSiteInput["parcels"] = [];
   const structures: CommitResolvedSiteInput["structures"] = [];
-  const jurisdictions: CommitResolvedSiteInput["jurisdiction"][] = [];
+  const jurisdictions: CommitResolvedSiteInput["jurisdictions"] = [];
 
   for (const candidate of chosen) {
     const parcelKey = candidate.brtId ?? candidate.parcelId;
@@ -351,7 +351,7 @@ export function buildCommitPlan(
     claims,
     parcels,
     structures,
-    jurisdiction: jurisdictions[0],
+    jurisdictions,
     ownerOfRecordClaimId: primary.ownerName
       ? `gis:claim:owner:${primary.brtId ?? primary.parcelId}`
       : undefined,

@@ -221,7 +221,7 @@ export const CommitResolvedSiteInput = z
     claims: z.array(z.any()).default([]),
     parcels: z.array(CreateParcelInput).min(1),
     structures: z.array(CreateExistingStructureInput).default([]),
-    jurisdiction: CreateJurisdictionAssignmentInput.optional(),
+    jurisdictions: z.array(CreateJurisdictionAssignmentInput).default([]),
     ownerOfRecordClaimId: z.string().optional(),
     summary: z.string().min(1),
     actor: z.string().min(1),
@@ -336,8 +336,8 @@ export function commitResolvedSite(input: CommitResolvedSiteInput): Project {
   for (const parcelId of property.parcelIds) {
     addEdge(staged, { dependentId: property.id, dependencyId: parcelId, role: "comprises" });
   }
-  if (parsed.jurisdiction) {
-    createJurisdictionAssignment(ctx, parsed.jurisdiction);
+  for (const jurisdiction of parsed.jurisdictions) {
+    createJurisdictionAssignment(ctx, jurisdiction);
   }
 
   applySiteEvent(ctx, "gis.site.resolved", Object.keys(staged.nodes), parsed.summary, () => {

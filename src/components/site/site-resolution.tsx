@@ -377,6 +377,26 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
                     </div>
                   ) : null}
                 </dl>
+                {/* Partial-failure states — visible, not silent */}
+                {session.parcelContexts.flatMap((ctx) => ctx.failures).length > 0 ? (
+                  <div className="mt-2 rounded border border-amber-400 bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
+                    {session.parcelContexts.flatMap((ctx) => ctx.failures).map((failure) => (
+                      <p key={`${failure.capability}-${failure.code}`}>
+                        {failure.capability === "zoning-base" || failure.capability === "zoning-overlays"
+                          ? "Zoning layer unavailable — zoning not yet verified"
+                          : failure.capability === "structures"
+                            ? "Building footprint service unavailable — structure not yet verified"
+                            : failure.capability === "flood"
+                              ? "Flood zone service unavailable — flood status not yet verified"
+                              : failure.capability === "historic"
+                                ? "Historic district service unavailable — historic status not yet verified"
+                                : failure.capability === "rco"
+                                  ? "Community organization data unavailable"
+                                  : `${failure.capability}: ${failure.message}`}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => void acceptAndCommit()}
