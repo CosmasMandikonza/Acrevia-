@@ -288,6 +288,59 @@ test("receipt from session A with envelope from session B is rejected", async ({
   await expectStorageCleared(page);
 });
 
+test("valid accepted session for one address does not restore under another workspace address", async ({
+  page,
+}) => {
+  test.slow(); // full LIVE flow + two workspace navigations
+  await resolveCanonical(page);
+  await acceptProperty(page);
+
+  // Storage shape proof: only the two signed artifacts — no unsigned query field.
+  const stored = await readStore(page);
+  const parsed = JSON.parse(stored!) as Record<string, unknown>;
+  expect(Object.keys(parsed).sort()).toEqual(["envelope", "receipt"]);
+
+  // Forge unsigned metadata claiming a different address (extra field on the
+  // stored session + a planted legacy record). Neither is a trust input.
+  await page.evaluate(
+    ({ key, legacyKey }) => {
+      const session = JSON.parse(window.sessionStorage.getItem(key) ?? "{}");
+      session.query = "1234 S Broad St, Philadelphia, PA";
+      window.sessionStorage.setItem(key, JSON.stringify(session));
+      window.sessionStorage.setItem(
+        legacyKey,
+        JSON.stringify({
+          query: "1234 S Broad St, Philadelphia, PA",
+          ownerName: "LEGACY FORGED OWNER",
+          zoningSummary: "LEGACY-FORGED ZONING",
+          revision: 777,
+          captures: [],
+        }),
+      );
+    },
+    { key: SESSION_KEY, legacyKey: LEGACY_RECORD_KEY },
+  );
+
+  // Open a DIFFERENT workspace address. The { envelope, receipt } pair still
+  // verifies server-side, but the binding query derives from the VERIFIED
+  // session (7200 Roosevelt) — not from any stored or forged metadata — so
+  // Property A cannot restore under Property B's workspace.
+  await page.goto(`${BASE}/workspace?address=1234%20S%20Broad%20St%2C%20Philadelphia%2C%20PA&view=site`);
+  await page.waitForTimeout(2500);
+  await expectNotAccepted(page);
+  await expect(page.getByText(/LEGACY FORGED OWNER/i)).toHaveCount(0);
+  await expect(page.getByText(/LEGACY-FORGED ZONING/i)).toHaveCount(0);
+  await expect(page.getByText(/Calvary Memorial Church/i)).toHaveCount(0);
+
+  // The rejection is address-scoped, not breakage: the canonical workspace
+  // still restores its accepted session.
+  await page.goto(CANONICAL);
+  await expect(page.getByRole("heading", { name: /property accepted/i })).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.getByText(/Calvary Memorial Church/i).first()).toBeVisible();
+});
+
 test("dispatching a forged acrevia:accepted event injects nothing", async ({ page }) => {
   await page.goto(CANONICAL);
   await page.waitForTimeout(1500);

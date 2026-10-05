@@ -7,6 +7,7 @@ import type { CommitReceipt } from "../../adapters/gis/commit-receipt";
 import {
   commitSummaryFromReceipt,
   emitAccepted,
+  normalizeAddressQuery,
   recordFromVerified,
   verifyStoredSession,
   writeAcceptedSession,
@@ -81,7 +82,10 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
     let cancelled = false;
     void verifyStoredSession().then((result) => {
       if (cancelled || result.status !== "valid") return;
-      if (!initialQuery.trim() || result.query !== initialQuery.trim()) return;
+      // Address binding: compare the current workspace address against the
+      // VERIFIED session query (server-derived), never stored metadata. A
+      // valid accepted session for one address must not restore under another.
+      if (normalizeAddressQuery(result.query) !== normalizeAddressQuery(initialQuery)) return;
       if (phaseRef.current !== "idle") return; // user already began a new resolution
       setEnvelope(result.envelope);
       setCommitSummary(commitSummaryFromReceipt(result.receipt));
@@ -239,18 +243,21 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
       const summary = commitSummaryFromReceipt(receipt.payload);
       setCommitSummary(summary);
       setPhase("committed");
-      // Persist the signed pair (server stays stateless; the envelope +
+      // Persist the signed pair only (server stays stateless; the envelope +
       // receipt live client-side per ADR 0004 and BOTH must re-verify against
-      // the server after any reload). Propagate acceptance through the
-      // in-memory registry only — no forgeable DOM event, and the record
-      // derives from the page's own server-signed envelope + receipt.
-      writeAcceptedSession(currentEnvelope, receipt, query.trim());
-      emitAccepted(recordFromVerified(currentEnvelope.session, receipt.payload, query.trim()));
+      // the server after any reload). The display record — including its
+      // query/address — derives from the server-signed session, not the
+      // editable input string. Propagate acceptance through the in-memory
+      // registry only; no forgeable DOM event.
+      writeAcceptedSession(currentEnvelope, receipt);
+      emitAccepted(
+        recordFromVerified(currentEnvelope.session, receipt.payload, currentEnvelope.session.query),
+      );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "commit failed");
       setPhase("failed");
     }
-  }, [call, envelope, phase, query]);
+  }, [call, envelope, phase]);
 
   const toggleParcel = useCallback((id: string) => {
     setSelectedParcels((current) => {

@@ -21,6 +21,7 @@ import nextDynamic from "next/dynamic";
 import { surfaces, getSurface } from "@/lib/surfaces";
 import { validateAddress } from "@/lib/address";
 import {
+  normalizeAddressQuery,
   onAccepted,
   verifyStoredSession,
   type AcceptedPropertyRecord,
@@ -59,14 +60,26 @@ export function Workspace() {
   useEffect(() => {
     let cancelled = false;
     void verifyStoredSession().then((result) => {
-      if (!cancelled) setAccepted(result.status === "valid" ? result.record : null);
+      if (cancelled) return;
+      // Address binding: the accepted record renders only when the current
+      // workspace address matches the VERIFIED session query — a valid
+      // accepted session for one address never displays under another.
+      if (
+        result.status === "valid" &&
+        address &&
+        normalizeAddressQuery(result.query) === normalizeAddressQuery(address)
+      ) {
+        setAccepted(result.record);
+      } else {
+        setAccepted(null);
+      }
     });
     const unsubscribe = onAccepted((record) => setAccepted(record));
     return () => {
       cancelled = true;
       unsubscribe();
     };
-  }, []);
+  }, [address]);
 
   function href(view: string) {
     const query = new URLSearchParams();

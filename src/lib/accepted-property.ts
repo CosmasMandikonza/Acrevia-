@@ -42,10 +42,15 @@ export type AcceptedPropertyRecord = {
   captures: AcceptedCaptureSummary[];
 };
 
+/**
+ * The ONLY stored state: the two server-signed artifacts. No unsigned fields —
+ * in particular no query/address metadata. The address binding for restore is
+ * derived from the VERIFIED envelope session (payload.session.query) and never
+ * from client-stored metadata.
+ */
 type StoredAcceptedSession = {
   envelope: { session: ResolutionSession; signature: string };
   receipt: CommitReceipt;
-  query: string;
 };
 
 /** Current store shape; the legacy unsigned record/envelope keys are dropped. */
@@ -95,7 +100,6 @@ function readStoredSession(): StoredRead {
   }
   const session = parsed?.envelope?.session;
   if (
-    typeof parsed.query !== "string" ||
     !session ||
     typeof session.sessionId !== "string" ||
     !Array.isArray(session.confirmedParcelIds) ||
@@ -108,13 +112,21 @@ function readStoredSession(): StoredRead {
   return { value: parsed };
 }
 
+/**
+ * Normalize an address string for binding comparisons: trim, collapse
+ * whitespace, case-fold. Used to compare the current workspace address
+ * against the VERIFIED session query — never against stored metadata.
+ */
+export function normalizeAddressQuery(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 /** Store the signed pair after a successful commit (trusted in-page response). */
 export function writeAcceptedSession(
   envelope: { session: ResolutionSession; signature: string },
   receipt: CommitReceipt,
-  query: string,
 ): void {
-  safeSet(SESSION_KEY, JSON.stringify({ envelope, receipt, query } satisfies StoredAcceptedSession));
+  safeSet(SESSION_KEY, JSON.stringify({ envelope, receipt } satisfies StoredAcceptedSession));
   for (const key of LEGACY_KEYS) safeRemove(key);
   invalidateVerificationCache();
 }
@@ -159,7 +171,7 @@ export function verifyStoredSession(): Promise<VerificationResult> {
         clearAcceptedState();
         return { status: "invalid" };
       }
-      const { envelope, receipt, query } = stored.value;
+      const { envelope, receipt } = stored.value;
       try {
         const response = await fetch("/api/gis/verify", {
           method: "POST",
@@ -180,7 +192,11 @@ export function verifyStoredSession(): Promise<VerificationResult> {
           return { status: "invalid" };
         }
         // Verified: every provider-derived fact comes from the verified
-        // session, every commit-derived fact from the verified receipt.
+        // session, every commit-derived fact from the verified receipt —
+        // including the query/address binding, which is derived from the
+        // VERIFIED session (payload.session.query), never from stored
+        // client metadata.
+        const query = payload.session.query;
         const record = recordFromVerified(payload.session, payload.receipt, query);
         return {
           status: "valid",
