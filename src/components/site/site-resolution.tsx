@@ -1,8 +1,18 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { SiteMap } from "./site-map";
 import type { ResolutionSession } from "../../application/resolution/state";
+import type { CommitReceipt } from "../../adapters/gis/commit-receipt";
+import {
+  commitSummaryFromReceipt,
+  emitAccepted,
+  normalizeAddressQuery,
+  recordFromVerified,
+  verifyStoredSession,
+  writeAcceptedSession,
+} from "../../lib/accepted-property";
 
 /**
  * Property resolution experience (issue #4): the canvas is the hero. The user
@@ -31,7 +41,23 @@ const MODE_LABEL: Record<string, string> = {
   FIXTURE: "Fixture evidence",
 };
 
+/** Plain-language failure text — a failed resolution must never be silent. */
+function addressFailureText(session: ResolutionSession): string {
+  const failure = session.addressFailure;
+  if (!failure) {
+    return "This address could not be resolved against the public registry. Try adding the city and state.";
+  }
+  if (failure.code === "NO_MATCH") {
+    return `No match in the public address registry for \u201c${session.query}\u201d. Add the city and state — e.g. \u201c7200 Roosevelt Blvd, Philadelphia, PA\u201d — then resolve again.`;
+  }
+  return `The address registry could not answer (${failure.code}): ${failure.message}.`;
+}
+
+const PARCEL_NONE_TEXT =
+  "The city parcel registry returned no parcels for this address. Check the street number, or try the parcel's full mailing address.";
+
 export function SiteResolution({ initialQuery = "" }: { initialQuery?: string }) {
+  const router = useRouter();
   const [query, setQuery] = useState(initialQuery);
   const [envelope, setEnvelope] = useState<ApiResult["envelope"] | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -42,6 +68,36 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
   const [sessionId] = useState(() => `session-${Date.now()}`);
   // Derived: current session from the server-signed envelope.
   const session = envelope?.session ?? null;
+
+  // Server-verified restore: sessionStorage is never trusted directly. After a
+  // navigation or reload the stored { envelope, receipt } pair must pass
+  // POST /api/gis/verify — BOTH the full-session envelope HMAC and the
+  // CommitReceipt HMAC that attests the commit happened — before the accepted
+  // state (or any fact inside it) is restored. Tampered or receipt-less
+  // storage is discarded server-side.
+  const phaseRef = useRef<Phase>("idle");
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void verifyStoredSession().then((result) => {
+      if (cancelled || result.status !== "valid") return;
+      // Address binding: compare the current workspace address against the
+      // VERIFIED session query (server-derived), never stored metadata. A
+      // valid accepted session for one address must not restore under another.
+      if (normalizeAddressQuery(result.query) !== normalizeAddressQuery(initialQuery)) return;
+      if (phaseRef.current !== "idle") return; // user already began a new resolution
+      setEnvelope(result.envelope);
+      setCommitSummary(commitSummaryFromReceipt(result.receipt));
+      setSelectedParcels(new Set(result.envelope.session.confirmedParcelIds));
+      setPhase("committed");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [initialQuery]);
 
   const call = useCallback(
     async (body: Record<string, unknown>): Promise<ApiResult | null> => {
@@ -68,6 +124,20 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
     [],
   );
 
+  /** Confirm specific parcels from a given envelope and land in the
+   * awaiting-property state with per-parcel context (zoning, structures,
+   * flood, RCO) resolved and visible BEFORE the user accepts. */
+  const confirmAndShow = useCallback(
+    async (source: ApiResult["envelope"], parcelIds: string[]) => {
+      setPhase("searching");
+      const result = await call({ action: "confirm", envelope: source, parcelIds });
+      if (!result) return;
+      setEnvelope(result.envelope);
+      setPhase("awaiting-property");
+    },
+    [call],
+  );
+
   const resolve = useCallback(async () => {
     if (!query.trim()) return;
     setPhase("searching");
@@ -76,18 +146,40 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
     if (!result) return;
     setEnvelope(result.envelope);
     const s = result.envelope.session;
+    // URL synchronization: when a different valid address resolves, rebind the
+    // workspace URL/header to the server-returned signed session query — never
+    // the raw typed string — so the Site input, shareable URL, project header,
+    // and accepted state all describe the same property BEFORE acceptance.
+    if (
+      s.addressStage !== "FAILED" &&
+      normalizeAddressQuery(s.query) !== normalizeAddressQuery(initialQuery)
+    ) {
+      const params = new URLSearchParams();
+      params.set("address", s.query);
+      params.set("view", "site");
+      router.replace(`/workspace?${params.toString()}`);
+    }
     if (s.addressStage === "CONFIRMATION_REQUIRED") setPhase("candidates");
-    else if (s.addressStage === "FAILED") setPhase("failed");
-    else if (s.parcelStage === "CONFIRMATION_REQUIRED") setPhase("parcel-candidates");
+    else if (s.addressStage === "FAILED") {
+      setError(addressFailureText(s));
+      setPhase("failed");
+    } else if (s.parcelStage === "CONFIRMATION_REQUIRED") setPhase("parcel-candidates");
     else if (s.parcelStage === "RESOLVED") {
       setPhase("awaiting-property");
       const primary = s.parcelCandidates[0];
       if (primary) {
         setSelectedParcels(new Set([primary.brtId ?? primary.parcelId]));
+        if (!s.userConfirmedProperty) {
+          // One strong registry match: resolve its context immediately so the
+          // user confirms against visible facts, not a bare button.
+          void confirmAndShow(result.envelope, [primary.brtId ?? primary.parcelId]);
+        }
       }
-    } else if (s.parcelStage === "PARCEL_NONE") setPhase("failed");
-    else setPhase("candidates");
-  }, [call, query, sessionId]);
+    } else if (s.parcelStage === "PARCEL_NONE") {
+      setError(s.parcelFailure ? `The city parcel registry could not answer (${s.parcelFailure.code}): ${s.parcelFailure.message}` : PARCEL_NONE_TEXT);
+      setPhase("failed");
+    } else setPhase("candidates");
+  }, [call, confirmAndShow, initialQuery, query, router, sessionId]);
 
   const selectCandidate = useCallback(
     async (index: number) => {
@@ -101,27 +193,27 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
       else if (s.parcelStage === "RESOLVED") {
         setPhase("awaiting-property");
         const primary = s.parcelCandidates[0];
-        if (primary) setSelectedParcels(new Set([primary.brtId ?? primary.parcelId]));
-      } else if (s.parcelStage === "PARCEL_NONE") setPhase("failed");
+        if (primary) {
+          setSelectedParcels(new Set([primary.brtId ?? primary.parcelId]));
+          if (!s.userConfirmedProperty) {
+            void confirmAndShow(result.envelope, [primary.brtId ?? primary.parcelId]);
+          }
+        }
+      } else if (s.parcelStage === "PARCEL_NONE") {
+        setError(PARCEL_NONE_TEXT);
+        setPhase("failed");
+      }
     },
-    [call, envelope],
+    [call, confirmAndShow, envelope],
   );
 
   const confirmParcels = useCallback(async () => {
     if (!envelope || selectedParcels.size === 0) return;
-    setPhase("searching");
-    const result = await call({
-      action: "confirm",
-      envelope,
-      parcelIds: [...selectedParcels],
-    });
-    if (!result) return;
-    setEnvelope(result.envelope);
-    setPhase("awaiting-property");
-  }, [call, selectedParcels, envelope]);
+    await confirmAndShow(envelope, [...selectedParcels]);
+  }, [confirmAndShow, envelope, selectedParcels]);
 
   const acceptAndCommit = useCallback(async () => {
-    if (!envelope) return;
+    if (!envelope || phase === "searching" || phase === "committed") return;
     setPhase("searching");
     let currentEnvelope = envelope;
     // If parcels aren't user-confirmed yet, confirm the primary parcel first
@@ -153,21 +245,34 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
           propertyId: `gis:property:${currentEnvelope.session.confirmedParcelIds[0]}`,
         }),
       });
-      const payload = await response.json();
-      if (!response.ok) {
-        setError(payload.error ?? "commit failed");
+      const payload = (await response.json()) as {
+        error?: string;
+        receipt?: CommitReceipt;
+      };
+      if (!response.ok || !payload.receipt) {
+        setError(payload.error ?? "commit failed: no signed receipt returned");
         setPhase("failed");
         return;
       }
-      setCommitSummary(
-        `Accepted as Development Graph project — ${payload.nodeCount} nodes, ${payload.eventCount} audited events, revision ${payload.revision}. Every fact traces to its source.`,
-      );
+      const receipt = payload.receipt;
+      const summary = commitSummaryFromReceipt(receipt.payload);
+      setCommitSummary(summary);
       setPhase("committed");
+      // Persist the signed pair only (server stays stateless; the envelope +
+      // receipt live client-side per ADR 0004 and BOTH must re-verify against
+      // the server after any reload). The display record — including its
+      // query/address — derives from the server-signed session, not the
+      // editable input string. Propagate acceptance through the in-memory
+      // registry only; no forgeable DOM event.
+      writeAcceptedSession(currentEnvelope, receipt);
+      emitAccepted(
+        recordFromVerified(currentEnvelope.session, receipt.payload, currentEnvelope.session.query),
+      );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "commit failed");
       setPhase("failed");
     }
-  }, [call, envelope]);
+  }, [call, envelope, phase]);
 
   const toggleParcel = useCallback((id: string) => {
     setSelectedParcels((current) => {
@@ -416,7 +521,7 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
                   (c.brtId ?? c.parcelId) === envelope?.session?.confirmedParcelIds[0],
                 )?.ownerName ?? envelope?.session?.selectedAddress?.matchedAddress}
               </p>
-              {envelope?.session?.parcelContexts.length ?? 0 > 0 ? (
+              {(envelope?.session?.parcelContexts.length ?? 0) > 0 ? (
                 <p className="mt-0.5 text-xs text-stone-600">
                   {envelope?.session?.parcelContexts.map((ctx) =>
                     ctx.zoningBase?.districtLong ?? ctx.zoningBase?.district ?? "—",
@@ -424,7 +529,7 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
                   {envelope?.session?.parcelContexts.some((ctx) => ctx.zoningOverlays && ctx.zoningOverlays.overlays.length > 0)
                     ? " + overlays"
                     : ""}
-                  {envelope?.session?.parcelContexts.flatMap((ctx) => ctx.structures).length ?? 0 > 0
+                  {(envelope?.session?.parcelContexts.flatMap((ctx) => ctx.structures).length ?? 0) > 0
                     ? ` · ${envelope?.session?.parcelContexts.flatMap((ctx) => ctx.structures).length} structure${envelope?.session?.parcelContexts.flatMap((ctx) => ctx.structures).length === 1 ? "" : "s"}`
                     : ""}
                 </p>

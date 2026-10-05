@@ -47,6 +47,15 @@ function fullPayload(session: ResolutionSession): string {
   return canonicalJson(session);
 }
 
+/**
+ * Canonical HMAC over any server-attested payload (resolution sessions,
+ * commit receipts) using ACREVIA_RESOLUTION_SECRET. Shared so every signed
+ * artifact fails closed under the same secret policy.
+ */
+export function hmacFor(value: unknown): string {
+  return createHmac("sha256", getSecret()).update(canonicalJson(value), "utf-8").digest("hex");
+}
+
 export function signSession(session: ResolutionSession): string {
   return createHmac("sha256", getSecret())
     .update(fullPayload(session), "utf-8")

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { commitSession, IncompleteSessionError, InvalidGeometryError } from "../../../../application/resolution/commit";
 import { ProjectCodec } from "../../../../adapters/persistence/project-codec";
 import { verifyEnvelope, type ResolutionEnvelope } from "../../../../adapters/gis/resolution-envelope";
+import { createCommitReceipt } from "../../../../adapters/gis/commit-receipt";
 
 export const dynamic = "force-dynamic";
 
@@ -29,12 +30,30 @@ export async function POST(request: Request) {
       now: new Date().toISOString(),
     });
     const encoded = ProjectCodec.encode(project);
+    // Server attestation that the commit happened: signed ONLY after the
+    // atomic commit and whole-result integrity encode succeed. The receipt
+    // binds the commit metadata to this exact envelope signature and session.
+    const committedAt = new Date().toISOString();
+    const nodeCount = Object.keys(project.nodes).length;
+    const eventCount = project.events.length;
+    const receipt = createCommitReceipt({
+      projectId: project.projectId,
+      propertyId: body.propertyId,
+      sessionId: session.sessionId,
+      envelopeSignature: body.envelope.signature,
+      revision: project.revision,
+      nodeCount,
+      eventCount,
+      committedAt,
+    });
     return NextResponse.json({
       projectId: project.projectId,
       revision: project.revision,
-      nodeCount: Object.keys(project.nodes).length,
-      eventCount: project.events.length,
+      nodeCount,
+      eventCount,
+      committedAt,
       project: JSON.parse(encoded),
+      receipt,
     });
   } catch (error) {
     if (error instanceof IncompleteSessionError) {
