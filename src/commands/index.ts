@@ -249,6 +249,36 @@ export function confirmMissionConstraint(
   );
 }
 
+export const RetractMissionConstraintInput = z.object({ id: z.string().min(1) }).strict();
+
+/**
+ * Retract a confirmed mission constraint (issue #6). The node and every edge
+ * touching it are removed; certificates whose dependency closure included it
+ * grade INVALIDATED ("no longer exists") via the normal staleness refresh —
+ * a retracted mission input must never silently keep certifying results.
+ */
+export function retractMissionConstraint(
+  ctx: CommandContext,
+  input: z.infer<typeof RetractMissionConstraintInput>,
+): void {
+  const parsed = RetractMissionConstraintInput.parse(input);
+  const existing = requireNode(ctx.project, parsed.id, "mission-constraint");
+  const intent = existing.intentText;
+  apply(
+    ctx,
+    "mission.constraint.retracted",
+    [parsed.id],
+    `retract mission constraint ${parsed.id}: ${intent}`,
+    () => {
+      removeEdgesWhere(
+        ctx.project,
+        (edge) => edge.dependencyId === parsed.id || edge.dependentId === parsed.id,
+      );
+      delete ctx.project.nodes[parsed.id];
+    },
+  );
+}
+
 export const SetAssumptionInput = AssumptionSemantic;
 export function setAssumption(
   ctx: CommandContext,

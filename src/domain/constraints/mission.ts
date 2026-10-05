@@ -18,12 +18,37 @@ export const MissionNormalized = z.discriminatedUnion("type", [
 ]);
 export type MissionNormalized = z.infer<typeof MissionNormalized>;
 
+/**
+ * Executable-semantics validation (issue #6). Typed units alone do not make a
+ * quantity meaningful as a mission constraint: a negative, zero, fractional, or
+ * non-finite parking/stories/height value must never become an active rule.
+ * Large-but-positive values REMAIN valid — without the #7 solver Acrevia
+ * cannot prove physical infeasibility, so "impossible" is not ours to claim.
+ */
+export const MissionNormalizedChecked = MissionNormalized.superRefine((normalized, ctx) => {
+  const reject = (message: string) => ctx.addIssue({ code: "custom", message });
+  if (normalized.type === "min-parking") {
+    if (!Number.isInteger(normalized.spaces.value) || normalized.spaces.value < 1) {
+      reject("minimum parking must be a whole number of spaces, at least 1");
+    }
+  } else if (normalized.type === "max-stories") {
+    if (!Number.isInteger(normalized.stories.value) || normalized.stories.value < 1) {
+      reject("maximum stories must be a whole number, at least 1");
+    }
+  } else if (normalized.type === "max-height") {
+    if (normalized.limit.value <= 0) {
+      reject("maximum height must be greater than 0 ft");
+    }
+  }
+});
+export type MissionNormalizedChecked = z.infer<typeof MissionNormalizedChecked>;
+
 export const MissionConstraintSemantic = z
   .object({
     id: z.string().min(1),
     kind: z.literal("mission-constraint"),
     intentText: z.string().min(1),
-    normalized: MissionNormalized,
+    normalized: MissionNormalizedChecked,
     origin: Origin,
     confirmationState: z.enum(["DRAFT", "CONFIRMED"]),
     hardOrSoft: z.enum(["hard", "soft"]),

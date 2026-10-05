@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SiteMap } from "./site-map";
+import { MissionCompiler } from "./mission-compiler";
 import type { ResolutionSession } from "../../application/resolution/state";
 import type { CommitReceipt } from "../../adapters/gis/commit-receipt";
 import {
@@ -64,6 +65,7 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
   const [error, setError] = useState<string | null>(null);
   const [selectedParcels, setSelectedParcels] = useState<Set<string>>(new Set());
   const [commitSummary, setCommitSummary] = useState<string | null>(null);
+  const [protectedStructureIds, setSelectedStructureIds] = useState<Set<string>>(new Set());
 
   const [sessionId] = useState(() => `session-${Date.now()}`);
   // Derived: current session from the server-signed envelope.
@@ -297,10 +299,15 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
         ctx.structures.map((structure) => ({
           id: structure.structureId,
           geometry: structure.footprint,
+          missionProtected: protectedStructureIds.has(structure.structureId),
         })),
       ),
     };
-  }, [selectedParcels, session]);
+  }, [protectedStructureIds, selectedParcels, session]);
+
+  const handleProtectedStructures = useCallback((ids: string[]) => {
+    setSelectedStructureIds(new Set(ids));
+  }, []);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
@@ -536,6 +543,20 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
               ) : null}
               <p className="mt-1 text-xs text-stone-700">{commitSummary}</p>
             </section>
+          ) : null}
+
+          {/* Mission Compiler — what the church refuses to lose (issue #6).
+              Lives in the accepted Site rail; the property stays the hero. */}
+          {phase === "committed" && session ? (
+            <MissionCompiler
+              structures={session.parcelContexts.flatMap((ctx) =>
+                ctx.structures.map((structure) => ({
+                  structureId: structure.structureId,
+                  name: structure.buildingName,
+                })),
+              )}
+              onProtectedStructures={handleProtectedStructures}
+            />
           ) : null}
 
           {/* Evidence rail — every capture, its mode, its source */}

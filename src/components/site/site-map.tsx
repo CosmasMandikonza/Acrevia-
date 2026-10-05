@@ -28,7 +28,9 @@ export type SiteMapLayers = {
     geometry: unknown;
     selected?: boolean;
   }>;
-  structures?: Array<{ id: string; geometry: unknown }>;
+  /** `missionProtected` marks structures under a CONFIRMED preserve-structure
+   *  mission rule — the sanctuary the church refused to lose reads on the map. */
+  structures?: Array<{ id: string; geometry: unknown; missionProtected?: boolean }>;
 };
 
 // ---------------------------------------------------------------------------
@@ -158,7 +160,9 @@ function SvgFallback({ layers, note }: { layers: SiteMapLayers; note?: string })
           ));
         })}
 
-        {/* Structure footprints (drawn after parcels so they're on top) */}
+        {/* Structure footprints (drawn after parcels so they're on top).
+            Mission-protected structures carry an olive ring — the sanctuary
+            the congregation refused to lose reads directly on the canvas. */}
         {(layers.structures ?? []).map((structure) => {
           const paths = geometryToPaths(structure.geometry, project);
           return paths.map((path, i) => (
@@ -166,11 +170,12 @@ function SvgFallback({ layers, note }: { layers: SiteMapLayers; note?: string })
               key={`${structure.id}-${i}`}
               data-testid="structure-geometry"
               data-structure-id={structure.id}
+              data-mission-protected={structure.missionProtected ? "yes" : "no"}
               d={path}
-              fill="#78350f"
-              fillOpacity={0.88}
-              stroke="#451a03"
-              strokeWidth={1.5}
+              fill={structure.missionProtected ? "#3f6212" : "#78350f"}
+              fillOpacity={structure.missionProtected ? 0.92 : 0.88}
+              stroke={structure.missionProtected ? "#365314" : "#451a03"}
+              strokeWidth={structure.missionProtected ? 3.5 : 1.5}
               strokeLinejoin="round"
             />
           ));
@@ -302,7 +307,10 @@ function syncAcreviaLayers(map: MapLibreMap, layers: SiteMapLayers): void {
         type: "FeatureCollection",
         features: layers.structures.map((structure) => ({
           type: "Feature",
-          properties: { id: structure.id },
+          properties: {
+            id: structure.id,
+            protected: structure.missionProtected ? "yes" : "no",
+          },
           geometry: structure.geometry as never,
         })),
       },
@@ -311,13 +319,19 @@ function syncAcreviaLayers(map: MapLibreMap, layers: SiteMapLayers): void {
       id: "structure-fill",
       type: "fill",
       source: "structures",
-      paint: { "fill-color": "#92400e", "fill-opacity": 0.85 },
+      paint: {
+        "fill-color": ["case", ["==", ["get", "protected"], "yes"], "#3f6212", "#92400e"],
+        "fill-opacity": 0.85,
+      },
     });
     map.addLayer({
       id: "structure-outline",
       type: "line",
       source: "structures",
-      paint: { "line-color": "#451a03", "line-width": 2 },
+      paint: {
+        "line-color": ["case", ["==", ["get", "protected"], "yes"], "#365314", "#451a03"],
+        "line-width": ["case", ["==", ["get", "protected"], "yes"], 4, 2],
+      },
     });
   }
   // Fit camera

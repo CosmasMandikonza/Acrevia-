@@ -31,6 +31,7 @@ export const ProjectEventType = z.enum([
   "regulation.upserted",
   "constraint.materialized",
   "mission.constraint.confirmed",
+  "mission.constraint.retracted",
   "assumption.set",
   "scenario.recorded",
   "expert-review.opened",
