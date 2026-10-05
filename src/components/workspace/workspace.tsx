@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   Building2,
   Map,
@@ -19,6 +20,11 @@ import { Copilot } from "./copilot";
 import nextDynamic from "next/dynamic";
 import { surfaces, getSurface } from "@/lib/surfaces";
 import { validateAddress } from "@/lib/address";
+import {
+  readAcceptedProperty,
+  verifyStoredEnvelope,
+  type AcceptedPropertyRecord,
+} from "@/lib/accepted-property";
 const icons = {
   portfolio: Building2,
   site: Map,
@@ -38,12 +44,30 @@ const SiteResolution = nextDynamic(
 );
 
 export function Workspace() {
-  
   const params = useSearchParams();
   const rawAddress = params.get("address") ?? "";
   const addressError = rawAddress ? validateAddress(rawAddress) : null;
   const address = addressError ? "" : rawAddress.trim();
   const surface = getSurface(params.get("view"));
+  const [accepted, setAccepted] = useState<AcceptedPropertyRecord | null>(null);
+
+  // The accepted record renders only after the stored envelope passes server
+  // verification (POST /api/gis/verify) — sessionStorage is never displayed as
+  // trusted on its own. The custom event fires on a fresh commit in this page,
+  // whose record derives from the page's own server-signed session.
+  useEffect(() => {
+    let cancelled = false;
+    void verifyStoredEnvelope().then((result) => {
+      if (!cancelled) setAccepted(result.status === "valid" ? result.record : null);
+    });
+    const onAccepted = () => setAccepted(readAcceptedProperty());
+    window.addEventListener("acrevia:accepted", onAccepted);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("acrevia:accepted", onAccepted);
+    };
+  }, []);
+
   function href(view: string) {
     const query = new URLSearchParams();
     if (address) query.set("address", address);
@@ -102,17 +126,21 @@ export function Workspace() {
             </div>
             <span className="toolbar-status">
               <span className="status-dot" />
-              {surface.id === "site" && !addressError
-                ? address
-                  ? "Public records connected"
-                  : "Enter a church address to begin"
-                : "Awaiting project data"}
+              {accepted
+                ? `Property accepted — Development Graph revision ${accepted.revision}`
+                : surface.id === "site" && !addressError
+                  ? address
+                    ? "Ready to resolve from public records"
+                    : "Enter a church address to begin"
+                  : "Awaiting project data"}
             </span>
           </div>
           {surface.id === "site" && !addressError ? (
             <section className="spatial-canvas spatial-canvas-live" aria-label="Site resolution canvas">
               <SiteResolution initialQuery={address} />
             </section>
+          ) : surface.id === "evidence" && accepted ? (
+            <EvidenceLedger record={accepted} />
           ) : (
           <section
             className="spatial-canvas"
@@ -166,15 +194,24 @@ export function Workspace() {
           <div className="evidence-strip" aria-label="Project evidence status">
             <BookOpen size={16} aria-hidden="true" />
             <strong>Evidence</strong>
-            {surface.id === "site" && !addressError ? (
+            {accepted ? (
+              <span>
+                {accepted.captures.length} captures behind the accepted property
+              </span>
+            ) : surface.id === "site" && !addressError ? (
               <span>Public records resolve on the Site surface</span>
             ) : (
               <span>No sources checked</span>
             )}
             <span className="evidence-note">
-              {surface.id === "site" && !addressError
-                ? "Census · Philadelphia parcels · L&I zoning · building footprints"
-                : "No feasibility conclusions available"}
+              {accepted
+                ? accepted.captures
+                    .map((capture) => capture.mode)
+                    .filter((mode, index, all) => all.indexOf(mode) === index)
+                    .join(" · ")
+                : surface.id === "site" && !addressError
+                  ? "Census · Philadelphia parcels · L&I zoning · building footprints"
+                  : "No feasibility conclusions available"}
             </span>
             <Link href={href("evidence")}>
               Inspect evidence
@@ -184,5 +221,99 @@ export function Workspace() {
         </main>
       </div>
     </div>
+  );
+}
+
+const MODE_BADGE_LABEL: Record<string, string> = {
+  LIVE: "Live",
+  CACHED: "Cached",
+  FIXTURE: "Fixture evidence",
+};
+
+function EvidenceLedger({ record }: { record: AcceptedPropertyRecord }) {
+  return (
+    <section
+      className="spatial-canvas spatial-canvas-live overflow-y-auto"
+      aria-label="Evidence ledger"
+    >
+      <div className="mx-auto max-w-3xl space-y-4 p-6">
+        <div className="rounded-md border border-olive-500 bg-olive-50 p-4">
+          <h2 className="text-sm font-semibold text-stone-900">
+            Accepted property — every fact traces to a source
+          </h2>
+          <p className="mt-1 text-sm text-stone-800">
+            {record.ownerName ?? record.matchedAddress ?? record.query}
+          </p>
+          <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-stone-700 sm:grid-cols-3">
+            <div>
+              <dt className="text-stone-500">Development Graph</dt>
+              <dd className="font-medium">
+                {record.nodeCount} nodes · revision {record.revision}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-stone-500">Audited events</dt>
+              <dd className="font-medium">{record.eventCount}</dd>
+            </div>
+            <div>
+              <dt className="text-stone-500">Accepted</dt>
+              <dd className="font-medium">{new Date(record.acceptedAt).toLocaleString()}</dd>
+            </div>
+            <div>
+              <dt className="text-stone-500">Zoning</dt>
+              <dd className="font-medium">{record.zoningSummary || "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-stone-500">Structures</dt>
+              <dd className="font-medium">{record.structureCount}</dd>
+            </div>
+            <div>
+              <dt className="text-stone-500">Captures</dt>
+              <dd className="font-medium">{record.captures.length}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <section aria-label="Captures" className="rounded-md border border-stone-300 bg-white p-4">
+          <h3 className="text-xs font-semibold tracking-[0.14em] text-stone-500">CAPTURES</h3>
+          <ul className="mt-3 space-y-2">
+            {record.captures.map((capture) => (
+              <li
+                key={`${capture.provider}-${capture.hashPrefix}`}
+                className="flex items-start justify-between gap-3 border-b border-stone-100 pb-2 text-sm last:border-b-0"
+              >
+                <div>
+                  <p className="font-medium text-stone-800">{capture.provider}</p>
+                  <p className="text-xs text-stone-500">
+                    retrieved {new Date(capture.retrievedAt).toLocaleString()} ·{" "}
+                    {capture.hashPrefix}…
+                  </p>
+                  {capture.note ? (
+                    <p className="text-xs text-stone-400">{capture.note}</p>
+                  ) : null}
+                </div>
+                <span
+                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                    capture.mode === "LIVE"
+                      ? "bg-olive-100 text-olive-800"
+                      : capture.mode === "CACHED"
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-stone-200 text-stone-700"
+                  }`}
+                >
+                  {MODE_BADGE_LABEL[capture.mode] ?? capture.mode}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <p className="text-xs text-stone-500">
+          From the property accepted in this browser session. The server stays stateless — the
+          signed resolution envelope and its captures persist client-side, and each capture hash
+          pins the exact bytes the provider returned.
+        </p>
+      </div>
+    </section>
   );
 }
