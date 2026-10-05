@@ -1,14 +1,16 @@
 import { test, expect, type Page } from "@playwright/test";
 
 /**
- * Site browser hardening (feat/site-browser-hardening).
+ * Site browser hardening (feat/site-browser-hardening, PR #25).
  *
- * Covers the failure/restore behaviors discovered by interactive browser QA:
- * visible NO_MATCH failures, pre-accept facts, single-commit double-click
- * protection, and the session-restore trust invariant — sessionStorage is
- * never a source of verified truth. A stored envelope restores only after the
- * server re-verifies its full-session signature (POST /api/gis/verify);
- * tampered storage is discarded and never displayed.
+ * Covers the failure/restore behaviors discovered by interactive browser QA
+ * and the session-restore trust invariant: sessionStorage is never a source
+ * of verified truth. Restoring an accepted state requires BOTH server
+ * attestations — the signed ResolutionEnvelope (authentic provider facts)
+ * and the signed CommitReceipt (proof the atomic commit happened, carrying
+ * the revision/node/event metadata) — verified together by
+ * POST /api/gis/verify. Tampered or receipt-less storage is discarded and
+ * never displayed; the forgeable acrevia:accepted DOM event is not listened to.
  *
  * Run against a running Acrevia server (default: local dev server on 3121):
  *   ACREVIA_E2E_BASE=http://localhost:3121 npx playwright test tests/e2e/site-hardening.spec.ts
@@ -16,10 +18,28 @@ import { test, expect, type Page } from "@playwright/test";
 
 const BASE = process.env.ACREVIA_E2E_BASE ?? "http://localhost:3121";
 const CANONICAL = `${BASE}/workspace?address=7200%20Roosevelt%20Blvd%2C%20Philadelphia%2C%20PA&view=site`;
+const SESSION_KEY = "acrevia.accepted-session";
+const LEGACY_RECORD_KEY = "acrevia.accepted-property";
+const LEGACY_ENVELOPE_KEY = "acrevia.accepted-envelope";
+
+// Each test drives a full LIVE resolution flow against public GIS providers;
+// running them concurrently trips provider throttling and blurs failures.
+test.describe.configure({ mode: "serial" });
 
 async function resolveCanonical(page: Page) {
   await page.goto(CANONICAL);
   await page.getByRole("button", { name: /resolve property/i }).click();
+  // Resolution completes with the pre-accept confirmation panel.
+  await expect(page.getByRole("heading", { name: /confirm this property/i })).toBeVisible({
+    timeout: 60_000,
+  });
+  // Public GIS layers occasionally fail transiently under load; the product
+  // surfaces that honestly ("Zoning layer unavailable"). Retry once — as a
+  // user would — so the suite anchors on a complete context.
+  const zoningUnavailable = await page.getByText(/zoning layer unavailable/i).count();
+  if (zoningUnavailable > 0) {
+    await page.getByRole("button", { name: /resolve property/i }).click();
+  }
   // Pre-accept context: zoning/structure facts render before acceptance.
   await expect(page.getByText(/RM-1/).first()).toBeVisible({ timeout: 60_000 });
 }
@@ -29,6 +49,34 @@ async function acceptProperty(page: Page) {
   await expect(page.getByRole("heading", { name: /property accepted/i })).toBeVisible({
     timeout: 30_000,
   });
+}
+
+/** Read the stored { envelope, receipt } pair. */
+function readStore(page: Page) {
+  return page.evaluate((key) => window.sessionStorage.getItem(key), SESSION_KEY);
+}
+
+function writeStore(page: Page, value: string | null) {
+  return page.evaluate(
+    ({ key, value: v }) => {
+      if (v === null) window.sessionStorage.removeItem(key);
+      else window.sessionStorage.setItem(key, v);
+    },
+    { key: SESSION_KEY, value },
+  );
+}
+
+async function expectNotAccepted(page: Page) {
+  await expect(page.getByRole("heading", { name: /property accepted/i })).toHaveCount(0);
+  await expect(page.locator(".toolbar-status")).toContainText(/ready to resolve/i);
+}
+
+async function expectStorageCleared(page: Page) {
+  const storage = await page.evaluate(
+    (keys) => keys.map((key) => window.sessionStorage.getItem(key)),
+    [SESSION_KEY, LEGACY_RECORD_KEY, LEGACY_ENVELOPE_KEY],
+  );
+  expect(storage).toEqual([null, null, null]);
 }
 
 test("short-address failure is visible and actionable", async ({ page }) => {
@@ -66,53 +114,60 @@ test("double-click Accept commits exactly once", async ({ page }) => {
   expect(commitPosts).toBe(1);
 });
 
-test("valid signed envelope restores the accepted state after reload", async ({ page }) => {
+test("valid commit receipt restores the accepted state after reload", async ({ page }) => {
+  test.slow(); // full LIVE flow + reload
   await resolveCanonical(page);
   await acceptProperty(page);
   await expect(page.getByText(/Calvary Memorial Church/i).first()).toBeVisible();
 
+  // Stored state is the signed pair — envelope AND receipt.
+  const stored = await readStore(page);
+  expect(stored).toBeTruthy();
+  const parsed = JSON.parse(stored!) as { envelope?: unknown; receipt?: { signature?: string } };
+  expect(parsed.envelope).toBeDefined();
+  expect(parsed.receipt?.signature).toMatch(/^[0-9a-f]{64}$/);
+
   await page.reload({ waitUntil: "domcontentloaded" });
 
-  // The stored envelope must pass server verification before any of this renders.
+  // The stored pair must pass server verification before any of this renders.
   await expect(page.getByRole("heading", { name: /property accepted/i })).toBeVisible({
     timeout: 30_000,
   });
   await expect(page.getByText(/Calvary Memorial Church/i).first()).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText(/RM-1/i).first()).toBeVisible();
+  // Revision in the chip is derived from the verified receipt.
   await expect(page.locator(".toolbar-status")).toContainText(/revision \d+/);
   await expect(page.locator('section[aria-label="Evidence"] li')).not.toHaveCount(0);
 });
 
-test("tampered sessionStorage envelope is rejected and discarded on reload", async ({ page }) => {
+test("tampered envelope (with valid receipt) is rejected and discarded on reload", async ({
+  page,
+}) => {
   await resolveCanonical(page);
   await acceptProperty(page);
 
-  // Forge provider-derived facts in storage: zoning district, owner name, and
-  // parcel geometry inside the signed envelope, plus an owner in the display record.
-  await page.evaluate(() => {
-    const ENVELOPE_KEY = "acrevia.accepted-envelope";
-    const RECORD_KEY = "acrevia.accepted-property";
-    const stored = JSON.parse(window.sessionStorage.getItem(ENVELOPE_KEY) ?? "{}");
-    stored.envelope.session.parcelContexts[0].zoningBase.district = "CA-999-TAMPERED";
-    stored.envelope.session.parcelCandidates[0].ownerName = "TAMPERED OWNER LLC";
-    stored.envelope.session.parcelCandidates[0].geometry = {
-      type: "Polygon",
-      coordinates: [
-        [
-          [-74.0, 40.0],
-          [-74.001, 40.0],
-          [-74.001, 40.001],
-          [-74.0, 40.001],
-          [-74.0, 40.0],
+  // Forge provider-derived facts inside the signed envelope.
+  await page.evaluate(
+    ({ key }) => {
+      const stored = JSON.parse(window.sessionStorage.getItem(key) ?? "{}");
+      stored.envelope.session.parcelContexts[0].zoningBase.district = "CA-999-TAMPERED";
+      stored.envelope.session.parcelCandidates[0].ownerName = "TAMPERED OWNER LLC";
+      stored.envelope.session.parcelCandidates[0].geometry = {
+        type: "Polygon",
+        coordinates: [
+          [
+            [-74.0, 40.0],
+            [-74.001, 40.0],
+            [-74.001, 40.001],
+            [-74.0, 40.001],
+            [-74.0, 40.0],
+          ],
         ],
-      ],
-    };
-    window.sessionStorage.setItem(ENVELOPE_KEY, JSON.stringify(stored));
-    const record = JSON.parse(window.sessionStorage.getItem(RECORD_KEY) ?? "{}");
-    record.ownerName = "TAMPERED OWNER LLC";
-    record.zoningSummary = "CA-999-TAMPERED";
-    window.sessionStorage.setItem(RECORD_KEY, JSON.stringify(record));
-  });
+      };
+      window.sessionStorage.setItem(key, JSON.stringify(stored));
+    },
+    { key: SESSION_KEY },
+  );
 
   const verifyFailed = page.waitForResponse(
     (response) => response.url().includes("/api/gis/verify") && response.status() === 400,
@@ -120,17 +175,149 @@ test("tampered sessionStorage envelope is rejected and discarded on reload", asy
   await page.reload({ waitUntil: "domcontentloaded" });
   await verifyFailed;
 
-  // Corrupted state is discarded: no accepted state, no forged facts displayed.
-  await page.waitForTimeout(1500);
-  await expect(page.getByRole("heading", { name: /property accepted/i })).toHaveCount(0);
+  await page.waitForTimeout(1000);
+  await expectNotAccepted(page);
   await expect(page.getByText(/TAMPERED OWNER LLC/i)).toHaveCount(0);
   await expect(page.getByText(/CA-999-TAMPERED/i)).toHaveCount(0);
-  await expect(page.locator(".toolbar-status")).toContainText(/ready to resolve/i);
+  await expectStorageCleared(page);
+});
 
-  const storage = await page.evaluate(() => ({
-    envelope: window.sessionStorage.getItem("acrevia.accepted-envelope"),
-    record: window.sessionStorage.getItem("acrevia.accepted-property"),
-  }));
-  expect(storage.envelope).toBeNull();
-  expect(storage.record).toBeNull();
+test("forged accepted record without a receipt never restores acceptance", async ({ page }) => {
+  test.slow(); // full LIVE flow before the forgery
+  await resolveCanonical(page);
+  await acceptProperty(page);
+
+  // Confirmed-but-never-committed attack: strip the receipt from the stored
+  // session and plant a forged legacy accepted-property record.
+  await page.evaluate(
+    ({ key, legacyKey }) => {
+      const stored = JSON.parse(window.sessionStorage.getItem(key) ?? "{}");
+      delete stored.receipt;
+      window.sessionStorage.setItem(key, JSON.stringify(stored));
+      window.sessionStorage.setItem(
+        legacyKey,
+        JSON.stringify({
+          query: "7200 Roosevelt Blvd, Philadelphia, PA",
+          ownerName: "FORGED OWNER LLC",
+          zoningSummary: "CA-999-TAMPERED",
+          nodeCount: 999999,
+          eventCount: 999999,
+          revision: 999999,
+          acceptedAt: "2030-01-01T00:00:00.000Z",
+          structureCount: 42,
+          captures: [],
+        }),
+      );
+    },
+    { key: SESSION_KEY, legacyKey: LEGACY_RECORD_KEY },
+  );
+
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(1500);
+
+  await expectNotAccepted(page);
+  await expect(page.getByText(/FORGED OWNER LLC/i)).toHaveCount(0);
+  await expect(page.getByText(/CA-999-TAMPERED/i)).toHaveCount(0);
+  await expect(page.getByText(/999999/)).toHaveCount(0);
+  await expectStorageCleared(page);
+});
+
+test("tampered receipt metadata fails verification and clears state", async ({ page }) => {
+  test.slow(); // full LIVE flow + reload
+  await resolveCanonical(page);
+  await acceptProperty(page);
+
+  await page.evaluate(
+    ({ key }) => {
+      const stored = JSON.parse(window.sessionStorage.getItem(key) ?? "{}");
+      stored.receipt.payload.revision = 999;
+      stored.receipt.payload.nodeCount = 8888;
+      stored.receipt.payload.eventCount = 7777;
+      window.sessionStorage.setItem(key, JSON.stringify(stored));
+    },
+    { key: SESSION_KEY },
+  );
+
+  const verifyFailed = page.waitForResponse(
+    (response) => response.url().includes("/api/gis/verify") && response.status() === 400,
+  );
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await verifyFailed;
+
+  await page.waitForTimeout(1000);
+  await expectNotAccepted(page);
+  await expect(page.getByText(/revision 999/)).toHaveCount(0);
+  await expectStorageCleared(page);
+});
+
+test("receipt from session A with envelope from session B is rejected", async ({ page }) => {
+  test.slow(); // two full LIVE resolution flows + two reloads
+  // Session A: accept and capture its receipt.
+  await resolveCanonical(page);
+  await acceptProperty(page);
+  const storeA = await readStore(page);
+  const receiptA = (JSON.parse(storeA!) as { receipt: unknown }).receipt;
+
+  // Reload, then run a second resolution+accept so a different session id and
+  // envelope signature are stored.
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2000);
+  await page.getByRole("button", { name: /resolve property/i }).click();
+  await expect(page.getByText(/RM-1/).first()).toBeVisible({ timeout: 60_000 });
+  await acceptProperty(page);
+  const storeB = await readStore(page);
+  const parsedB = JSON.parse(storeB!) as {
+    envelope: unknown;
+    receipt: { payload: { sessionId: string } };
+  };
+  expect(parsedB.receipt.payload.sessionId).not.toBe(
+    (receiptA as { payload: { sessionId: string } }).payload.sessionId,
+  );
+
+  // Cross-pair: envelope B + receipt A.
+  await writeStore(page, JSON.stringify({ ...parsedB, receipt: receiptA }));
+
+  const verifyFailed = page.waitForResponse(
+    (response) => response.url().includes("/api/gis/verify") && response.status() === 400,
+  );
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await verifyFailed;
+
+  await page.waitForTimeout(1000);
+  await expectNotAccepted(page);
+  await expectStorageCleared(page);
+});
+
+test("dispatching a forged acrevia:accepted event injects nothing", async ({ page }) => {
+  await page.goto(CANONICAL);
+  await page.waitForTimeout(1500);
+
+  // Forge the legacy record and dispatch the public custom event. The DOM
+  // event is not a trust path — the app listens only to its in-memory
+  // registry, unreachable from page scripts.
+  await page.evaluate(
+    ({ legacyKey }) => {
+      window.sessionStorage.setItem(
+        legacyKey,
+        JSON.stringify({
+          query: "7200 Roosevelt Blvd, Philadelphia, PA",
+          ownerName: "EVENT FORGED OWNER",
+          zoningSummary: "EVENT-FORGED ZONING",
+          nodeCount: 123,
+          eventCount: 123,
+          revision: 123,
+          acceptedAt: "2030-01-01T00:00:00.000Z",
+          structureCount: 9,
+          captures: [],
+        }),
+      );
+      window.dispatchEvent(new CustomEvent("acrevia:accepted"));
+    },
+    { legacyKey: LEGACY_RECORD_KEY },
+  );
+
+  await page.waitForTimeout(1000);
+  await expectNotAccepted(page);
+  await expect(page.getByText(/EVENT FORGED OWNER/i)).toHaveCount(0);
+  await expect(page.getByText(/EVENT-FORGED ZONING/i)).toHaveCount(0);
 });

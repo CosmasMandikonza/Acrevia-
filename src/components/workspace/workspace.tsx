@@ -21,8 +21,8 @@ import nextDynamic from "next/dynamic";
 import { surfaces, getSurface } from "@/lib/surfaces";
 import { validateAddress } from "@/lib/address";
 import {
-  readAcceptedProperty,
-  verifyStoredEnvelope,
+  onAccepted,
+  verifyStoredSession,
   type AcceptedPropertyRecord,
 } from "@/lib/accepted-property";
 const icons = {
@@ -51,20 +51,20 @@ export function Workspace() {
   const surface = getSurface(params.get("view"));
   const [accepted, setAccepted] = useState<AcceptedPropertyRecord | null>(null);
 
-  // The accepted record renders only after the stored envelope passes server
-  // verification (POST /api/gis/verify) — sessionStorage is never displayed as
-  // trusted on its own. The custom event fires on a fresh commit in this page,
-  // whose record derives from the page's own server-signed session.
+  // The accepted record renders only after the stored { envelope, receipt }
+  // pair passes server verification (POST /api/gis/verify) — sessionStorage is
+  // never displayed as trusted on its own. Fresh commits propagate through the
+  // in-memory accepted registry (module scope, unreachable from page scripts);
+  // no DOM custom event can inject accepted state.
   useEffect(() => {
     let cancelled = false;
-    void verifyStoredEnvelope().then((result) => {
+    void verifyStoredSession().then((result) => {
       if (!cancelled) setAccepted(result.status === "valid" ? result.record : null);
     });
-    const onAccepted = () => setAccepted(readAcceptedProperty());
-    window.addEventListener("acrevia:accepted", onAccepted);
+    const unsubscribe = onAccepted((record) => setAccepted(record));
     return () => {
       cancelled = true;
-      window.removeEventListener("acrevia:accepted", onAccepted);
+      unsubscribe();
     };
   }, []);
 

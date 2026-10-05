@@ -1,21 +1,24 @@
 "use client";
 
 import type { ResolutionSession } from "../application/resolution/state";
+import type { CommitReceipt, CommitReceiptPayload } from "../adapters/gis/commit-receipt";
 
 /**
- * Client-side record of the most recently accepted property (session
- * lifetime). The GIS commit API is stateless by design (ADR 0004); this store
- * keeps the accepted experience visible across surface navigation and reloads.
+ * Client-side accepted-session store (PR #25 trust model).
  *
- * TRUST INVARIANT: sessionStorage is never a source of verified truth. The
- * stored envelope is a signed ResolutionEnvelope, and after any reload it must
- * pass POST /api/gis/verify (full-session HMAC against the server secret)
- * before Acrevia restores provider-derived facts (zoning, owner, parcel
- * geometry, structures) as trusted state. Tampered storage fails verification
- * and is discarded; the server returns only { valid: false }, never unverified
- * content. Commit metadata (node/event/revision counts) is display text from
- * the commit response — every provider-derived display fact is re-derived from
- * the server-verified session, never read straight from storage.
+ * sessionStorage is NEVER a source of verified truth. The only stored state
+ * is the pair of server-signed artifacts — the ResolutionEnvelope (authentic
+ * provider facts) and the CommitReceipt (proof the atomic commit happened,
+ * with the commit metadata). After any reload, POST /api/gis/verify must
+ * verify BOTH signatures and their mutual consistency before any accepted
+ * state (or any provider- or commit-derived fact) is restored. Tampered or
+ * receipt-less storage fails verification and is discarded; the server
+ * returns only { valid: false }, never unverified content.
+ *
+ * The displayed revision/node/event counts and accepted time derive ONLY from
+ * the verified receipt payload. There is no unsigned accepted-property
+ * record anymore, and acceptance propagation inside the page uses an
+ * in-memory listener registry — never a forgeable DOM custom event.
  */
 
 export type AcceptedCaptureSummary = {
@@ -39,8 +42,15 @@ export type AcceptedPropertyRecord = {
   captures: AcceptedCaptureSummary[];
 };
 
-const RECORD_KEY = "acrevia.accepted-property";
-const ENVELOPE_KEY = "acrevia.accepted-envelope";
+type StoredAcceptedSession = {
+  envelope: { session: ResolutionSession; signature: string };
+  receipt: CommitReceipt;
+  query: string;
+};
+
+/** Current store shape; the legacy unsigned record/envelope keys are dropped. */
+const SESSION_KEY = "acrevia.accepted-session";
+const LEGACY_KEYS = ["acrevia.accepted-property", "acrevia.accepted-envelope"];
 
 function safeGet(key: string): string | null {
   if (typeof window === "undefined") return null;
@@ -69,72 +79,50 @@ function safeRemove(key: string): void {
   }
 }
 
-export function readAcceptedProperty(): AcceptedPropertyRecord | null {
-  const raw = safeGet(RECORD_KEY);
+type StoredRead =
+  | { value: StoredAcceptedSession }
+  | { malformed: true }
+  | null; // null = nothing stored
+
+function readStoredSession(): StoredRead {
+  const raw = safeGet(SESSION_KEY);
   if (!raw) return null;
+  let parsed: StoredAcceptedSession;
   try {
-    const parsed = JSON.parse(raw) as AcceptedPropertyRecord;
-    if (
-      typeof parsed.query !== "string" ||
-      typeof parsed.nodeCount !== "number" ||
-      !Array.isArray(parsed.captures)
-    ) {
-      return null;
-    }
-    return parsed;
+    parsed = JSON.parse(raw) as StoredAcceptedSession;
   } catch {
-    return null;
+    return { malformed: true };
   }
+  const session = parsed?.envelope?.session;
+  if (
+    typeof parsed.query !== "string" ||
+    !session ||
+    typeof session.sessionId !== "string" ||
+    !Array.isArray(session.confirmedParcelIds) ||
+    typeof parsed.envelope.signature !== "string" ||
+    !parsed.receipt?.payload ||
+    typeof parsed.receipt.signature !== "string"
+  ) {
+    return { malformed: true };
+  }
+  return { value: parsed };
 }
 
-export function writeAcceptedProperty(record: AcceptedPropertyRecord): void {
-  safeSet(RECORD_KEY, JSON.stringify(record));
-  invalidateVerificationCache();
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent("acrevia:accepted"));
-  }
-}
-
-export type StoredEnvelope = {
-  envelope: { session: ResolutionSession; signature: string };
-  commitSummary: string;
-  query: string;
-};
-
-function readStoredEnvelope(): StoredEnvelope | null {
-  const raw = safeGet(ENVELOPE_KEY);
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as StoredEnvelope;
-    const session = parsed?.envelope?.session;
-    if (
-      typeof parsed.commitSummary !== "string" ||
-      typeof parsed.query !== "string" ||
-      !session ||
-      typeof session.sessionId !== "string" ||
-      !Array.isArray(session.confirmedParcelIds)
-    ) {
-      return null;
-    }
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-export function writeAcceptedEnvelope<T extends { session: ResolutionSession }>(
-  envelope: T,
-  commitSummary: string,
+/** Store the signed pair after a successful commit (trusted in-page response). */
+export function writeAcceptedSession(
+  envelope: { session: ResolutionSession; signature: string },
+  receipt: CommitReceipt,
   query: string,
 ): void {
-  safeSet(ENVELOPE_KEY, JSON.stringify({ envelope, commitSummary, query }));
+  safeSet(SESSION_KEY, JSON.stringify({ envelope, receipt, query } satisfies StoredAcceptedSession));
+  for (const key of LEGACY_KEYS) safeRemove(key);
   invalidateVerificationCache();
 }
 
 /** Drop everything stored — used when verification fails (tampered state). */
 export function clearAcceptedState(): void {
-  safeRemove(RECORD_KEY);
-  safeRemove(ENVELOPE_KEY);
+  safeRemove(SESSION_KEY);
+  for (const key of LEGACY_KEYS) safeRemove(key);
   invalidateVerificationCache();
 }
 
@@ -143,7 +131,7 @@ export type VerificationResult =
   | {
       status: "valid";
       envelope: { session: ResolutionSession; signature: string };
-      commitSummary: string;
+      receipt: CommitReceiptPayload;
       query: string;
       record: AcceptedPropertyRecord;
     }
@@ -156,21 +144,27 @@ export function invalidateVerificationCache(): void {
 }
 
 /**
- * Verify the stored envelope against the server before anything from storage
- * is displayed as trusted. Memoized per page load so the Site surface and the
- * workspace shell share a single verification round trip; a reload always
- * starts a fresh verification.
+ * Verify the stored { envelope, receipt } pair against the server before
+ * anything from storage is displayed as trusted. Memoized per page load so
+ * the Site surface and the workspace shell share one verification round
+ * trip; a reload always starts a fresh verification.
  */
-export function verifyStoredEnvelope(): Promise<VerificationResult> {
+export function verifyStoredSession(): Promise<VerificationResult> {
   if (!verificationCache) {
     verificationCache = (async (): Promise<VerificationResult> => {
-      const stored = readStoredEnvelope();
+      const stored = readStoredSession();
       if (!stored) return { status: "none" };
+      // Corrupted storage (e.g. a receipt-less session) is discarded, not ignored.
+      if ("malformed" in stored) {
+        clearAcceptedState();
+        return { status: "invalid" };
+      }
+      const { envelope, receipt, query } = stored.value;
       try {
         const response = await fetch("/api/gis/verify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ envelope: stored.envelope }),
+          body: JSON.stringify({ envelope, receipt }),
         });
         if (!response.ok) {
           clearAcceptedState();
@@ -179,20 +173,20 @@ export function verifyStoredEnvelope(): Promise<VerificationResult> {
         const payload = (await response.json()) as {
           valid: boolean;
           session?: ResolutionSession;
+          receipt?: CommitReceiptPayload;
         };
-        if (!payload.valid || !payload.session) {
+        if (!payload.valid || !payload.session || !payload.receipt) {
           clearAcceptedState();
           return { status: "invalid" };
         }
-        // Verified: re-derive every provider-derived display fact from the
-        // server-verified session. Stored display copies are not trusted.
-        const record = recordFromVerifiedSession(payload.session, readAcceptedProperty());
-        safeSet(RECORD_KEY, JSON.stringify(record));
+        // Verified: every provider-derived fact comes from the verified
+        // session, every commit-derived fact from the verified receipt.
+        const record = recordFromVerified(payload.session, payload.receipt, query);
         return {
           status: "valid",
-          envelope: { session: payload.session, signature: stored.envelope.signature },
-          commitSummary: stored.commitSummary,
-          query: stored.query,
+          envelope: { session: payload.session, signature: envelope.signature },
+          receipt: payload.receipt,
+          query,
           record,
         };
       } catch {
@@ -205,30 +199,35 @@ export function verifyStoredEnvelope(): Promise<VerificationResult> {
   return verificationCache;
 }
 
+/** Commit summary text derived ONLY from the (verified) receipt payload. */
+export function commitSummaryFromReceipt(receipt: CommitReceiptPayload): string {
+  return `Accepted as Development Graph project — ${receipt.nodeCount} nodes, ${receipt.eventCount} audited events, revision ${receipt.revision}. Every fact traces to its source.`;
+}
+
 /**
- * Build the display record from the SERVER-VERIFIED session. Provider facts
- * (owner, zoning, structures, captures, matched address) come only from the
- * verified session; node/event/revision counts and acceptedAt are commit
- * metadata retained from the previous record (they cannot be re-derived
- * without server-side persistence, which does not exist by design).
+ * Build the display record from the SERVER-VERIFIED session (provider facts:
+ * owner, zoning, structures, captures, matched address) and the
+ * SERVER-VERIFIED receipt (commit facts: revision, node/event counts,
+ * committed time). Nothing here reads unsigned storage.
  */
-export function recordFromVerifiedSession(
+export function recordFromVerified(
   session: ResolutionSession,
-  previous: AcceptedPropertyRecord | null,
+  receipt: CommitReceiptPayload,
+  query: string,
 ): AcceptedPropertyRecord {
   const structures = session.parcelContexts.flatMap((context) => context.structures);
   const primaryId = session.confirmedParcelIds[0];
   return {
-    query: previous?.query ?? session.query,
+    query,
     matchedAddress: session.selectedAddress?.matchedAddress,
     ownerName:
       session.parcelCandidates.find(
         (candidate) => (candidate.brtId ?? candidate.parcelId) === primaryId,
       )?.ownerName ?? undefined,
-    acceptedAt: previous?.acceptedAt ?? new Date().toISOString(),
-    nodeCount: previous?.nodeCount ?? 0,
-    eventCount: previous?.eventCount ?? 0,
-    revision: previous?.revision ?? 0,
+    acceptedAt: receipt.committedAt,
+    nodeCount: receipt.nodeCount,
+    eventCount: receipt.eventCount,
+    revision: receipt.revision,
     structureCount: structures.length,
     zoningSummary:
       session.parcelContexts
@@ -249,6 +248,30 @@ export function recordFromVerifiedSession(
       note: capture.note,
     })),
   };
+}
+
+// ---------------------------------------------------------------------------
+// In-memory accepted notification (replaces the forgeable DOM event).
+//
+// A custom browser event (acrevia:accepted) could be dispatched by any page
+// script to inject accepted state. This module-scope registry is reachable
+// only through module imports — page scripts cannot call it — and is invoked
+// exclusively by the commit path with a record derived from the page's own
+// server-signed envelope + receipt.
+// ---------------------------------------------------------------------------
+
+type AcceptedListener = (record: AcceptedPropertyRecord) => void;
+const listeners = new Set<AcceptedListener>();
+
+export function onAccepted(listener: AcceptedListener): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+export function emitAccepted(record: AcceptedPropertyRecord): void {
+  for (const listener of listeners) listener(record);
 }
 
 type CaptureLike = {

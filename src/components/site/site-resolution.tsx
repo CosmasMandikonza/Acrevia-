@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SiteMap } from "./site-map";
 import type { ResolutionSession } from "../../application/resolution/state";
+import type { CommitReceipt } from "../../adapters/gis/commit-receipt";
 import {
-  recordFromVerifiedSession,
-  verifyStoredEnvelope,
-  writeAcceptedEnvelope,
-  writeAcceptedProperty,
+  commitSummaryFromReceipt,
+  emitAccepted,
+  recordFromVerified,
+  verifyStoredSession,
+  writeAcceptedSession,
 } from "../../lib/accepted-property";
 
 /**
@@ -65,9 +67,11 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
   const session = envelope?.session ?? null;
 
   // Server-verified restore: sessionStorage is never trusted directly. After a
-  // navigation or reload the stored envelope must pass POST /api/gis/verify
-  // (full-session HMAC) before the accepted state — and any provider-derived
-  // fact inside it — is restored. Tampered storage is discarded server-side.
+  // navigation or reload the stored { envelope, receipt } pair must pass
+  // POST /api/gis/verify — BOTH the full-session envelope HMAC and the
+  // CommitReceipt HMAC that attests the commit happened — before the accepted
+  // state (or any fact inside it) is restored. Tampered or receipt-less
+  // storage is discarded server-side.
   const phaseRef = useRef<Phase>("idle");
   useEffect(() => {
     phaseRef.current = phase;
@@ -75,12 +79,12 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
 
   useEffect(() => {
     let cancelled = false;
-    void verifyStoredEnvelope().then((result) => {
+    void verifyStoredSession().then((result) => {
       if (cancelled || result.status !== "valid") return;
       if (!initialQuery.trim() || result.query !== initialQuery.trim()) return;
       if (phaseRef.current !== "idle") return; // user already began a new resolution
       setEnvelope(result.envelope);
-      setCommitSummary(result.commitSummary);
+      setCommitSummary(commitSummaryFromReceipt(result.receipt));
       setSelectedParcels(new Set(result.envelope.session.confirmedParcelIds));
       setPhase("committed");
     });
@@ -222,32 +226,26 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
           propertyId: `gis:property:${currentEnvelope.session.confirmedParcelIds[0]}`,
         }),
       });
-      const payload = await response.json();
-      if (!response.ok) {
-        setError(payload.error ?? "commit failed");
+      const payload = (await response.json()) as {
+        error?: string;
+        receipt?: CommitReceipt;
+      };
+      if (!response.ok || !payload.receipt) {
+        setError(payload.error ?? "commit failed: no signed receipt returned");
         setPhase("failed");
         return;
       }
-      const summary = `Accepted as Development Graph project — ${payload.nodeCount} nodes, ${payload.eventCount} audited events, revision ${payload.revision}. Every fact traces to its source.`;
+      const receipt = payload.receipt;
+      const summary = commitSummaryFromReceipt(receipt.payload);
       setCommitSummary(summary);
       setPhase("committed");
-      // Persist the accepted experience for this browser session (the server
-      // stays stateless; the signed envelope lives client-side per ADR 0004
-      // and must re-verify against the server after any reload).
-      const confirmedSession = currentEnvelope.session;
-      writeAcceptedEnvelope(currentEnvelope, summary, query.trim());
-      writeAcceptedProperty(
-        recordFromVerifiedSession(confirmedSession, {
-          query: query.trim(),
-          acceptedAt: new Date().toISOString(),
-          nodeCount: payload.nodeCount,
-          eventCount: payload.eventCount,
-          revision: payload.revision,
-          structureCount: 0,
-          zoningSummary: "",
-          captures: [],
-        }),
-      );
+      // Persist the signed pair (server stays stateless; the envelope +
+      // receipt live client-side per ADR 0004 and BOTH must re-verify against
+      // the server after any reload). Propagate acceptance through the
+      // in-memory registry only — no forgeable DOM event, and the record
+      // derives from the page's own server-signed envelope + receipt.
+      writeAcceptedSession(currentEnvelope, receipt, query.trim());
+      emitAccepted(recordFromVerified(currentEnvelope.session, receipt.payload, query.trim()));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "commit failed");
       setPhase("failed");

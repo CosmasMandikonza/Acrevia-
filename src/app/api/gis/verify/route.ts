@@ -3,27 +3,41 @@ import {
   verifyEnvelope,
   type ResolutionEnvelope,
 } from "../../../../adapters/gis/resolution-envelope";
+import {
+  assertReceiptMatchesEnvelope,
+  verifyCommitReceipt,
+  type CommitReceipt,
+} from "../../../../adapters/gis/commit-receipt";
 
 /**
- * Server verification boundary for client-stored resolution envelopes.
+ * Server verification boundary for client-stored accepted sessions (PR #25).
  *
- * sessionStorage is NEVER a source of verified truth: before the browser may
- * restore provider-derived facts (zoning, owner, parcel geometry, structures)
- * after a navigation or reload, the stored signed envelope must come back here
- * and pass full-session HMAC verification against the server secret. A tampered
- * session fails verification and the caller must discard the stored state — the
- * server returns only { valid: false }, never the unverified content.
+ * sessionStorage is NEVER a source of verified truth, and a signed
+ * ResolutionEnvelope alone only proves the provider-derived facts are
+ * authentic — it does not prove a commit happened. Restoring an accepted
+ * state therefore requires BOTH server attestations:
  *
- * Like the rest of the GIS API, this route is stateless: no session or project
- * data is persisted server-side.
+ *   1. the ResolutionEnvelope's full-session HMAC signature;
+ *   2. the CommitReceipt's HMAC signature (issued only after an atomic
+ *      commit + integrity encode succeeded);
+ *   3. the receipt was issued for THIS envelope (signature binding);
+ *   4. the receipt session id matches the envelope session;
+ *   5. the receipt's project/property ids match the accepted-parcel
+ *      convention derived from the envelope.
+ *
+ * Only then does the response return the verified session AND the verified
+ * receipt metadata (revision, node/event counts, committed time), from which
+ * every displayed commit fact must be derived. Any failure returns only
+ * { valid: false } — never unverified content. Stateless: nothing is
+ * persisted server-side.
  */
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  let body: { envelope?: ResolutionEnvelope };
+  let body: { envelope?: ResolutionEnvelope; receipt?: CommitReceipt };
   try {
-    body = (await request.json()) as { envelope?: ResolutionEnvelope };
+    body = (await request.json()) as { envelope?: ResolutionEnvelope; receipt?: CommitReceipt };
   } catch {
     return NextResponse.json({ valid: false, reason: "invalid JSON body" }, { status: 400 });
   }
@@ -38,10 +52,25 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  // An envelope without a receipt is a confirmed-but-never-committed (or
+  // forged) session: acceptance requires server attestation of the commit.
+  if (
+    !body.receipt ||
+    typeof body.receipt !== "object" ||
+    !body.receipt.payload ||
+    typeof body.receipt.signature !== "string"
+  ) {
+    return NextResponse.json(
+      { valid: false, reason: "verify requires a signed commit receipt" },
+      { status: 400 },
+    );
+  }
 
   try {
     const session = verifyEnvelope(body.envelope);
-    return NextResponse.json({ valid: true, session });
+    const receiptPayload = verifyCommitReceipt(body.receipt);
+    assertReceiptMatchesEnvelope(receiptPayload, body.envelope);
+    return NextResponse.json({ valid: true, session, receipt: receiptPayload });
   } catch (error) {
     const name = error instanceof Error ? error.name : "Error";
     if (name === "MissingSecretError") {
@@ -52,7 +81,7 @@ export async function POST(request: Request) {
       );
     }
     return NextResponse.json(
-      { valid: false, reason: "signature verification failed", name },
+      { valid: false, reason: "verification failed", name },
       { status: 400 },
     );
   }
