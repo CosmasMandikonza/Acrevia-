@@ -341,6 +341,67 @@ test("valid accepted session for one address does not restore under another work
   await expect(page.getByText(/Calvary Memorial Church/i).first()).toBeVisible();
 });
 
+test("accepting an edited address rebinds URL and header — never shows B under A", async ({
+  page,
+}) => {
+  test.slow(); // two full LIVE resolutions in one page session
+  const ADDRESS_B = "1401 John F Kennedy Blvd, Philadelphia, PA";
+
+  // Workspace opens on Property A (canonical 7200 Roosevelt).
+  await page.goto(CANONICAL);
+
+  // Edit the Site field to a different valid address and resolve it.
+  await page.fill("#site-address", ADDRESS_B);
+  await page.getByRole("button", { name: /resolve property/i }).click();
+
+  // This address has no single registry match, so Acrevia asks the user to
+  // pick the parcel — the ambiguity flow. Select the Kennedy Blvd parcel,
+  // then confirm it to reach the pre-accept facts panel.
+  await expect(page.getByRole("heading", { name: /select yours/i })).toBeVisible({
+    timeout: 60_000,
+  });
+  const parcelOptions = page.locator("section h3 + ul button");
+  const preferred = parcelOptions.filter({ hasText: /kennedy/i });
+  await (await preferred.count() > 0 ? preferred.first() : parcelOptions.first()).click();
+  await page.getByRole("button", { name: /^confirm \d* ?parcel/i }).click();
+  await expect(page.getByRole("heading", { name: /confirm this property/i })).toBeVisible({
+    timeout: 60_000,
+  });
+  // Public GIS layers occasionally fail transiently under load; retry once.
+  if ((await page.getByText(/zoning layer unavailable/i).count()) > 0) {
+    await page.getByRole("button", { name: /resolve property/i }).click();
+    await expect(page.getByRole("heading", { name: /select yours/i })).toBeVisible({
+      timeout: 60_000,
+    });
+    const retryPreferred = page.locator("section h3 + ul button").filter({ hasText: /kennedy/i });
+    await retryPreferred.first().click();
+    await page.getByRole("button", { name: /^confirm \d* ?parcel/i }).click();
+    await expect(page.getByRole("heading", { name: /confirm this property/i })).toBeVisible({
+      timeout: 60_000,
+    });
+  }
+
+  // BEFORE acceptance, the workspace URL and header already describe B —
+  // synchronized to the server-returned signed session query, not the typed
+  // string's casing/spacing artifacts.
+  await expect
+    .poll(async () => new URL(page.url()).searchParams.get("address"))
+    .toBe(ADDRESS_B);
+  await expect(page.locator(".project-identity strong")).toHaveText(ADDRESS_B);
+
+  // Accept B: the accepted state renders under B's URL/header only.
+  await acceptProperty(page);
+  await expect(page.getByRole("heading", { name: /property accepted/i })).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.locator(".project-identity strong")).toHaveText(ADDRESS_B);
+  await expect
+    .poll(async () => new URL(page.url()).searchParams.get("address"))
+    .toBe(ADDRESS_B);
+  // Property A's facts never appear in this workspace.
+  await expect(page.getByText(/Calvary Memorial Church/i)).toHaveCount(0);
+});
+
 test("dispatching a forged acrevia:accepted event injects nothing", async ({ page }) => {
   await page.goto(CANONICAL);
   await page.waitForTimeout(1500);

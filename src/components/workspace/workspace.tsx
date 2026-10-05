@@ -74,7 +74,18 @@ export function Workspace() {
         setAccepted(null);
       }
     });
-    const unsubscribe = onAccepted((record) => setAccepted(record));
+    // Fresh in-page acceptances are address-scoped too: a record for another
+    // address (e.g. resolved by editing the Site field) must not render under
+    // this workspace's URL/header. The URL itself is synchronized to the
+    // verified session query on successful resolve, so the normal path keeps
+    // input, URL, header, and accepted property bound to the same site.
+    const unsubscribe = onAccepted((record) => {
+      if (address && normalizeAddressQuery(record.query) === normalizeAddressQuery(address)) {
+        setAccepted(record);
+      } else {
+        setAccepted(null);
+      }
+    });
     return () => {
       cancelled = true;
       unsubscribe();

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { SiteMap } from "./site-map";
 import type { ResolutionSession } from "../../application/resolution/state";
 import type { CommitReceipt } from "../../adapters/gis/commit-receipt";
@@ -56,6 +57,7 @@ const PARCEL_NONE_TEXT =
   "The city parcel registry returned no parcels for this address. Check the street number, or try the parcel's full mailing address.";
 
 export function SiteResolution({ initialQuery = "" }: { initialQuery?: string }) {
+  const router = useRouter();
   const [query, setQuery] = useState(initialQuery);
   const [envelope, setEnvelope] = useState<ApiResult["envelope"] | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -144,6 +146,19 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
     if (!result) return;
     setEnvelope(result.envelope);
     const s = result.envelope.session;
+    // URL synchronization: when a different valid address resolves, rebind the
+    // workspace URL/header to the server-returned signed session query — never
+    // the raw typed string — so the Site input, shareable URL, project header,
+    // and accepted state all describe the same property BEFORE acceptance.
+    if (
+      s.addressStage !== "FAILED" &&
+      normalizeAddressQuery(s.query) !== normalizeAddressQuery(initialQuery)
+    ) {
+      const params = new URLSearchParams();
+      params.set("address", s.query);
+      params.set("view", "site");
+      router.replace(`/workspace?${params.toString()}`);
+    }
     if (s.addressStage === "CONFIRMATION_REQUIRED") setPhase("candidates");
     else if (s.addressStage === "FAILED") {
       setError(addressFailureText(s));
@@ -164,7 +179,7 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
       setError(s.parcelFailure ? `The city parcel registry could not answer (${s.parcelFailure.code}): ${s.parcelFailure.message}` : PARCEL_NONE_TEXT);
       setPhase("failed");
     } else setPhase("candidates");
-  }, [call, confirmAndShow, query, sessionId]);
+  }, [call, confirmAndShow, initialQuery, query, router, sessionId]);
 
   const selectCandidate = useCallback(
     async (index: number) => {
