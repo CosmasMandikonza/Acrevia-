@@ -159,7 +159,10 @@ describe("POST /api/mission/state — canonical lifecycle", () => {
         confirmCommand({
           normalized: { type: "min-parking", spaces: { value: 130, unit: "spaces" } },
         }),
-        { kind: "retract", input: { id: "mission:min-sunday-parking" } },
+        {
+          kind: "retract",
+          input: { id: "mission:min-sunday-parking", declaredAt: "2026-10-06T12:00:00.000Z" },
+        },
       ])
     ).json();
     expect(fourth.missionConstraints).toEqual([]);
@@ -310,5 +313,31 @@ describe("POST /api/mission/state — canonical lifecycle", () => {
     expect(response.status).toBe(400);
     const payload = await response.json();
     expect(payload.name).toBe("InvalidMissionCommandLog");
+  });
+
+  it("RETRACT TIMESTAMPS: confirm@T1 then retract@T2 audits distinct, correct event times", async () => {
+    const pair = await acceptedPair();
+    const T1 = "2026-10-06T09:00:00.000Z";
+    const T2 = "2026-10-06T11:30:00.000Z";
+    const commands = [
+      confirmCommand({ origin: { kind: "USER_DECLARED", actorId: "church-leader", declaredAt: T1 } }),
+      { kind: "retract", input: { id: "mission:min-sunday-parking", declaredAt: T2 } },
+    ];
+    const state = await (await missionState(pair, commands)).json();
+    const events = state.project.events as Array<{
+      eventType: string;
+      occurredAt: string;
+    }>;
+    const confirmedEvent = events.find((event) => event.eventType === "mission.constraint.confirmed");
+    const retractedEvent = events.find((event) => event.eventType === "mission.constraint.retracted");
+    expect(confirmedEvent?.occurredAt).toBe(T1);
+    expect(retractedEvent?.occurredAt).toBe(T2);
+    expect(retractedEvent?.occurredAt).not.toBe(confirmedEvent?.occurredAt);
+    // No mission rule remains after the retraction.
+    expect(state.missionConstraints).toEqual([]);
+    // Deterministic replay: identical log reproduces identical event history.
+    const replay = await (await missionState(pair, commands)).json();
+    expect(replay.attestation.projectHash).toBe(state.attestation.projectHash);
+    expect(replay.attestation.signature).toBe(state.attestation.signature);
   });
 });

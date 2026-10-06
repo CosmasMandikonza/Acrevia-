@@ -105,6 +105,7 @@ export function MissionCompiler({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [logError, setLogError] = useState<string | null>(null);
+  const [directError, setDirectError] = useState<string | null>(null);
   // Direct-control values
   const [parkingValue, setParkingValue] = useState("110");
   const [heightValue, setHeightValue] = useState("38");
@@ -161,23 +162,36 @@ export function MissionCompiler({
     onProtectedStructures?.(ids);
   }, [missionState, onProtectedStructures]);
 
+  // Serialized canonical-mutation queue: every command runs AFTER the previous
+  // one completes and the log is updated. Rapid confirmations can never read
+  // a stale log or overwrite each other's commands, and the persisted log and
+  // the canonical project stay in step. (A ref-based queue, not React state —
+  // pending flags alone cannot close the race.)
+  const chainRef = useRef<Promise<unknown>>(Promise.resolve());
   const runCommand = useCallback(
-    async (command: MissionCommand) => {
-      const pair = readStoredAcceptedPair();
-      if (!pair) {
-        setError("Accepted property session unavailable.");
-        return null;
-      }
-      const next = [...logRef.current, command];
-      const result = await refresh(next);
-      if (result) {
-        logRef.current = next;
-        writeMissionLogFor(pair, next);
-        setLogError(null);
-      }
-      // On failure the log is NOT extended — canonical state and log stay in
-      // step; the server response explains what was rejected.
-      return result;
+    (command: MissionCommand): Promise<MissionStateResponse | null> => {
+      const task = chainRef.current.then(async () => {
+        const pair = readStoredAcceptedPair();
+        if (!pair) {
+          setError("Accepted property session unavailable.");
+          return null;
+        }
+        const next = [...logRef.current, command];
+        const result = await refresh(next);
+        if (result) {
+          logRef.current = next;
+          writeMissionLogFor(pair, next);
+          setLogError(null);
+        }
+        // On failure the log is NOT extended — canonical state and log stay
+        // in step; the server response explains what was rejected.
+        return result;
+      });
+      chainRef.current = task.then(
+        () => undefined,
+        () => undefined,
+      );
+      return task;
     },
     [refresh],
   );
@@ -301,6 +315,11 @@ export function MissionCompiler({
             Or set a rule directly
           </summary>
           <div className="space-y-2 border-t border-stone-200 px-3 py-2.5">
+            {directError ? (
+              <p role="alert" className="rounded border border-amber-400 bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
+                {directError}
+              </p>
+            ) : null}
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <label htmlFor="mission-parking" className="text-stone-600">
                 Sunday parking — at least
@@ -309,7 +328,10 @@ export function MissionCompiler({
                 id="mission-parking"
                 inputMode="numeric"
                 value={parkingValue}
-                onChange={(event) => setParkingValue(event.target.value)}
+                onChange={(event) => {
+                  setParkingValue(event.target.value);
+                  setDirectError(null);
+                }}
                 className="w-16 rounded border border-stone-300 px-2 py-1 text-sm focus:border-stone-500 focus:outline-none"
               />
               <span className="text-stone-600">spaces</span>
@@ -317,12 +339,15 @@ export function MissionCompiler({
                 type="button"
                 onClick={() => {
                   const value = Number(parkingValue);
-                  if (Number.isInteger(value) && value > 0) {
-                    addDraft(
-                      { type: "min-parking", spaces: { value, unit: "spaces" } },
-                      `Keep at least ${value} Sunday parking spaces.`,
-                    );
+                  if (!Number.isFinite(value) || !Number.isInteger(value) || value < 1) {
+                    setDirectError("Sunday parking must be a whole number of spaces, at least 1.");
+                    return;
                   }
+                  setDirectError(null);
+                  addDraft(
+                    { type: "min-parking", spaces: { value, unit: "spaces" } },
+                    `Keep at least ${value} Sunday parking spaces.`,
+                  );
                 }}
                 className="rounded border border-stone-400 px-2 py-1 text-xs font-medium text-stone-700 hover:border-stone-600"
               >
@@ -377,7 +402,10 @@ export function MissionCompiler({
                 id="mission-height"
                 inputMode="decimal"
                 value={heightValue}
-                onChange={(event) => setHeightValue(event.target.value)}
+                onChange={(event) => {
+                  setHeightValue(event.target.value);
+                  setDirectError(null);
+                }}
                 className="w-16 rounded border border-stone-300 px-2 py-1 text-sm focus:border-stone-500 focus:outline-none"
               />
               <span className="text-stone-600">ft</span>
@@ -385,9 +413,12 @@ export function MissionCompiler({
                 type="button"
                 onClick={() => {
                   const value = Number(heightValue);
-                  if (Number.isFinite(value) && value > 0) {
-                    addDraft({ type: "max-height", limit: { value, unit: "ft" } }, `Keep it no taller than ${value} ft.`);
+                  if (!Number.isFinite(value) || value <= 0) {
+                    setDirectError("Building height must be a number of feet, greater than 0.");
+                    return;
                   }
+                  setDirectError(null);
+                  addDraft({ type: "max-height", limit: { value, unit: "ft" } }, `Keep it no taller than ${value} ft.`);
                 }}
                 className="rounded border border-stone-400 px-2 py-1 text-xs font-medium text-stone-700 hover:border-stone-600"
               >
@@ -401,7 +432,10 @@ export function MissionCompiler({
                 id="mission-stories"
                 inputMode="numeric"
                 value={storiesValue}
-                onChange={(event) => setStoriesValue(event.target.value)}
+                onChange={(event) => {
+                  setStoriesValue(event.target.value);
+                  setDirectError(null);
+                }}
                 className="w-14 rounded border border-stone-300 px-2 py-1 text-sm focus:border-stone-500 focus:outline-none"
               />
               <span className="text-stone-600">stories</span>
@@ -409,9 +443,12 @@ export function MissionCompiler({
                 type="button"
                 onClick={() => {
                   const value = Number(storiesValue);
-                  if (Number.isInteger(value) && value > 0) {
-                    addDraft({ type: "max-stories", stories: { value, unit: "stories" } }, `Keep it to at most ${value} stories.`);
+                  if (!Number.isFinite(value) || !Number.isInteger(value) || value < 1) {
+                    setDirectError("The story limit must be a whole number, at least 1.");
+                    return;
                   }
+                  setDirectError(null);
+                  addDraft({ type: "max-stories", stories: { value, unit: "stories" } }, `Keep it to at most ${value} stories.`);
                 }}
                 className="rounded border border-stone-400 px-2 py-1 text-xs font-medium text-stone-700 hover:border-stone-600"
               >
@@ -427,16 +464,19 @@ export function MissionCompiler({
           </p>
         ) : null}
 
-        {/* Interpretation review — proposals, clarifications, conflicts */}
-        {interpretation ? (
+        {/* Interpretation review — proposals, clarifications, conflicts.
+            Direct-control proposals appear here too, so the review step is
+            shown whenever anything awaits confirmation. */}
+        {interpretation || drafts.length > 0 ? (
           <div aria-label="Interpretation" className="space-y-3">
             <p className="text-xs font-semibold tracking-[0.14em] text-stone-500">
-              WHAT ACREVIA UNDERSTOOD
+              {interpretation ? "WHAT ACREVIA UNDERSTOOD" : "PROPOSED RULES — REVIEW BEFORE CONFIRMING"}
             </p>
-            {interpretation.proposals.map((proposal) => (
+            {interpretation?.proposals.map((proposal) => (
               <ProposalRow
                 key={`i-${proposal.proposalId}`}
                 proposal={proposal}
+                pending={pending}
                 structureName={preserveStructureName(proposal.normalized, structures)}
                 onConfirm={() => confirmProposal(proposal)}
                 onRemove={() => removeProposal(proposal.proposalId)}
@@ -458,6 +498,7 @@ export function MissionCompiler({
               <ProposalRow
                 key={`d-${proposal.proposalId}`}
                 proposal={proposal}
+                pending={pending}
                 structureName={preserveStructureName(proposal.normalized, structures)}
                 onConfirm={() => confirmProposal(proposal)}
                 onRemove={() => removeProposal(proposal.proposalId)}
@@ -468,7 +509,7 @@ export function MissionCompiler({
                 }
               />
             ))}
-            {interpretation.needsClarification.map((item, index) => (
+            {interpretation?.needsClarification.map((item, index) => (
               <div key={`c-${index}`} className="border-l-2 border-amber-400 bg-amber-50/60 px-3 py-2">
                 <p className="text-[11px] font-semibold tracking-[0.1em] text-amber-800">NEEDS CLARIFICATION</p>
                 <p className="mt-0.5 text-sm italic text-stone-700">&ldquo;{item.quote}&rdquo;</p>
@@ -476,7 +517,7 @@ export function MissionCompiler({
                 {item.suggestion ? <p className="mt-0.5 text-xs text-stone-500">{item.suggestion}</p> : null}
               </div>
             ))}
-            {interpretation.unsupported.map((item, index) => (
+            {interpretation?.unsupported.map((item, index) => (
               <div key={`u-${index}`} className="border-l-2 border-stone-400 bg-stone-50 px-3 py-2">
                 <p className="text-[11px] font-semibold tracking-[0.1em] text-stone-600">NOT EXECUTABLE YET</p>
                 <p className="mt-0.5 text-sm italic text-stone-700">&ldquo;{item.quote}&rdquo;</p>
@@ -484,7 +525,7 @@ export function MissionCompiler({
                 {item.suggestion ? <p className="mt-0.5 text-xs text-stone-500">{item.suggestion}</p> : null}
               </div>
             ))}
-            {interpretation.conflicts.map((item, index) => (
+            {interpretation?.conflicts.map((item, index) => (
               <div key={`x-${index}`} className="border-l-2 border-rust-500 bg-rust-50 px-3 py-2">
                 <p className="text-[11px] font-semibold tracking-[0.1em] text-rust-800">CONFLICT</p>
                 <p className="mt-0.5 text-sm text-stone-700">{item.reason}</p>
@@ -565,7 +606,10 @@ export function MissionCompiler({
                     })
                   }
                   onRetract={() =>
-                    void runCommand({ kind: "retract", input: { id: constraint.id } }).then((ok) => {
+                    void runCommand({
+                      kind: "retract",
+                      input: { id: constraint.id, declaredAt: new Date().toISOString() },
+                    }).then((ok) => {
                       if (!ok) setLogError("The rule could not be retracted — the server rejected the command.");
                     })
                   }
@@ -581,12 +625,15 @@ export function MissionCompiler({
 
 function ProposalRow({
   proposal,
+  pending,
   structureName,
   onConfirm,
   onRemove,
   onSoftToggle,
 }: {
   proposal: MissionProposal;
+  /** Canonical mutation in flight — confirm/preference actions are locked. */
+  pending: boolean;
   structureName?: string;
   onConfirm: () => void;
   onRemove: () => void;
@@ -611,14 +658,16 @@ function ProposalRow({
         <button
           type="button"
           onClick={onConfirm}
-          className="rounded bg-olive-700 px-2.5 py-1 text-xs font-semibold text-white"
+          disabled={pending}
+          className="rounded bg-olive-700 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-40"
         >
           Confirm{proposal.hardOrSoft === "hard" ? " — must keep" : " — preference"}
         </button>
         <button
           type="button"
           onClick={() => onSoftToggle(proposal.hardOrSoft === "hard")}
-          className="rounded border border-stone-300 px-2 py-1 text-xs text-stone-600 hover:border-stone-500"
+          disabled={pending}
+          className="rounded border border-stone-300 px-2 py-1 text-xs text-stone-600 hover:border-stone-500 disabled:opacity-40"
         >
           {proposal.hardOrSoft === "hard" ? "Make preference" : "Make must keep"}
         </button>

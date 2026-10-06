@@ -161,6 +161,59 @@ test("mission state never leaks from Property A onto Property B", async ({ page 
   await page.screenshot({ path: `${REVIEWS}/mission-5-cross-property-isolation.png` });
 });
 
+test("rapid confirmations cannot lose, duplicate, or reorder mission rules", async ({ page }) => {
+  test.slow();
+  const mission = await resolveAndAccept(page);
+  await mission.getByLabel("DESCRIBE IT IN A SENTENCE").fill(
+    "Keep at least 110 Sunday parking spaces. We are not selling the land.",
+  );
+  await mission.getByRole("button", { name: "Interpret" }).click();
+  await expect(mission.getByText("PROPOSED · SUNDAY PARKING", { exact: false })).toBeVisible({
+    timeout: 10_000,
+  });
+  await expect(mission.getByText("PROPOSED · OWNERSHIP", { exact: false })).toBeVisible();
+
+  // Fire both confirmations with no await between clicks — the second lands
+  // while the first canonical mutation is still in flight.
+  const confirms = mission.getByRole("button", { name: "Confirm — must keep" });
+  await confirms.first().click();
+  await confirms.first().click();
+
+  // The serialized command queue must land BOTH rules exactly once, in order.
+  await expect(mission.locator("[data-constraint-id]")).toHaveCount(2, { timeout: 20_000 });
+  await expect(mission.getByText("SUNDAY PARKING · MUST KEEP", { exact: false })).toBeVisible();
+  await expect(mission.getByText("OWNERSHIP · MUST KEEP", { exact: false })).toBeVisible();
+  await expect(mission.locator("[data-constraint-id='mission:min-sunday-parking']")).toHaveCount(1);
+  await expect(mission.locator("[data-constraint-id='mission:retain-ownership']")).toHaveCount(1);
+
+  // Canonical project and persisted log agree: reload reconstructs both.
+  await page.reload({ waitUntil: "domcontentloaded" });
+  const restored = page.locator('section[aria-label="Mission Compiler"]');
+  await expect(restored.locator("[data-constraint-id]")).toHaveCount(2, { timeout: 20_000 });
+  await expect(restored.getByText("SUNDAY PARKING · MUST KEEP", { exact: false })).toBeVisible();
+  await expect(restored.getByText("OWNERSHIP · MUST KEEP", { exact: false })).toBeVisible();
+});
+
+test("direct controls validate visibly instead of silently doing nothing", async ({ page }) => {
+  test.slow();
+  const mission = await resolveAndAccept(page);
+  await mission.getByText("Or set a rule directly").click();
+
+  // Invalid parking value → a visible explanation, no proposal.
+  await mission.getByLabel("Sunday parking — at least").fill("0");
+  await mission.getByRole("button", { name: "Propose" }).first().click();
+  await expect(
+    mission.getByText("Sunday parking must be a whole number of spaces, at least 1."),
+  ).toBeVisible();
+  await expect(mission.getByText("PROPOSED · SUNDAY PARKING", { exact: false })).toHaveCount(0);
+
+  // Corrected value → the proposal appears.
+  await mission.getByLabel("Sunday parking — at least").fill("110");
+  await mission.getByRole("button", { name: "Propose" }).first().click();
+  await expect(mission.getByText("PROPOSED · SUNDAY PARKING", { exact: false })).toBeVisible();
+  await expect(mission.getByText("Minimum 110 spaces")).toBeVisible();
+});
+
 test("contradictions and vague language never silently activate", async ({ page }) => {
   test.slow();
   const mission = await resolveAndAccept(page);

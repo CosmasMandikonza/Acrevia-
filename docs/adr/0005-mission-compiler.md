@@ -77,8 +77,10 @@ client truth model.
      carries a stable `commitVersion`); any drift fails closed (409,
      re-accept required) rather than silently rebuilding a different base;
    - replay the client-held mission command log through the typed command
-     boundary; each event is stamped with the command's own `declaredAt`
-     (never wall-clock), so identical logs yield byte-identical projects;
+     boundary; each event (confirm AND retract) is stamped with the
+     command's own user-declared `declaredAt` (never wall-clock), so
+     identical logs yield byte-identical projects and audited timestamps
+     reflect when the user actually acted;
    - `ProjectCodec.encode()` integrity gate;
    - return the project with an HMAC attestation binding
      `{ projectId, envelopeSignature, commandCount, revision, projectHash }`.

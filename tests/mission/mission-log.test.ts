@@ -31,9 +31,9 @@ describe("mission command log binding", () => {
   });
 
   it("returns commands for the bound pair and discards them for another property", () => {
-    writeMissionLogFor(PAIR_A, [{ kind: "retract", input: { id: "mission:x" } }]);
+    writeMissionLogFor(PAIR_A, [{ kind: "retract", input: { id: "mission:x", declaredAt: "2026-10-06T00:00:00.000Z" } }]);
     expect(readMissionLogFor(PAIR_A)).toEqual([
-      { kind: "retract", input: { id: "mission:x" } },
+      { kind: "retract", input: { id: "mission:x", declaredAt: "2026-10-06T00:00:00.000Z" } },
     ]);
     // Property B reads → discarded, and the stale log is cleared.
     expect(readMissionLogFor(PAIR_B)).toEqual([]);
@@ -41,7 +41,7 @@ describe("mission command log binding", () => {
   });
 
   it("discards a log from an earlier acceptance of the same property (new envelope signature)", () => {
-    writeMissionLogFor(PAIR_A, [{ kind: "retract", input: { id: "mission:x" } }]);
+    writeMissionLogFor(PAIR_A, [{ kind: "retract", input: { id: "mission:x", declaredAt: "2026-10-06T00:00:00.000Z" } }]);
     expect(readMissionLogFor(SAME_PROPERTY_NEW_ACCEPTANCE)).toEqual([]);
   });
 

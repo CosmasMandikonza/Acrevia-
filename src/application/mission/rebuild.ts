@@ -73,10 +73,16 @@ export function verifyAcceptedPair(
 
 /** The typed mission command log the client holds (user intent, unsigned).
  *  Confirm commands are CONFIRMED-only by schema — a DRAFT payload cannot
- *  enter the log at all. */
+ *  enter the log at all. Retract commands carry the USER_DECLARED retraction
+ *  time so the audited event reflects when the rule was actually retracted. */
 export const MissionCommand = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("confirm"), input: MissionConstraintConfirmation }).strict(),
-  z.object({ kind: z.literal("retract"), input: z.object({ id: z.string().min(1) }).strict() }).strict(),
+  z
+    .object({
+      kind: z.literal("retract"),
+      input: z.object({ id: z.string().min(1), declaredAt: z.string().min(1) }).strict(),
+    })
+    .strict(),
 ]);
 export type MissionCommand = z.infer<typeof MissionCommand>;
 
@@ -180,7 +186,10 @@ export function replayMissionCommands(
         }
         confirmMissionConstraint(ctx, command.input);
       } else {
-        retractMissionConstraint(ctx, command.input);
+        // Retractions are user-declared actions too: the audited event must
+        // carry the actual retraction time, not the previous confirm's.
+        eventAt = command.input.declaredAt;
+        retractMissionConstraint(ctx, { id: command.input.id });
       }
     } catch (cause) {
       throw new CommandReplayError(

@@ -150,6 +150,24 @@ describe("mission parser — refuses to fabricate", () => {
     expect(result.proposals[0].normalized.type).toBe("preserve-structure");
   });
 
+  it("never throws on recognized-but-invalid numbers — they become clarifications", () => {
+    const cases: Array<[string, RegExp]> = [
+      ["Keep at least 0 Sunday parking spaces.", /whole space/],
+      ["At most 0 stories.", /whole number, at least 1/],
+      ["No building taller than 0 feet.", /greater than 0 ft/],
+      ["Keep at least -5 Sunday parking spaces.", /positive number of spaces/],
+      ["Keep at least 1.5 Sunday parking spaces.", /whole space/],
+      ["Keep it to at most 2.5 stories.", /whole number, at least 1/],
+      ["No building taller than -20 feet.", /positive number of feet/],
+    ];
+    for (const [sentence, message] of cases) {
+      const result = interpretMission(sentence, { structures: ONE_STRUCTURE });
+      expect(result.proposals, sentence).toHaveLength(0);
+      expect(result.needsClarification, sentence).toHaveLength(1);
+      expect(result.needsClarification[0].reason, sentence).toMatch(message);
+    }
+  });
+
   it("keeps extreme-but-positive quantities valid with an untested-feasibility note", () => {
     const result = interpretMission("Keep at least 5000 Sunday parking spaces.", {
       structures: ONE_STRUCTURE,

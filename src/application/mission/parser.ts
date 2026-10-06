@@ -119,8 +119,10 @@ function parseCount(raw: string): number {
 }
 
 function splitClauses(input: string): string[] {
+  // Sentence boundaries — but a period BETWEEN digits is a decimal point
+  // ("1.5 spaces"), never a sentence end.
   return input
-    .split(/[.;!?]+|\n+|\bbut\b|,\s+and\s+/i)
+    .split(/(?:(?<!\d)\.|\.(?!\d)|[;!?]+|\n+|\bbut\b|,\s+and\s+)/i)
     .map((clause) => clause.trim())
     .filter((clause) => clause.length > 0);
 }
@@ -177,14 +179,53 @@ export function interpretMission(
   const ownershipContradicted = result.conflicts.length > 0;
   const hardByDefault = (clause: string) => (SOFT_MARKERS.test(clause) ? "soft" : "hard") as "hard" | "soft";
 
+  /**
+   * Quantity guard: recognized-but-invalid numbers NEVER throw out of the
+   * parser. A domain-invalid quantity becomes a typed NEEDS CLARIFICATION
+   * note with the exact rule that was violated — the UI must stay alive and
+   * honest when a pastor types a bad number.
+   */
+  const pushQuantityProposal = (
+    build: () => MissionProposal,
+    clause: string,
+    invalidMessage: string,
+  ): void => {
+    try {
+      result.proposals.push(MissionProposal.parse(build()));
+    } catch {
+      result.needsClarification.push({ quote: clause, reason: invalidMessage });
+    }
+  };
+  /** A minus directly before any number in the clause = negative intent. */
+  const hasNegativeNumber = (clause: string): boolean => /-\s*\d/.test(clause);
+  /** A decimal number anywhere in the clause = fractional intent (whole-only
+   *  dimensions like parking spaces and stories must not be truncated). */
+  const hasFractionalNumber = (clause: string): boolean => /\d\s*\.\s*\d/.test(clause);
+
   for (const clause of clauses) {
-    // Sunday parking minimum — only with an explicit quantity.
+    // Sunday parking minimum — only with an explicit, valid quantity.
     const parkingMatch = clause.match(PARKING_WITH_NUMBER);
     if (parkingMatch) {
       const spaces = parseCount(parkingMatch[1]);
-      if (Number.isFinite(spaces)) {
-        result.proposals.push(
-          MissionProposal.parse({
+      if (hasNegativeNumber(clause)) {
+        result.needsClarification.push({
+          quote: clause,
+          reason: "Sunday parking must be a positive number of spaces.",
+        });
+      } else if (hasFractionalNumber(clause)) {
+        result.needsClarification.push({
+          quote: clause,
+          reason: "Sunday parking must be at least 1 whole space.",
+        });
+      } else if (!Number.isFinite(spaces)) {
+        result.needsClarification.push({
+          quote: clause,
+          reason: "The parking number could not be read.",
+          suggestion: "Try the form: keep at least 110 Sunday parking spaces.",
+        });
+      } else {
+        pushQuantityProposal(
+          () => ({
             proposalId: "mission:min-sunday-parking",
             intentText: clause,
             normalized: { type: "min-parking", spaces: { value: spaces, unit: "spaces" } },
@@ -193,13 +234,9 @@ export function interpretMission(
             detail: `Minimum ${spaces} spaces`,
             feasibilityNote: extremeNote("min-parking", spaces),
           }),
+          clause,
+          "Sunday parking must be at least 1 whole space.",
         );
-      } else {
-        result.needsClarification.push({
-          quote: clause,
-          reason: "The parking number could not be read.",
-          suggestion: "Try the form: keep at least 110 Sunday parking spaces.",
-        });
       }
       continue;
     }
@@ -232,12 +269,20 @@ export function interpretMission(
       continue;
     }
 
-    // Mission-preferred maximum height.
+    // Mission-preferred maximum height — a minus sign can prevent the main
+    // grammar from matching at all, so catch negative intent explicitly.
+    if (/\b(feet|ft|foot|taller|higher|height)\b/i.test(clause) && hasNegativeNumber(clause)) {
+      result.needsClarification.push({
+        quote: clause,
+        reason: "Building height must be a positive number of feet.",
+      });
+      continue;
+    }
     const heightMatch = clause.match(HEIGHT);
     if (heightMatch) {
       const feet = Number(heightMatch[1]);
-      result.proposals.push(
-        MissionProposal.parse({
+      pushQuantityProposal(
+        () => ({
           proposalId: "mission:max-height",
           intentText: clause,
           normalized: { type: "max-height", limit: { value: feet, unit: "ft" } },
@@ -246,17 +291,30 @@ export function interpretMission(
           detail: `No taller than ${feet} ft`,
           feasibilityNote: extremeNote("max-height", feet),
         }),
+        clause,
+        "Building height must be greater than 0 ft.",
       );
       continue;
     }
 
-    // Mission-preferred maximum stories.
+    // Mission-preferred maximum stories — fractional or negative limits are
+    // caught even when the number shape prevents the main grammar from
+    // matching at all.
+    if (/\b(stor(?:y|ies)|storeys?|floors?)\b/i.test(clause) && (hasFractionalNumber(clause) || hasNegativeNumber(clause))) {
+      result.needsClarification.push({
+        quote: clause,
+        reason: hasNegativeNumber(clause)
+          ? "The story limit must be a positive number."
+          : "The story limit must be a whole number, at least 1.",
+      });
+      continue;
+    }
     const storiesMatch = clause.match(STORIES);
     if (storiesMatch) {
       const stories = parseCount(storiesMatch[1]);
       if (Number.isFinite(stories)) {
-        result.proposals.push(
-          MissionProposal.parse({
+        pushQuantityProposal(
+          () => ({
             proposalId: "mission:max-stories",
             intentText: clause,
             normalized: { type: "max-stories", stories: { value: stories, unit: "stories" } },
@@ -265,6 +323,8 @@ export function interpretMission(
             detail: `At most ${stories} stories`,
             feasibilityNote: extremeNote("max-stories", stories),
           }),
+          clause,
+          "The story limit must be a whole number, at least 1.",
         );
         continue;
       }
