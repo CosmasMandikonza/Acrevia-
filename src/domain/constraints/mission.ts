@@ -55,3 +55,14 @@ export const MissionConstraintSemantic = z
   })
   .strict();
 export type MissionConstraintSemantic = z.infer<typeof MissionConstraintSemantic>;
+
+/**
+ * The confirm-command input (issue #6 review): a MissionConstraint becomes
+ * canonical ONLY through explicit confirmation. A DRAFT payload must never
+ * pass the command boundary no matter who sends it — interpretation and
+ * proposals are not project state until a human confirms.
+ */
+export const MissionConstraintConfirmation = MissionConstraintSemantic.extend({
+  confirmationState: z.literal("CONFIRMED"),
+}).strict();
+export type MissionConstraintConfirmation = z.infer<typeof MissionConstraintConfirmation>;

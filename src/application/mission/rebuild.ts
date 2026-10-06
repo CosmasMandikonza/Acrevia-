@@ -18,7 +18,7 @@ import {
   type CommandContext,
 } from "../../commands";
 import { ProjectCodec } from "../../adapters/persistence/project-codec";
-import { MissionConstraintSemantic } from "../../domain/constraints/mission";
+import { MissionConstraintConfirmation, type MissionNormalized } from "../../domain/constraints/mission";
 import type { Project } from "../../domain/graph/project";
 
 /**
@@ -71,9 +71,11 @@ export function verifyAcceptedPair(
   }
 }
 
-/** The typed mission command log the client holds (user intent, unsigned). */
+/** The typed mission command log the client holds (user intent, unsigned).
+ *  Confirm commands are CONFIRMED-only by schema — a DRAFT payload cannot
+ *  enter the log at all. */
 export const MissionCommand = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("confirm"), input: MissionConstraintSemantic }).strict(),
+  z.object({ kind: z.literal("confirm"), input: MissionConstraintConfirmation }).strict(),
   z.object({ kind: z.literal("retract"), input: z.object({ id: z.string().min(1) }).strict() }).strict(),
 ]);
 export type MissionCommand = z.infer<typeof MissionCommand>;
@@ -93,7 +95,7 @@ export type MissionStateAttestation = {
 export type MissionConstraintView = {
   id: string;
   intentText: string;
-  normalized: MissionConstraintSemantic["normalized"];
+  normalized: MissionNormalized;
   hardOrSoft: "hard" | "soft";
   revision: number;
   lastModifiedAt: string;
@@ -118,10 +120,29 @@ export class CommandReplayError extends Error {
   }
 }
 
-/** Deterministically rebuild the committed project from the verified pair. */
+/**
+ * The rebuilt base project does not reproduce the exact committed bytes the
+ * receipt signed. Fail closed: the accepted property must be refreshed and
+ * re-accepted rather than silently rebuilding a different base.
+ */
+export class BaseProjectDriftError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "BaseProjectDriftError";
+  }
+}
+
+/** Canonical SHA-256 of an encoded project — shared by commit and rebuild. */
+export function sha256Project(encoded: string): string {
+  return createHash("sha256").update(encoded, "utf-8").digest("hex");
+}
+
+/** Deterministically rebuild the committed project from the verified pair.
+ *  Reconstruction depends only on the identity + timestamp fields; the signed
+ *  projectHash is checked separately against the rebuilt bytes. */
 export function rebuildAcceptedProject(
   session: ResolutionEnvelope["session"],
-  receiptPayload: CommitReceipt["payload"],
+  receiptPayload: Pick<CommitReceipt["payload"], "projectId" | "propertyId" | "committedAt">,
 ): Project {
   const { project } = commitSession(session, {
     projectId: receiptPayload.projectId,
@@ -177,6 +198,18 @@ export function buildMissionState(
 ): MissionStateResult {
   const { session, receiptPayload } = verifyAcceptedPair(envelope, receipt);
   const project = rebuildAcceptedProject(session, receiptPayload);
+
+  // Hash gate: the reconstructed base project must reproduce the EXACT
+  // committed bytes the receipt signed. Any drift (implementation change,
+  // mismatched commit version, forged pair) fails closed — the accepted
+  // property must be refreshed and re-accepted, never silently rebuilt.
+  const baseHash = sha256Project(ProjectCodec.encode(project));
+  if (baseHash !== receiptPayload.projectHash) {
+    throw new BaseProjectDriftError(
+      "the accepted property's committed project could not be reproduced exactly (base project hash mismatch); re-resolve and re-accept the property to continue",
+    );
+  }
+
   replayMissionCommands(project, commands, {
     actor: "church-leader",
     fallbackAt: receiptPayload.committedAt,
@@ -197,7 +230,7 @@ export function buildMissionState(
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
 
-  const projectHash = createHash("sha256").update(encoded, "utf-8").digest("hex");
+  const projectHash = sha256Project(encoded);
   const attestationPayload = {
     projectId: receiptPayload.projectId,
     envelopeSignature: receiptPayload.envelopeSignature,

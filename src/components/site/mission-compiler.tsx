@@ -5,14 +5,13 @@ import {
   interpretMission,
   type InterpretationResult,
   type MissionProposal,
-  type StructureContext,
 } from "../../application/mission/parser";
 import type { MissionCommand } from "../../application/mission/rebuild";
 import type { MissionNormalized } from "../../domain/constraints/mission";
 import {
-  readMissionLog,
+  readMissionLogFor,
   readStoredAcceptedPair,
-  writeMissionLog,
+  writeMissionLogFor,
 } from "../../lib/accepted-property";
 
 /**
@@ -25,7 +24,20 @@ import {
  * project state returned by POST /api/mission/state, which verifies the
  * accepted { envelope, receipt } pair and replays the commands through the
  * typed command boundary. Only explicit confirmation sends a command.
+ *
+ * The command log is BOUND to the accepted pair ({ projectId,
+ * envelopeSignature, commands }): mission state can never leak onto a
+ * different property. Structure identity is the canonical Development Graph
+ * node id (gis:structure:<id>) — the map renderer adapts back to raw GIS ids.
  */
+
+export type MissionStructure = {
+  /** Canonical Development Graph node id: gis:structure:<raw id>. */
+  graphId: string;
+  /** Raw provider id the map renderer draws. */
+  renderId: string;
+  name?: string;
+};
 
 type MissionConstraintView = {
   id: string;
@@ -73,17 +85,17 @@ function detailFor(normalized: MissionNormalized): string {
 
 function preserveStructureName(
   normalized: MissionNormalized,
-  structures: StructureContext[],
+  structures: MissionStructure[],
 ): string | undefined {
   if (normalized.type !== "preserve-structure") return undefined;
-  return structures.find((s) => s.structureId === normalized.structureId)?.name;
+  return structures.find((s) => s.graphId === normalized.structureId)?.name;
 }
 
 export function MissionCompiler({
   structures,
   onProtectedStructures,
 }: {
-  structures: StructureContext[];
+  structures: MissionStructure[];
   onProtectedStructures?: (structureIds: string[]) => void;
 }) {
   const [sentence, setSentence] = useState("");
@@ -97,7 +109,7 @@ export function MissionCompiler({
   const [parkingValue, setParkingValue] = useState("110");
   const [heightValue, setHeightValue] = useState("38");
   const [storiesValue, setStoriesValue] = useState("3");
-  const [preservePick, setPreservePick] = useState(structures[0]?.structureId ?? "");
+  const [preservePick, setPreservePick] = useState(structures[0]?.graphId ?? "");
   const logRef = useRef<MissionCommand[]>([]);
 
   const refresh = useCallback(async (commands: MissionCommand[]) => {
@@ -129,14 +141,16 @@ export function MissionCompiler({
     }
   }, []);
 
-  // Mount: load the persisted command log and derive the canonical view.
+  // Mount: load the command log BOUND to the currently accepted pair. A log
+  // from a different property (or a different acceptance) is discarded here.
   useEffect(() => {
-    const stored = readMissionLog<MissionCommand>();
-    logRef.current = Array.isArray(stored) ? stored : [];
+    const pair = readStoredAcceptedPair();
+    logRef.current = pair ? readMissionLogFor<MissionCommand>(pair) : [];
     void refresh(logRef.current);
   }, [refresh]);
 
   // Keep the map honest: protected structures derive from CONFIRMED rules.
+  // Emitted ids are canonical graph ids (gis:structure:<id>).
   useEffect(() => {
     const ids: string[] = [];
     for (const constraint of missionState?.missionConstraints ?? []) {
@@ -149,11 +163,16 @@ export function MissionCompiler({
 
   const runCommand = useCallback(
     async (command: MissionCommand) => {
+      const pair = readStoredAcceptedPair();
+      if (!pair) {
+        setError("Accepted property session unavailable.");
+        return null;
+      }
       const next = [...logRef.current, command];
       const result = await refresh(next);
       if (result) {
         logRef.current = next;
-        writeMissionLog(next);
+        writeMissionLogFor(pair, next);
         setLogError(null);
       }
       // On failure the log is NOT extended — canonical state and log stay in
@@ -200,7 +219,13 @@ export function MissionCompiler({
   const interpret = useCallback(() => {
     if (!sentence.trim()) return;
     setDrafts([]);
-    setInterpretation(interpretMission(sentence, { structures }));
+    // The parser works in canonical graph ids — a confirmed preserve rule
+    // must reference the gis:structure:<id> node, not a provider id.
+    setInterpretation(
+      interpretMission(sentence, {
+        structures: structures.map((s) => ({ structureId: s.graphId, name: s.name })),
+      }),
+    );
   }, [sentence, structures]);
 
   const addDraft = useCallback(
@@ -316,8 +341,8 @@ export function MissionCompiler({
                   className="rounded border border-stone-300 px-2 py-1 text-sm focus:border-stone-500 focus:outline-none"
                 >
                   {structures.map((structure) => (
-                    <option key={structure.structureId} value={structure.structureId}>
-                      {structure.name ?? structure.structureId}
+                    <option key={structure.graphId} value={structure.graphId}>
+                      {structure.name ?? structure.graphId}
                     </option>
                   ))}
                 </select>
@@ -326,7 +351,7 @@ export function MissionCompiler({
                   onClick={() =>
                     addDraft(
                       { type: "preserve-structure", structureId: preservePick },
-                      `Preserve ${structures.find((s) => s.structureId === preservePick)?.name ?? preservePick}.`,
+                      `Preserve ${structures.find((s) => s.graphId === preservePick)?.name ?? preservePick}.`,
                     )
                   }
                   className="rounded border border-stone-400 px-2 py-1 text-xs font-medium text-stone-700 hover:border-stone-600"
@@ -491,7 +516,7 @@ export function MissionCompiler({
           ) : null}
           <ul className="mt-2 divide-y divide-stone-100">
             {confirmed.map((constraint) => (
-              <li key={constraint.id} className="py-2.5">
+              <li key={constraint.id} data-constraint-id={constraint.id} className="py-2.5">
                 <ConfirmedRule
                   constraint={constraint}
                   structureName={preserveStructureName(constraint.normalized, structures)}

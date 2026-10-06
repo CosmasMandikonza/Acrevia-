@@ -67,6 +67,36 @@ describe("mission constraint value validation", () => {
     ).toThrow(/USER_DECLARED/);
   });
 
+  it("DRAFT REGRESSION: a forged DRAFT confirm never creates a node or advances revision", () => {
+    const project = seedPhiladelphiaProject();
+    const revisionBefore = project.revision;
+    // Deliberately forged payload — the command input type itself forbids
+    // DRAFT, so this is typed as unknown to exercise the runtime boundary.
+    const forged = {
+      ...confirmInput({ type: "retain-ownership" }),
+      confirmationState: "DRAFT",
+    } as unknown as Parameters<typeof confirmMissionConstraint>[1];
+    expect(() => confirmMissionConstraint(contextFor(project), forged)).toThrow();
+    expect(project.nodes["mission:test-rule"]).toBeUndefined();
+    expect(project.revision).toBe(revisionBefore);
+    expect(
+      project.events.some((event) => event.eventType === "mission.constraint.confirmed"),
+    ).toBe(false);
+  });
+
+  it("REFERENTIAL INTEGRITY: preserve-structure for a nonexistent structure rejects atomically", () => {
+    const project = seedPhiladelphiaProject();
+    const revisionBefore = project.revision;
+    expect(() =>
+      confirmMissionConstraint(
+        contextFor(project),
+        confirmInput({ type: "preserve-structure", structureId: "gis:structure:missing" }),
+      ),
+    ).toThrow();
+    expect(project.nodes["mission:test-rule"]).toBeUndefined();
+    expect(project.revision).toBe(revisionBefore);
+  });
+
   it("retract removes a confirmed constraint through the typed boundary", () => {
     const project = seedPhiladelphiaProject();
     confirmMissionConstraint(

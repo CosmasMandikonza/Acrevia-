@@ -9,7 +9,7 @@ import { SourceArtifactSemantic } from "../domain/evidence/source-artifact";
 import { ClaimSemantic, validateClaimRules } from "../domain/evidence/claim";
 import { RegulationSemantic } from "../domain/evidence/regulation";
 import { ConstraintSemantic } from "../domain/constraints/constraint";
-import { MissionConstraintSemantic } from "../domain/constraints/mission";
+import { MissionConstraintConfirmation } from "../domain/constraints/mission";
 import { AssumptionSemantic } from "../domain/constraints/assumption";
 import {
   ScenarioMetric,
@@ -222,7 +222,7 @@ export function materializeConstraint(
 // Mission + assumptions (origin rules enforced here)
 // ---------------------------------------------------------------------------
 
-export const ConfirmMissionConstraintInput = MissionConstraintSemantic;
+export const ConfirmMissionConstraintInput = MissionConstraintConfirmation;
 export function confirmMissionConstraint(
   ctx: CommandContext,
   input: z.infer<typeof ConfirmMissionConstraintInput>,
@@ -230,6 +230,12 @@ export function confirmMissionConstraint(
   const parsed = ConfirmMissionConstraintInput.parse(input);
   if (parsed.origin.kind !== "USER_DECLARED") {
     throw new Error("mission constraints must have USER_DECLARED origin");
+  }
+  // Referential integrity: preserve-structure rules must point at the
+  // canonical Development Graph structure node (gis:structure:<id>), never a
+  // raw provider identifier or a nonexistent building.
+  if (parsed.normalized.type === "preserve-structure") {
+    requireNode(ctx.project, parsed.normalized.structureId, "structure");
   }
   rejectKindCollision(ctx.project, parsed.id, "mission-constraint", "confirmMissionConstraint");
   apply(

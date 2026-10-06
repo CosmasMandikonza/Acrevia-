@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { ResolutionEnvelope } from "../../../../adapters/gis/resolution-envelope";
 import type { CommitReceipt } from "../../../../adapters/gis/commit-receipt";
 import {
+  BaseProjectDriftError,
   buildMissionState,
   CommandReplayError,
   MissionCommandLog,
@@ -69,6 +70,18 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: error.message, name: error.name, reason: "verification-failed" },
         { status: 403 },
+      );
+    }
+    if (error instanceof BaseProjectDriftError) {
+      // Fail closed: the accepted property must be refreshed and re-accepted.
+      return NextResponse.json(
+        {
+          error: error.message,
+          name: error.name,
+          reason: "base-project-drift",
+          reacceptRequired: true,
+        },
+        { status: 409 },
       );
     }
     if (error instanceof CommandReplayError) {

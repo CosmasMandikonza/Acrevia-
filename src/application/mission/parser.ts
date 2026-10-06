@@ -97,6 +97,13 @@ const PRESERVE_VERB =
   /\b(preserve|keep|protect|retain|save|do\s+not\s+demolish|don'?t\s+demolish)\s+(?:the\s+|our\s+)?([a-z][a-z\s'-]{2,50})/i;
 const STRUCTURE_NOUNS =
   /\b(sanctuary|church|chapel|fellowship\s+hall|gym(nasium)?|annex|educational\s+wing|building|buildings|structure|structures|food\s+pantry|pantry|parsonage|office)s?\b/i;
+/**
+ * Interior ministry areas (a pantry, a kitchen, classrooms…) are usually
+ * spaces INSIDE a building, not mapped structures. Preserving one must never
+ * silently become "preserve the entire only-resolved building" unless a
+ * resolved structure genuinely identifies that space by name.
+ */
+const INTERIOR_NOUNS = /\b(food\s+pantry|pantry|kitchen|classrooms?|nursery|offices?)\b/i;
 
 const UNSUPPORTED_GOALS: Array<{ pattern: RegExp; goal: string }> = [
   { pattern: /\baffordab(?:le|ility)\b/i, goal: "Affordability targets" },
@@ -263,12 +270,22 @@ export function interpretMission(
       }
     }
 
-    // Preserve a structure — never silently choosing a building.
+    // Preserve a structure — never silently choosing a building, and never
+    // treating an INTERIOR ministry area (pantry, kitchen…) as a whole mapped
+    // building unless a resolved structure genuinely identifies it by name.
     const preserveMatch = clause.match(PRESERVE_VERB);
     if (preserveMatch && STRUCTURE_NOUNS.test(clause)) {
       const nounMatch = clause.match(STRUCTURE_NOUNS);
       const noun = nounMatch ? nounMatch[1] : undefined;
       const structures = context.structures;
+      const interior = INTERIOR_NOUNS.test(clause);
+      // An interior area only maps to a structure whose resolved name
+      // genuinely identifies it ("FOOD PANTRY" as a mapped structure).
+      const nameMatch = (structure: { name?: string }): boolean =>
+        Boolean(
+          noun &&
+            (structure.name ?? "").toLowerCase().includes(noun.toLowerCase().split(" ")[0]),
+        );
       if (structures.length === 0) {
         result.unsupported.push({
           quote: clause,
@@ -276,6 +293,28 @@ export function interpretMission(
             "This property has no resolved building footprints to protect yet, so preservation cannot become an executable rule.",
           suggestion: "Re-resolve the property, or express the goal as one of the supported rules.",
         });
+      } else if (interior) {
+        const named = structures.filter(nameMatch);
+        if (named.length === 1) {
+          const match = named[0];
+          result.proposals.push(
+            MissionProposal.parse({
+              proposalId: `mission:preserve:${match.structureId}`,
+              intentText: clause,
+              normalized: { type: "preserve-structure", structureId: match.structureId },
+              hardOrSoft: hardByDefault(clause),
+              label: "PRESERVE",
+              detail: match.name ?? match.structureId,
+            }),
+          );
+        } else {
+          result.needsClarification.push({
+            quote: clause,
+            reason: `A ${noun ?? "ministry space"} is usually an interior area, not a separately mapped building — Acrevia will not interpret it as preserving an entire resolved structure.`,
+            suggestion:
+              "If it is its own building on this property, name it exactly as the resolved footprint is labeled; otherwise keep it as a board note for now.",
+          });
+        }
       } else if (structures.length === 1) {
         const only = structures[0];
         result.proposals.push(

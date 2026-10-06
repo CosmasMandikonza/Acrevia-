@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { POST as missionStatePost } from "../../src/app/api/mission/state/route";
 import { POST as commitPost } from "../../src/app/api/gis/commit/route";
 import { createEnvelope } from "../../src/adapters/gis/resolution-envelope";
+import { createCommitReceipt, type CommitReceipt } from "../../src/adapters/gis/commit-receipt";
 import type { ResolutionSession } from "../../src/application/resolution/state";
 import type { ResolvedParcelContext } from "../../src/adapters/gis";
 import {
@@ -174,6 +175,35 @@ describe("POST /api/mission/state — canonical lifecycle", () => {
     expect(a.revision).toBe(b.revision);
   });
 
+  it("HASH GATE: reconstructed base project hash equals the hash signed at commit", async () => {
+    const pair = await acceptedPair();
+    const receiptPayload = (pair.receipt as { payload: { projectHash: string } }).payload;
+    expect(receiptPayload.projectHash).toMatch(/^[0-9a-f]{64}$/);
+    // Empty command log = identity replay: the rebuilt base project bytes are
+    // exactly the committed bytes, so the attestation hash equals the receipt's.
+    const state = await (await missionState(pair, [])).json();
+    expect(state.attestation.projectHash).toBe(receiptPayload.projectHash);
+  });
+
+  it("HASH GATE: a validly-signed receipt whose projectHash does not match the rebuild is refused", async () => {
+    const pair = await acceptedPair();
+    // Server-side signature over a WRONG hash: signature verification passes,
+    // the base-project rebuild cannot reproduce those bytes → fail closed.
+    const drifted = createCommitReceipt({
+      ...(pair.receipt as { payload: CommitReceipt["payload"] }).payload,
+      projectHash: "0".repeat(64),
+    });
+    const response = await missionState(
+      { envelope: pair.envelope, receipt: drifted },
+      [confirmCommand()],
+    );
+    expect(response.status).toBe(409);
+    const payload = await response.json();
+    expect(payload.name).toBe("BaseProjectDriftError");
+    expect(payload.reacceptRequired).toBe(true);
+    expect(payload.error).toContain("re-accept");
+  });
+
   it("replay rejects invalid values atomically with the failing command index", async () => {
     const pair = await acceptedPair();
     const response = await missionState(pair, [
@@ -213,5 +243,72 @@ describe("POST /api/mission/state — canonical lifecycle", () => {
     const pair = await acceptedPair();
     const response = await missionState({ envelope: pair.envelope, receipt: undefined }, []);
     expect(response.status).toBe(400);
+  });
+
+  it("CANONICAL STRUCTURE: preserve-structure references the gis:structure:* graph node", async () => {
+    const pair = await acceptedPair();
+    const response = await missionState(pair, [
+      {
+        kind: "confirm",
+        input: {
+          id: "mission:preserve:gis:structure:1282177",
+          kind: "mission-constraint",
+          intentText: "Preserve the sanctuary.",
+          normalized: { type: "preserve-structure", structureId: "gis:structure:1282177" },
+          origin: { kind: "USER_DECLARED", actorId: "church-leader", declaredAt: NOW },
+          confirmationState: "CONFIRMED",
+          hardOrSoft: "hard",
+        },
+      },
+    ]);
+    expect(response.status).toBe(200);
+    const state = await response.json();
+    expect(state.missionConstraints).toHaveLength(1);
+    expect(state.missionConstraints[0].normalized).toEqual({
+      type: "preserve-structure",
+      structureId: "gis:structure:1282177",
+    });
+    // The referenced node genuinely exists in the canonical graph.
+    expect(state.project.nodes["gis:structure:1282177"]).toBeDefined();
+    expect(state.project.nodes["gis:structure:1282177"].kind).toBe("structure");
+  });
+
+  it("NONEXISTENT STRUCTURE: a preserve rule for a missing structure node rejects atomically", async () => {
+    const pair = await acceptedPair();
+    const response = await missionState(pair, [
+      confirmCommand(),
+      {
+        kind: "confirm",
+        input: {
+          id: "mission:preserve:gis:structure:does-not-exist",
+          kind: "mission-constraint",
+          intentText: "Preserve a building that is not on this property.",
+          normalized: { type: "preserve-structure", structureId: "gis:structure:does-not-exist" },
+          origin: { kind: "USER_DECLARED", actorId: "church-leader", declaredAt: NOW },
+          confirmationState: "CONFIRMED",
+          hardOrSoft: "hard",
+        },
+      },
+    ]);
+    expect(response.status).toBe(422);
+    const payload = await response.json();
+    expect(payload.commandIndex).toBe(1);
+    expect(payload.partialStateWritten).toBe(false);
+  });
+
+  it("DRAFT: a forged DRAFT confirm command never enters the log schema at all", async () => {
+    const pair = await acceptedPair();
+    const response = await missionState(pair, [
+      {
+        kind: "confirm",
+        input: {
+          ...confirmCommand().input,
+          confirmationState: "DRAFT" as const,
+        },
+      },
+    ]);
+    expect(response.status).toBe(400);
+    const payload = await response.json();
+    expect(payload.name).toBe("InvalidMissionCommandLog");
   });
 });

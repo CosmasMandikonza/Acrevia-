@@ -116,12 +116,38 @@ describe("mission parser — refuses to fabricate", () => {
     for (const sentence of [
       "Prioritize affordable housing.",
       "We need long-term income from the property.",
-      "Preserve the food pantry.",
     ]) {
       const result = interpretMission(sentence, { structures: [] });
       expect(result.proposals, sentence).toHaveLength(0);
       expect(result.unsupported.length + result.needsClarification.length, sentence).toBeGreaterThan(0);
     }
+  });
+
+  it("PANTRY: never preserves an entire building for an interior ministry area", () => {
+    // One generic church structure exists — a pantry is still an interior
+    // area, not that whole building. Ask, don't fabricate.
+    const result = interpretMission("Preserve the food pantry.", { structures: ONE_STRUCTURE });
+    expect(result.proposals).toHaveLength(0);
+    expect(result.needsClarification).toHaveLength(1);
+    expect(result.needsClarification[0].reason).toContain("interior area");
+  });
+
+  it("PANTRY: a resolved structure genuinely named for the pantry maps to it", () => {
+    const result = interpretMission(
+      "Preserve the food pantry.",
+      { structures: [{ structureId: "gis:structure:999", name: "FOOD PANTRY ANNEX" }] },
+    );
+    expect(result.proposals).toHaveLength(1);
+    expect(result.proposals[0].normalized).toEqual({
+      type: "preserve-structure",
+      structureId: "gis:structure:999",
+    });
+  });
+
+  it("SANCTUARY: one unambiguous church structure still maps deliberately (canonical demo)", () => {
+    const result = interpretMission("Preserve the sanctuary.", { structures: ONE_STRUCTURE });
+    expect(result.proposals).toHaveLength(1);
+    expect(result.proposals[0].normalized.type).toBe("preserve-structure");
   });
 
   it("keeps extreme-but-positive quantities valid with an untested-feasibility note", () => {
