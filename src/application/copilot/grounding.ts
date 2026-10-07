@@ -4,10 +4,17 @@
  * Acrevia's rule: a number the model produces is prose until a deterministic
  * tool result contains it. This guard extracts every numeric token from the
  * Copilot's final reply and requires each consequential one to appear in this
- * turn's tool outputs (or in the user's own message, which the model may
- * legitimately echo). Violations trigger one corrective retry; a second
+ * turn's tool outputs. Violations trigger one corrective retry; a second
  * failure replaces the reply with the deterministic tool facts instead of
  * showing unverified numbers as project truth.
+ *
+ * Tool output is the SOLE numeric authority. Numbers that appear only in the
+ * user's message do NOT authorize the model's claims — a user saying "make
+ * 150 homes work" can never launder 150 into a verified fact. Echoing a
+ * user's number is still possible exactly when it is grounded: the tools echo
+ * request parameters in their results (e.g. explain_feasibility returns
+ * requestedTarget), so a properly tooled reply never needs ungrounded
+ * numbers.
  *
  * Small integers (0–12) are exempt: list numbering, ordinals and small counts
  * whose authoritative versions (when consequential) also appear in tool
@@ -34,19 +41,15 @@ export function numericTokens(text: string): Set<string> {
 }
 
 /**
- * The allow-list for one turn: numbers present in serialized tool results and
- * in the user's message. Tool results are serialized exactly as the model saw
- * them, so any number the model could have grounded is in this set.
+ * The allow-list for one turn: numbers present in serialized tool results
+ * ONLY — never user-authored text. Tool results are serialized exactly as the
+ * model saw them, so any number the model could have grounded is in this set.
  */
-export function allowedNumbers(
-  toolResultJson: string[],
-  userMessage: string,
-): Set<string> {
+export function allowedNumbers(toolResultJson: string[]): Set<string> {
   const allowed = new Set<string>();
   for (const blob of toolResultJson) {
     for (const token of numericTokens(blob)) allowed.add(token);
   }
-  for (const token of numericTokens(userMessage)) allowed.add(token);
   return allowed;
 }
 

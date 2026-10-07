@@ -108,7 +108,13 @@ describe("Copilot rail", () => {
         new Response(JSON.stringify(proposalTurn), { status: 200 }),
       );
     vi.stubGlobal("fetch", fetchMock);
-    render(<Copilot accepted={accepted} />);
+    const onProjectStateChanged = vi.fn();
+    render(
+      <Copilot
+        accepted={accepted}
+        onProjectStateChanged={onProjectStateChanged}
+      />,
+    );
     await userEvent.click(screen.getByRole("button", { name: /copilot/i }));
     await userEvent.type(
       screen.getByTestId("copilot-composer-input"),
@@ -135,6 +141,8 @@ describe("Copilot rail", () => {
     ).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(window.sessionStorage.getItem("acrevia.mission-log")).toBeNull();
+    // Cancelled proposals never notify the workspace of a state change.
+    expect(onProjectStateChanged).not.toHaveBeenCalled();
   });
 
   it("confirm applies through POST /api/mission/state and persists the command log", async () => {
@@ -195,6 +203,55 @@ describe("Copilot rail", () => {
     );
     expect(stored.commands).toHaveLength(1);
     expect(stored.projectId).toBe("gis:778273000");
+  });
+
+  it("fires the project-state refresh callback exactly once per applied confirmation (review correction 1)", async () => {
+    storePair();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(proposalTurn), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            projectId: "gis:778273000",
+            revision: 10,
+            missionConstraints: [],
+          }),
+          { status: 200 },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const onProjectStateChanged = vi.fn();
+    render(
+      <Copilot
+        accepted={accepted}
+        onProjectStateChanged={onProjectStateChanged}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /copilot/i }));
+    await userEvent.type(
+      screen.getByTestId("copilot-composer-input"),
+      "Keep at least 90 Sunday parking spaces.",
+    );
+    await userEvent.click(screen.getByTestId("copilot-send"));
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("copilot-proposal-confirm"),
+      ).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByTestId("copilot-proposal-confirm"));
+    await waitFor(() => {
+      expect(
+        screen.getByText(/applied — project revision 10/i),
+      ).toBeInTheDocument();
+    });
+    // Mission state accepted + log persisted → the workspace refresh callback
+    // fires exactly once, so mounted state-derived surfaces rebuild now.
+    expect(onProjectStateChanged).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("shows the honest ai-unavailable state without canned answers", async () => {

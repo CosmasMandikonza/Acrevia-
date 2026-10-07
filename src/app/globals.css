@@ -1065,6 +1065,13 @@ a:hover.text-link {
   font-size: var(--text-sm);
   letter-spacing: 0.02em;
 }
+.copilot-board-summary {
+  font-size: 0.95rem;
+  line-height: 1.75;
+  color: var(--color-ink);
+  border-left: 2px solid var(--color-accent);
+  padding-left: var(--space-3);
+}
 .copilot-board-metrics {
   font-size: 1.05rem;
   color: var(--color-ink);

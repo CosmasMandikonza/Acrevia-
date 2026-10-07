@@ -99,7 +99,32 @@ describe("hero interactions through the generic tool loop", () => {
     expect(feasibility?.ok).toBe(true);
   });
 
-  it("3 — 'Prepare this scenario for the board' returns the trusted board artifact", async () => {
+  it("3 — 'Prepare this scenario for the board' returns the trusted board artifact with the grounded narrative as its executive summary", async () => {
+    const reply =
+      "Board brief ready from the current verified state — open it below. It separates modeled outcomes from assumptions and the items that still require experts.";
+    const { provider } = fakeProvider([
+      {
+        kind: "tool-calls",
+        calls: [{ name: "prepare_board_context", args: {} }],
+      },
+      { kind: "reply", content: reply },
+    ]);
+    const result = await turn(provider, "Prepare this scenario for the board.");
+    expect(result.board).not.toBeNull();
+    const board = result.board as {
+      boundaryNotice?: string;
+      executiveSummary?: string;
+      property?: { address?: string };
+    };
+    expect(board.boundaryNotice).toContain("not legal certification");
+    // Review correction 2: the grounded final reply becomes the artifact's
+    // executive summary; deterministic sections remain the source of facts.
+    expect(result.grounding.ok).toBe(true);
+    expect(board.executiveSummary).toBe(reply);
+    expect(board.property?.address).toBeTruthy();
+  });
+
+  it("3b — rejected ungrounded prose can never enter the board artifact; the safe fallback becomes the summary", async () => {
     const { provider } = fakeProvider([
       {
         kind: "tool-calls",
@@ -107,15 +132,24 @@ describe("hero interactions through the generic tool loop", () => {
       },
       {
         kind: "reply",
-        content:
-          "Board brief ready from the current verified state — open it below. It separates modeled outcomes from assumptions and the items that still require experts.",
+        content: "This option delivers 87 homes with certainty.",
       },
+      { kind: "reply", content: "No — 87 homes are guaranteed." },
     ]);
     const result = await turn(provider, "Prepare this scenario for the board.");
+    expect(result.grounding.ok).toBe(false);
+    expect(result.grounding.replacedWithFacts).toBe(true);
     expect(result.board).not.toBeNull();
-    expect(
-      (result.board as { boundaryNotice?: string }).boundaryNotice,
-    ).toContain("not legal certification");
+    const board = result.board as {
+      executiveSummary?: string;
+      boundaryNotice?: string;
+      selectedScenario?: { homes?: number };
+    };
+    expect(board.executiveSummary).toContain("could not ground");
+    expect(board.executiveSummary).not.toContain("87 homes");
+    // The deterministic structured sections stay intact and authoritative.
+    expect(board.boundaryNotice).toContain("not legal certification");
+    expect(typeof board.selectedScenario?.homes).toBe("number");
   });
 
   it("confirmation applies through the EXISTING typed command boundary and recomputes downstream", async () => {

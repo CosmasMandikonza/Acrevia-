@@ -200,54 +200,54 @@ export async function runCopilotTurn(input: {
     break;
   }
 
-  // Numeric grounding: consequential numbers must exist in tool output (or be
-  // the user's own words). One corrective retry; a second failure replaces
-  // the reply with the deterministic tool facts — never unverified numbers.
-  const userAuthored = [
-    ...input.history
-      .filter((message) => message.role === "user")
-      .map((message) => message.content),
-    input.message,
-  ].join("\n");
-  const allowed = allowedNumbers(serializedToolOutputs, userAuthored);
+  // Numeric grounding: consequential numbers must exist in this turn's tool
+  // output — the SOLE numeric authority. User-authored text (including the
+  // user's own numbers) never authorizes a claim; the tools echo request
+  // parameters in their results, so grounded echoes still pass. One
+  // corrective retry; a second failure replaces the reply with the
+  // deterministic tool facts — never unverified numbers.
+  const allowed = allowedNumbers(serializedToolOutputs);
+
+  /**
+   * Single exit path. When a board brief exists, the RESOLVED final reply —
+   * the grounded model narrative, or the safe deterministic fallback when
+   * grounding rejected the model's prose — becomes the artifact's
+   * `executiveSummary`. Attached only after grounding has passed or the
+   * fallback has been chosen, so ungrounded prose can never enter the board
+   * artifact; the deterministic sections remain the sole source of facts.
+   */
+  const finish = (
+    reply: string,
+    grounding: CopilotTurnResult["grounding"],
+  ): CopilotTurnResult => ({
+    status: "ok",
+    reply,
+    toolRuns,
+    proposal,
+    board: board ? { ...board, executiveSummary: reply } : null,
+    grounding,
+  });
 
   if (finalReply === null) {
     // No final content within the round budget: honest truncation notice with
     // the verified tool facts — never a fabricated summary.
-    finalReply = fallbackFactsReply(
-      "The Copilot reached its tool-use limit before writing a final answer.",
-      toolRuns,
+    return finish(
+      fallbackFactsReply(
+        "The Copilot reached its tool-use limit before writing a final answer.",
+        toolRuns,
+      ),
+      { checked: true, ok: true, violations: [], replacedWithFacts: true },
     );
-    return {
-      status: "ok",
-      reply: finalReply,
-      toolRuns,
-      proposal,
-      board,
-      grounding: {
-        checked: true,
-        ok: true,
-        violations: [],
-        replacedWithFacts: true,
-      },
-    };
   }
 
   let violations = groundingViolations(finalReply, allowed);
   if (violations.length === 0) {
-    return {
-      status: "ok",
-      reply: finalReply,
-      toolRuns,
-      proposal,
-      board,
-      grounding: {
-        checked: true,
-        ok: true,
-        violations: [],
-        replacedWithFacts: false,
-      },
-    };
+    return finish(finalReply, {
+      checked: true,
+      ok: true,
+      violations: [],
+      replacedWithFacts: false,
+    });
   }
 
   // Retry once with an explicit corrective instruction.
@@ -264,39 +264,23 @@ export async function runCopilotTurn(input: {
   if (retryReply !== null) {
     violations = groundingViolations(retryReply, allowed);
     if (violations.length === 0) {
-      return {
-        status: "ok",
-        reply: retryReply,
-        toolRuns,
-        proposal,
-        board,
-        grounding: {
-          checked: true,
-          ok: true,
-          violations: [],
-          replacedWithFacts: false,
-        },
-      };
+      return finish(retryReply, {
+        checked: true,
+        ok: true,
+        violations: [],
+        replacedWithFacts: false,
+      });
     }
     finalReply = retryReply;
   }
 
-  return {
-    status: "ok",
-    reply: fallbackFactsReply(
+  return finish(
+    fallbackFactsReply(
       `The Copilot could not ground its answer in verified project facts (unverified numbers: ${violations.join(", ")}).`,
       toolRuns,
     ),
-    toolRuns,
-    proposal,
-    board,
-    grounding: {
-      checked: true,
-      ok: false,
-      violations,
-      replacedWithFacts: true,
-    },
-  };
+    { checked: true, ok: false, violations, replacedWithFacts: true },
+  );
 }
 
 /** Deterministic fallback: verified tool facts only, no model prose. */

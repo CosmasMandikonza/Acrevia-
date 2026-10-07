@@ -40,6 +40,8 @@ type UiProposal = CopilotMissionProposalForUi & {
 
 type BoardContext = {
   title?: string;
+  /** Grounded AI narrative (the turn's final reply after grounding, or the safe deterministic fallback). Deterministic sections below remain the sole source of facts. */
+  executiveSummary?: string;
   property?: { address?: string; district?: string; overlay?: string | null };
   selectedScenario?: {
     label?: string;
@@ -131,8 +133,17 @@ function normalizedSummary(normalized: MissionNormalized): string {
 
 export function Copilot({
   accepted,
+  onProjectStateChanged,
 }: {
   accepted: AcceptedPropertyRecord | null;
+  /**
+   * Fired exactly once per APPLIED mission confirmation (after
+   * /api/mission/state accepts the command and the mission log is persisted).
+   * The workspace bumps its project-state epoch so currently mounted
+   * state-derived surfaces (Scenarios, Evidence) re-read the mission log and
+   * rebuild immediately. React-owned callback — deliberately NOT a DOM event.
+   */
+  onProjectStateChanged?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [entries, setEntries] = useState<RailEntry[]>([]);
@@ -331,6 +342,10 @@ export function Copilot({
           return;
         }
         writeMissionLogFor(pair, nextCommands);
+        // State truly changed: notify the workspace immediately so mounted
+        // state-derived surfaces (Scenarios, Evidence) rebuild from the new
+        // mission log — no navigation away/back required.
+        onProjectStateChanged?.();
         setEntries((current) => [
           ...current.map((entry, index) =>
             entry.kind === "proposal" && index === entryIndex
@@ -347,7 +362,7 @@ export function Copilot({
           {
             kind: "notice",
             tone: "info",
-            text: "Mission updated through the standard command boundary. Scenarios, Forge, and Evidence recompute from the new state the next time you open them.",
+            text: "Mission updated through the standard command boundary. Current project views (Scenarios, Evidence) refresh immediately; Forge recomputes when you open it.",
           },
         ]);
       } catch (cause) {
@@ -368,7 +383,7 @@ export function Copilot({
         );
       }
     },
-    [entries],
+    [entries, onProjectStateChanged],
   );
 
   const cancelProposal = useCallback((entryIndex: number) => {
@@ -679,6 +694,14 @@ function BoardBriefDialog({
                 current verified result, until recompute.
               </p>
             )}
+            {board.executiveSummary && (
+              <section aria-label="Executive summary">
+                <span className="eyebrow">EXECUTIVE SUMMARY</span>
+                <p className="copilot-board-summary">
+                  {board.executiveSummary}
+                </p>
+              </section>
+            )}
             <section>
               <span className="eyebrow">PROPERTY</span>
               <p>
@@ -824,6 +847,14 @@ function BoardBriefDialog({
 
 function boardToMarkdown(board: BoardContext): string {
   const lines: string[] = [`# ${board.title ?? "Board brief"}`, ""];
+  if (board.executiveSummary) {
+    lines.push(
+      "## Executive summary",
+      "", // grounded AI narrative; every fact below is the verified structured state
+      board.executiveSummary,
+      "",
+    );
+  }
   lines.push(
     `**Property:** ${board.property?.address ?? ""} — zoned ${board.property?.district ?? ""}`,
     "",

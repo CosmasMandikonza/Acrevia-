@@ -41,10 +41,13 @@ subsystem.
 
 4. **Numeric grounding is enforced, not asked for.** Every consequential
    number in the model's final reply must appear in this turn's serialized
-   tool results (or be the user's own words). Violations trigger one
-   corrective retry; a second failure replaces the reply with the
-   deterministic tool facts (`src/application/copilot/grounding.ts`). Small
-   integers (≤12) are exempt as structural prose.
+   tool results — the sole numeric authority. Numbers that exist only in
+   user-authored text (the user's message, conversation history) never
+   authorize a claim; the tools echo request parameters in their results, so
+   grounded echoes still pass. Violations trigger one corrective retry; a
+   second failure replaces the reply with the deterministic tool facts
+   (`src/application/copilot/grounding.ts`). Small integers (≤12) are exempt
+   as structural prose.
 
 5. **Untrusted text stays data.** Regulation quotes, intent text, and source
    documents travel inside typed tool results marked as data; the system
@@ -61,8 +64,14 @@ subsystem.
 7. **Sidecar UI.** The rail stays a right drawer over the canvas; tool runs,
    proposals, and the board brief render as structured cards that visually
    outweigh prose. The board brief is a deterministic artifact assembled from
-   verified state (certificate freshness banner, boundary notice) with model
-   narrative on top. Conversation memory is component state only.
+   verified state (certificate freshness banner, boundary notice); its
+   executive summary is the turn's final reply attached only AFTER grounding
+   has passed or the deterministic fallback has been chosen, so ungrounded
+   prose can never enter the artifact. Conversation memory is component state
+   only. Applied mission confirmations notify the workspace through a
+   React-owned callback (a project-state epoch fed into the keys of the
+   state-derived surfaces), so Scenarios and Evidence rebuild immediately —
+   never a DOM custom event, never a second store.
 
 ## Consequences
 
