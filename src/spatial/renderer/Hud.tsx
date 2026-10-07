@@ -74,7 +74,11 @@ export function ForgeHud({
         <p className="forge-eyebrow">Acrevia Forge · spatial spike</p>
         <h1 className="forge-title">{model.title}</h1>
         <p className="forge-subtitle">{model.subtitle}</p>
-        <p className="forge-disclaimer">Preliminary massing — not architectural design</p>
+        <p className="forge-disclaimer">
+          Preliminary massing — not architectural design. Scenarios are
+          HYPOTHETICAL SPIKE FIXTURES (synthetic test inputs — not canonical
+          mission state, not pitch evidence).
+        </p>
       </header>
 
       {/* Instrumentation */}
@@ -245,22 +249,22 @@ function Legend({ moment, model }: { moment: Moment; model: SpatialSceneModel })
         ]
       : moment === "legal"
         ? [
-            { color: "#54749c", label: "Legal envelope" },
-            { color: "#54749c", label: `Height max ${model.heightPlaneFt ?? "—"} ft`, hollow: true },
+            { color: "#54749c", label: "Planning envelope (assumption-derived)" },
+            { color: "#54749c", label: `Height max ${model.heightPlaneFt ?? "—"} ft (sourced law)`, hollow: true },
             { color: "var(--color-wall)", label: "Existing structure" },
           ]
         : moment === "mission"
           ? [
-              { color: "#5a7048", label: "Mission envelope" },
+              { color: "#5a7048", label: "Mission planning envelope" },
               { color: "#c99a4a", label: "Removed by mission", dashed: true },
               { color: "#45583b", label: "Protected sanctuary", dashed: true },
-              { color: "#8a6420", label: "Parking reservation" },
+              ...(model.parking ? [{ color: "#8a6420", label: "Parking reservation" }] : []),
             ]
           : [
-              { color: "#f5f3e8", label: "Scenario mass (buildable)" },
+              { color: "#f5f3e8", label: "Fixture mass (hypothetical)" },
               { color: "#a4543f", label: "Refused mass (not buildable)", dashed: true },
-              { color: "#5a7048", label: "Mission envelope", hollow: true },
-              { color: "#8a6420", label: "Parking reservation" },
+              { color: "#5a7048", label: "Mission planning envelope", hollow: true },
+              ...(model.parking ? [{ color: "#8a6420", label: "Parking reservation" }] : []),
             ];
   return (
     <ul className="forge-legend-list" data-testid="forge-legend">

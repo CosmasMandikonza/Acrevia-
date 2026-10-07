@@ -68,8 +68,9 @@ test.describe("forge spike (issue #8)", () => {
     await page.click('[data-testid="moment-scenario"]');
     await expect(page.locator('[data-testid="forge-scenarios"]')).toBeVisible();
 
-    // Buildable scenario shows computed metrics.
+    // Buildable scenario shows computed metrics and is unmistakably a fixture.
     await expect(page.getByText("24 dwelling_units").first()).toBeVisible();
+    await expect(page.getByText(/HYPOTHETICAL SPIKE FIXTURE/).first()).toBeVisible();
 
     // Refused scenario is visibly marked and never presented as buildable.
     await page.click('[data-testid="scenario-phl\\:scenario\\:optimistic-tower"]');
@@ -127,6 +128,8 @@ test.describe("forge spike (issue #8)", () => {
     await expect(page.getByText(/24 dwelling_units/).first()).toBeVisible();
     // The scene must be fully self-hosted: no fonts, HDRs, tiles, or APIs off-origin.
     expect(external).toEqual([]);
+    // Truth labels survive offline too.
+    await expect(page.getByText(/HYPOTHETICAL SPIKE FIXTURE/).first()).toBeVisible();
     await page.screenshot({ path: "test-results/forge-e2e-offline-blocked.png" });
   });
 

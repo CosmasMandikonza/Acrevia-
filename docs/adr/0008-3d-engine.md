@@ -106,16 +106,51 @@ clock; nothing hard-coded in React):
 | Frontage | edges within 60 ft of the published address point (orientation only — hint never geometry) |
 | Setback envelope (side 5 ft range-min, rear 9 ft numeric, front contextual → no plane) | 114,413 ft² (95.9%) |
 | Legal envelope (occupied-area cap 75%, intermediate-lot conservative, trimmed 208 ft from the Roosevelt frontage) | 89,475 ft² × 38 ft |
-| Parking (mission min 24; 2×12 stalls, 108×60 ft, deterministic first-fit) | 6,480 ft² |
-| Mission envelope (legal − sanctuary − parking; height capped 28 ft below the legal 38) | 53,303 ft² × 28 ft = 60% of legal footprint, 44% of legal volume |
-| Scenario A "24 homes" (graph status COMPUTED, 4 SATISFIED results) | north bar + east wing, 28 ft, VALID |
-| Scenario B "optimistic tower" (graph status REFUSED, height VIOLATED 45 > 38) | rust ghost, dashed, "NOT BUILDABLE" |
+| Parking (canonical mission min 110 stalls) | honestly UNRESOLVED — no deterministic rectangular field fits beside the preserved sanctuary (2–6 rows searched along every frontage); nothing faked, nothing subtracted; solver #7 owns the parking design |
+| Mission envelope (legal − sanctuary; canonical flow has NO mission height cap) | derived at request time; verification ASSUMPTION_DERIVED |
+| Envelope verification (PR #30 review truth label) | `legalEnvelope.verification = "ASSUMPTION_DERIVED"` — edge-role geometry is a visualization heuristic; the 38-ft height and 75% occupied-area remain sourced law |
+| Scenario setback results (PR #30 review truth label) | front EXPERT_REQUIRED; side/rear NOT_EVALUATED (lot-line roles unclassified in trusted state) |
+| Scenario A "24 homes" (graph status COMPUTED; HYPOTHETICAL SPIKE FIXTURE label) | north bar + east wing, 28 ft, VALID |
+| Scenario B "optimistic tower" (graph status REFUSED, height VIOLATED 45 > 38; HYPOTHETICAL SPIKE FIXTURE label) | rust ghost, dashed, "NOT BUILDABLE" |
 
 Four saved cameras (aerial / church entry / pedestrian / neighbor) are
 computed from parcel bbox, sanctuary centroid, and frontage normal — exact
 poses asserted in vitest; switching tweens 950 ms with an ease-in-out curve
 and SNAPS to the exact saved pose (determinism), then OrbitControls take
 over.
+
+## Truth labels (added in the PR #30 review round)
+
+The maintainer approved the engine decision and required the spike to be
+unable to masquerade as canonical feasibility truth. Changes:
+
+1. **Canonical mission flow only.** The bootstrap confirms exactly
+   preserve-sanctuary + min-parking **110** + retain-ownership — the
+   canonical Calvary USER_DECLARED flow (matching #7). The invented 28-ft
+   mission height cap is REMOVED; the mission envelope now clips only the
+   preserved sanctuary at the legal height.
+2. **Honest setback statuses.** Fixture scenario results no longer claim
+   SATISFIED setbacks: front is EXPERT_REQUIRED (contextual + unclassified),
+   side/rear are NOT_EVALUATED (lot-line roles are not classified in
+   trusted state). Height and occupied-area keep their sourced evaluations.
+3. **Envelope verification status.** `SpatialSceneModel` gains
+   `EnvelopeVerification = VERIFIED | ASSUMPTION_DERIVED | UNRESOLVED` on
+   every envelope. This spike's envelope is `ASSUMPTION_DERIVED`: the 38-ft
+   height max and 75% occupied-area cap are sourced law, but the
+   frontage/rear edge-role classification that shapes the polygon is a
+   visualization heuristic. UI, legends, selection cards, and this ADR say
+   "planning envelope — assumption-derived", never "verified legal
+   envelope".
+4. **Scenario massings are HYPOTHETICAL SPIKE FIXTURES.** Graph labels,
+   solverVersion strings, the fixture description, and the HUD say so
+   explicitly. They are synthetic visual test inputs — never canonical user
+   decisions, never pitch or user evidence.
+5. **110-stall parking is honestly UNRESOLVED.** The deterministic
+   rectangular first-fit (2–6 rows along every frontage edge) cannot place
+   110 stalls without overlapping the preserved sanctuary inside the
+   setback strips. The requirement stands; the spike renders no fake field
+   and subtracts nothing — solver #7 owns the parking design (podium,
+   structured, or multi-field).
 
 ## Measurements (this host, 2026-10-07)
 
@@ -127,8 +162,10 @@ over.
   dominates; scene then renders correctly at 1–2 fps).
 - **Frame rate**: 60 fps GPU-headed at 1512×982 with 2048 shadow map, ACES
   tone mapping, dpr up to 2. 1–2 fps SwiftShader (correct, slow).
-- **Layer legibility** (pixel deltas at judge viewport, aerial): existing→
-  legal 20.4%, legal→mission 15.4%, mission→scenario 15.0%, valid→refused
+- **Layer legibility** (pixel deltas at judge viewport, aerial, after the
+  truth-label round): existing→legal 21.0%, legal→mission 4.4% (the
+  canonical mission now clips only the sanctuary — no invented cap or
+  parking field to remove), mission→scenario 12.9%, valid→refused
   scenario 6.9% (localized to the mass region). Every story beat visibly
   changes the scene.
 - **Offline**: with every non-localhost request aborted, the page renders
@@ -136,9 +173,12 @@ over.
   even attempted (no CDN fonts, HDR environments, tiles, or APIs).
 - **Determinism**: building the model twice yields identical canonical-JSON
   SHA-256 (vitest); rebuilds with a different project clock change nothing.
-- **Tests**: 297/297 vitest (290 pre-existing + 7 new: 6 adapter, 1 renderer
-  isolation); 6/6 e2e on the production build (moments, camera determinism,
-  statuses, provenance card, derivation drawer, offline-blocked, SVG
+- **Tests** (after the truth-label round): 299/299 vitest (290 pre-existing
+  + 9 new: 8 adapter incl. canonical-mission, honest-setback-status, and
+  envelope-verification regressions, 1 renderer isolation); 6/6 e2e on the
+  production build (moments, camera determinism, statuses +
+  HYPOTHETICAL SPIKE FIXTURE labeling, provenance card, derivation drawer,
+  offline-blocked, SVG
   fallback). `npm run check` green; lint clean under the repo's react-hooks
   v6 rules.
 
@@ -203,6 +243,18 @@ rather than a guessed number.
    `docs/benchmarks/...` from `process.cwd()` — fine for `next start`; a
    standalone deployment must bundle the pack (noted for #9).
 
+## Visual proof limitation (kept prominent per the PR #30 review)
+
+The ENGINE and PATH are proven: deterministic state mapping, offline
+self-hosting, production-build performance, fallback behavior, and layer
+legibility are measured above. Forma/Snaptrude-level final aesthetics are
+NOT proven: direct visual inspection was unavailable in the spike
+environment, so visual QA was programmatic (pixel deltas, color
+signatures, DOM assertions), and the screenshots in
+`docs/reviews/issue-8/` await human review. **#9 owns the final art
+direction and polish** — camera choreography, materials, and typography to
+the Design Constitution's bar.
+
 ## Final recommendation
 
 Build #9 Forge on **in-app React Three Fiber behind the existing
@@ -220,27 +272,31 @@ the winning standard forbids for the live demo.
    Extend it (camera transitions config, scenario comparison views,
    before/after states) rather than forking it; bump the version if fields
    change shape.
-2. **Solver output contract (proposes what #7 must emit)**: per scenario,
-   `volumes: [{ volumeId, label, geometry: GeoJSON Polygon (WGS84, graph
-   frame), heightFt }]` plus the existing graph Scenario node (status,
-   metrics, constraint results, certificate). The spike's fixture
-   (`src/adapters/spatial/fixtures/forge-spike-massing.json` + zod schema in
-   `massing-fixture.ts`) is the reference shape. Scenario volume geometry in
-   graph coordinates keeps projection in exactly one place (the adapter).
-   PR #29 (#7 solver, in parallel review) landed its own neutral handoff
-   (`src/application/solver/geometry-handoff.ts`, JSON geometry primitives);
-   the two shapes must be reconciled at #9 — this ADR's requirement is the
-   RECONCILIATION TARGET stays graph-coordinate GeoJSON + heights, consumed
-   only through the scene adapter, never by the renderer.
+2. **Truth-source hierarchy (per the PR #30 review)**:
+   - **PR #29's `geometry-handoff.ts` is the SOLVER TRUTH SOURCE.** #9
+     consumes #7's neutral handoff as source truth for scenario geometry —
+     it is NOT integrated into this spike.
+   - **`SpatialSceneModel` is the RENDERER ADAPTER TARGET.** #9 maps
+     solver-handoff output (plus graph state) into the scene model through
+     an adapter like this spike's; the renderer never sees anything else.
+   - **The spike massing fixture
+     (`src/adapters/spatial/fixtures/forge-spike-massing.json`) is a VISUAL
+     TEST FIXTURE ONLY** — synthetic renderer inputs, never the canonical
+     solver-output contract, never pitch or user evidence. When #9 lands,
+     the fixture survives only as test data under its explicit
+     HYPOTHETICAL SPIKE FIXTURE labeling.
 3. **Adapter rulebook** (already implemented; keep or amend via ADR): frame
    = ring-centroid ENU feet; frontage = ≤60 ft from the address hint
    (orientation only); rear = longest non-frontage edge; maximum envelope =
    range-minimum side setbacks + numeric rear + cap trim from the longest
    frontage edge via bisection; conservative lot-type for the occupied-area
    cap; parking = deterministic first-fit frontage search (9×18 stalls,
-   24 ft aisle); mission clips as explicit removed volumes with from/to
-   elevations; scenario volumes validated against the mission envelope with
-   failures rendered as CONFLICT — never as buildable.
+   24 ft aisle, 2–6 rows) that fails closed to an UNRESOLVED note when no
+   rectangular field fits (the canonical 110-stall case); mission clips as
+   explicit removed volumes with from/to elevations; scenario volumes
+   validated against the mission envelope with failures rendered as
+   CONFLICT — never as buildable; every envelope carries an
+   `EnvelopeVerification` level the UI must display.
 4. **Renderer discipline**: renderer files must not import domain/adapters/
    commands or contain regulatory vocabulary (isolation test enforces);
    saved cameras stay derived from geometry; every user-visible derivation

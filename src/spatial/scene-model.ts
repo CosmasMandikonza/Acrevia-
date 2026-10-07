@@ -85,6 +85,15 @@ export interface SetbackScene {
   note: string;
 }
 
+/**
+ * How much of an envelope's geometry is trusted (ADR 0008 truth labels).
+ * Law-derived scalars (height max, occupied-area cap) can be sourced while
+ * the edge-role geometry that shapes the polygon remains a heuristic — the
+ * two are stated separately so a renderer can never present an
+ * assumption-derived polygon as verified legal geometry.
+ */
+export type EnvelopeVerification = "VERIFIED" | "ASSUMPTION_DERIVED" | "UNRESOLVED";
+
 export interface EnvelopeScene {
   /**
    * One or more disjoint buildable footprints (boolean subtraction of
@@ -94,6 +103,10 @@ export interface EnvelopeScene {
   heightFt: number;
   areaSqFt: number;
   volumeCuFt: number;
+  /** Trust level of the polygon itself (edge roles / setback application). */
+  verification: EnvelopeVerification;
+  /** Plain-language reason for the verification level. */
+  verificationNote: string;
   setbacks: SetbackScene[];
   /** e.g. occupied-area cap trimmed the geometric envelope. */
   bindingNotes: string[];

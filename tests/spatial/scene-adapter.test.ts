@@ -4,6 +4,7 @@ import { bootstrapSpikeProject, loadMassingFixture } from "../../src/adapters/sp
 import { buildSpatialScene } from "../../src/adapters/spatial/scene-adapter";
 import { createSha256 } from "../../src/domain/graph/hashing";
 import { canonicalJson } from "../../src/domain/graph/serialization";
+import { nodesOfKind } from "../../src/domain";
 
 const FIXTURE_DIR = join(process.cwd(), "docs", "benchmarks", "calvary-memorial-philadelphia");
 
@@ -19,7 +20,7 @@ function buildScene() {
   });
 }
 
-describe("spike scene adapter (issue #8)", () => {
+describe("spike scene adapter (issue #8, truth labels per PR #30 review)", () => {
   it("projects the canonical parcel within 0.1% of the recorded area", () => {
     const scene = buildScene();
     expect(scene.parcel.recordedAreaSqFt).toBe(119295);
@@ -30,11 +31,47 @@ describe("spike scene adapter (issue #8)", () => {
     expect(scene.structures[0].protectedByMission).toBe(true);
   });
 
-  it("derives the legal envelope from setbacks + occupied-area cap", () => {
+  it("records the CANONICAL mission flow — preserve, 110 parking, retain ownership; no invented cap", () => {
+    const boot = bootstrapSpikeProject(FIXTURE_DIR);
+    const missions = nodesOfKind(boot.project, "mission-constraint").map((n) => {
+      const m = n as unknown as { id: string; normalized: { type: string } };
+      return `${m.id}:${m.normalized.type}`;
+    });
+    expect(missions).toEqual([
+      "phl:mission:preserve-sanctuary:preserve-structure",
+      "phl:mission:min-parking-110:min-parking",
+      "phl:mission:retain-ownership:retain-ownership",
+    ]);
+  });
+
+  it("scenario setback results are the honest trusted states (front EXPERT_REQUIRED, side/rear NOT_EVALUATED)", () => {
+    const boot = bootstrapSpikeProject(FIXTURE_DIR);
+    const homes = nodesOfKind(boot.project, "constraint-result").filter((n) => {
+      const r = n as unknown as { scenarioId: string };
+      return r.scenarioId === "phl:scenario:homes-24";
+    }) as unknown as { constraintId: string; status: string }[];
+    const byConstraint = new Map(homes.map((r) => [r.constraintId, r.status]));
+    expect(byConstraint.get("phl:constraint:setback-front")).toBe("EXPERT_REQUIRED");
+    expect(byConstraint.get("phl:constraint:setback-side")).toBe("NOT_EVALUATED");
+    expect(byConstraint.get("phl:constraint:setback-rear")).toBe("NOT_EVALUATED");
+    // Law-derived scalars keep their honest evaluations.
+    expect(byConstraint.get("phl:constraint:height-max")).toBe("SATISFIED");
+    expect(byConstraint.get("phl:constraint:occupied-area-max")).toBe("SATISFIED");
+    // Scenario labels are unmistakably fixtures.
+    const scenario = nodesOfKind(boot.project, "scenario").find(
+      (n) => (n as unknown as { id: string }).id === "phl:scenario:homes-24",
+    ) as unknown as { label: string };
+    expect(scenario.label).toMatch(/^HYPOTHETICAL SPIKE FIXTURE/);
+  });
+
+  it("derives the planning envelope from setbacks + occupied-area cap, marked ASSUMPTION_DERIVED", () => {
     const scene = buildScene();
     const env = scene.legalEnvelope;
     expect(env).not.toBeNull();
     expect(env!.heightFt).toBe(38);
+    expect(env!.verification).toBe("ASSUMPTION_DERIVED");
+    expect(env!.verificationNote).toMatch(/visualization heuristic/i);
+    expect(env!.verificationNote).toMatch(/not yet classified in trusted state/i);
     // 75% of the computed parcel area (intermediate-lot conservative cap).
     const cap = scene.parcel.computedAreaSqFt * 0.75;
     expect(Math.abs(env!.areaSqFt - cap)).toBeLessThan(5);
@@ -46,24 +83,28 @@ describe("spike scene adapter (issue #8)", () => {
     expect(env!.setbacks.find((s) => s.face === "rear")?.appliedFt).toBe(9);
   });
 
-  it("derives the mission envelope by clipping sanctuary + parking + height", () => {
+  it("canonical mission: sanctuary clip only, NO invented height cap, 110-stall parking honestly UNRESOLVED", () => {
     const scene = buildScene();
     const mission = scene.missionEnvelope;
     expect(mission).not.toBeNull();
-    expect(mission!.heightFt).toBe(28); // mission cap below legal 38
+    expect(mission!.heightFt).toBe(38); // canonical flow has no mission cap
+    expect(mission!.verification).toBe("ASSUMPTION_DERIVED");
     expect(mission!.areaSqFt).toBeLessThan(scene.legalEnvelope!.areaSqFt);
     const labels = mission!.clips.map((c) => c.label).join(" | ");
     expect(labels).toMatch(/sanctuary/i);
-    expect(labels).toMatch(/parking/i);
-    expect(labels).toMatch(/height cap 28/i);
-    expect(scene.parking?.stalls.count).toBe(24);
+    expect(labels).not.toMatch(/height cap/i);
+    // The 110-stall requirement is real but this spike cannot design it:
+    // no single rectangular field fits, so nothing is faked.
+    expect(scene.parking).toBeNull();
+    expect(scene.derivationNotes.join(" ")).toMatch(/Parking field UNRESOLVED/);
   });
 
-  it("validates scenario volumes against the mission envelope", () => {
+  it("validates fixture scenario volumes against the mission envelope", () => {
     const scene = buildScene();
     expect(scene.scenarios).toHaveLength(2);
     const homes = scene.scenarios.find((s) => s.scenarioId === "phl:scenario:homes-24")!;
     expect(homes.status).toBe("COMPUTED");
+    expect(homes.label).toMatch(/^HYPOTHETICAL SPIKE FIXTURE/);
     for (const v of homes.volumes) {
       expect(v.status).toBe("VALID");
     }
@@ -92,7 +133,6 @@ describe("spike scene adapter (issue #8)", () => {
     const jsonA = canonicalJson(a as never);
     const jsonB = canonicalJson(b as never);
     expect(createSha256(jsonA)).toBe(createSha256(jsonB));
-    // Sanity: the model is not trivially empty.
     expect(a.derivationNotes.length).toBeGreaterThan(4);
     expect(a.legalEnvelope!.polygons.length).toBeGreaterThan(0);
   });

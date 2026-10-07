@@ -287,12 +287,9 @@ function SceneContent({
               edge={C.legalEdge}
               opacity={moment === "legal" ? O.envelope : O.envelopeDim}
               id="volume:legal-envelope"
-              title="Legal buildable envelope"
-              status={`${legal.areaSqFt.toFixed(0)} sq ft × ${legal.heightFt} ft`}
-              detail={
-                legal.bindingNotes.join(" ") ||
-                "Maximum buildable volume derived from verified dimensional constraints."
-              }
+              title="Planning envelope — assumption-derived"
+              status={`${legal.areaSqFt.toFixed(0)} sq ft × ${legal.heightFt} ft · ${legal.verification}`}
+              detail={[legal.verificationNote, ...legal.bindingNotes].join(" ")}
               provenance={legal.provenance}
               onSelect={onSelect}
             />
@@ -323,9 +320,9 @@ function SceneContent({
               edge={C.missionEdge}
               opacity={moment === "mission" ? O.envelope : O.envelopeDim}
               id="volume:mission-envelope"
-              title="Mission-constrained envelope"
-              status={`${mission.areaSqFt.toFixed(0)} sq ft × ${mission.heightFt} ft`}
-              detail="What remains for new build after the mission protects the sanctuary, reserves parking, and caps height."
+              title="Mission-constrained planning envelope — assumption-derived"
+              status={`${mission.areaSqFt.toFixed(0)} sq ft × ${mission.heightFt} ft · ${mission.verification}`}
+              detail={[mission.verificationNote, ...mission.bindingNotes].join(" ")}
               provenance={mission.provenance}
               onSelect={onSelect}
             />
@@ -361,17 +358,7 @@ function SceneContent({
               <div className="forge-badge forge-badge-legal">{a.text}</div>
             </Html>
           ))}
-      {mission && moment === "mission" && (
-        <Html
-          position={[bbox.maxX - 30, mission.heightFt + 4, -(bbox.minY + 14)]}
-          center
-          zIndexRange={[20, 0]}
-        >
-          <div className="forge-badge forge-badge-mission">
-            mission cap {mission.heightFt} ft
-          </div>
-        </Html>
-      )}
+
     </>
   );
 }

@@ -13,10 +13,16 @@
  *    benchmark's own captured GIS fixture (S8 building_footprints) — with
  *    real claims and source links, exactly as the live GIS commit would.
  * 3. Mission constraints are confirmed through the real command boundary
- *    (USER_DECLARED, hard) — the demo mission for Calvary.
+ *    (USER_DECLARED, hard) — the CANONICAL Calvary mission flow: preserve
+ *    sanctuary, keep >= 110 Sunday parking, retain ownership. No invented
+ *    height cap.
  * 4. The two scenarios are recorded through `recordScenario` with results
  *    "computed elsewhere" (the sanctioned pre-#7 pattern; the massing
- *    geometry itself lives in the spike fixture, NOT the graph).
+ *    geometry itself lives in the spike fixture, NOT the graph). Both are
+ *    HYPOTHETICAL SPIKE FIXTURES — synthetic visual test inputs, never
+ *    canonical user decisions or pitch evidence. Setback results are the
+ *    honest trusted states (front EXPERT_REQUIRED, side/rear
+ *    NOT_EVALUATED) because lot-line roles are not classified yet.
  *
  * A fixed clock keeps the whole bootstrap byte-deterministic.
  */
@@ -123,19 +129,19 @@ export function bootstrapSpikeProject(fixtureDir: string): SpikeBootstrap {
     hardOrSoft: "hard",
   });
   confirmMissionConstraint(ctx, {
-    id: "phl:mission:max-height-28",
+    id: "phl:mission:min-parking-110",
     kind: "mission-constraint",
-    intentText: "Keep new construction below the sanctuary roofline (29 ft) — cap new build at 28 ft.",
-    normalized: { type: "max-height", limit: { value: 28, unit: "ft" } },
+    intentText: "Keep at least 110 Sunday parking stalls on site.",
+    normalized: { type: "min-parking", spaces: { value: 110, unit: "spaces" } },
     origin: { kind: "USER_DECLARED" },
     confirmationState: "CONFIRMED",
     hardOrSoft: "hard",
   });
   confirmMissionConstraint(ctx, {
-    id: "phl:mission:min-parking-24",
+    id: "phl:mission:retain-ownership",
     kind: "mission-constraint",
-    intentText: "Sunday parking must survive — at least 24 surface stalls stay on site.",
-    normalized: { type: "min-parking", spaces: { value: 24, unit: "spaces" } },
+    intentText: "The church retains ownership of the property.",
+    normalized: { type: "retain-ownership" },
     origin: { kind: "USER_DECLARED" },
     confirmationState: "CONFIRMED",
     hardOrSoft: "hard",
@@ -144,6 +150,7 @@ export function bootstrapSpikeProject(fixtureDir: string): SpikeBootstrap {
   // --- 4. Scenarios (results computed elsewhere — the sanctioned pre-#7 path)
   const constraintIds = [
     "phl:constraint:height-max",
+    "phl:constraint:setback-front",
     "phl:constraint:setback-side",
     "phl:constraint:setback-rear",
     "phl:constraint:occupied-area-max",
@@ -151,19 +158,18 @@ export function bootstrapSpikeProject(fixtureDir: string): SpikeBootstrap {
   ];
   const missionIds = [
     "phl:mission:preserve-sanctuary",
-    "phl:mission:max-height-28",
-    "phl:mission:min-parking-24",
+    "phl:mission:min-parking-110",
+    "phl:mission:retain-ownership",
   ];
 
   recordScenario(ctx, {
     scenarioId: "phl:scenario:homes-24",
-    label: "24 homes around a living sanctuary",
-    solverVersion: "forge-spike-fixture/0.1 (solver #7 pending)",
+    label: "HYPOTHETICAL SPIKE FIXTURE — 24 homes",
+    solverVersion: "forge-spike-fixture/0.2 (visual test fixture; solver #7 pending)",
     status: "COMPUTED",
     metrics: [
-      { metricId: "units", label: "Homes", value: { value: 24, unit: "dwelling_units" } },
-      { metricId: "new-height", label: "New build height", value: { value: 28, unit: "ft" } },
-      { metricId: "parking", label: "Surface stalls", value: { value: 24, unit: "spaces" } },
+      { metricId: "units", label: "Homes (fixture)", value: { value: 24, unit: "dwelling_units" } },
+      { metricId: "new-height", label: "Fixture height", value: { value: 28, unit: "ft" } },
       { metricId: "occupied", label: "Occupied area", value: { value: 39, unit: "percent" } },
     ],
     constraintIds,
@@ -180,16 +186,25 @@ export function bootstrapSpikeProject(fixtureDir: string): SpikeBootstrap {
         explanation: "New massing tops at 28 ft, inside the 38 ft RM-1 cap.",
       },
       {
+        resultId: "phl:result:homes-24:setback-front",
+        constraintId: "phl:constraint:setback-front",
+        status: "EXPERT_REQUIRED",
+        explanation:
+          "Front setback is contextual and lot-line roles are not classified in trusted state — a professional must resolve the blockface before compliance can be evaluated.",
+      },
+      {
         resultId: "phl:result:homes-24:setback-side",
         constraintId: "phl:constraint:setback-side",
-        status: "SATISFIED",
-        explanation: "Both volumes sit outside the 5 ft minimum side setbacks.",
+        status: "NOT_EVALUATED",
+        explanation:
+          "Side lot-line roles are not classified in trusted state — compliance against the 5 ft minimum is NOT_EVALUATED (the spike's envelope polygon is assumption-derived).",
       },
       {
         resultId: "phl:result:homes-24:setback-rear",
         constraintId: "phl:constraint:setback-rear",
-        status: "SATISFIED",
-        explanation: "Rear volume maintains the 9 ft rear setback.",
+        status: "NOT_EVALUATED",
+        explanation:
+          "Rear lot-line role is not classified in trusted state — compliance against the 9 ft minimum is NOT_EVALUATED (the spike's envelope polygon is assumption-derived).",
       },
       {
         resultId: "phl:result:homes-24:occupied",
@@ -205,19 +220,20 @@ export function bootstrapSpikeProject(fixtureDir: string): SpikeBootstrap {
         status: "SATISFIED",
         actual: { value: 24, unit: "spaces" },
         limit: { value: 0, unit: "spaces" },
-        explanation: "Zoning requires 0 spaces for multi-family; the mission's 24 stalls are provided.",
+        explanation:
+          "Zoning requires 0 spaces for multi-family (sourced). The canonical mission's 110-stall reservation is real but NOT designed by this spike — parking geometry is UNRESOLVED here.",
       },
     ],
   });
 
   recordScenario(ctx, {
     scenarioId: "phl:scenario:optimistic-tower",
-    label: "Optimistic six-story mass",
-    solverVersion: "forge-spike-fixture/0.1 (solver #7 pending)",
+    label: "HYPOTHETICAL SPIKE FIXTURE — optimistic six-story mass",
+    solverVersion: "forge-spike-fixture/0.2 (visual test fixture; solver #7 pending)",
     status: "REFUSED",
     metrics: [
-      { metricId: "units", label: "Homes (claimed)", value: { value: 96, unit: "dwelling_units" } },
-      { metricId: "new-height", label: "Claimed height", value: { value: 45, unit: "ft" } },
+      { metricId: "units", label: "Homes (fixture claim)", value: { value: 96, unit: "dwelling_units" } },
+      { metricId: "new-height", label: "Fixture height", value: { value: 45, unit: "ft" } },
     ],
     constraintIds,
     missionIds,
@@ -231,6 +247,12 @@ export function bootstrapSpikeProject(fixtureDir: string): SpikeBootstrap {
         actual: { value: 45, unit: "ft" },
         limit: { value: 38, unit: "ft" },
         explanation: "45 ft mass exceeds the 38 ft RM-1 maximum — refused.",
+      },
+      {
+        resultId: "phl:result:tower:setback-front",
+        constraintId: "phl:constraint:setback-front",
+        status: "EXPERT_REQUIRED",
+        explanation: "Contextual front setback needs professional resolution regardless of the refusal.",
       },
       {
         resultId: "phl:result:tower:setback-side",

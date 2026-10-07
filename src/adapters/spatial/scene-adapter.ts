@@ -379,6 +379,9 @@ export function buildSpatialScene(input: BuildSceneInput): SpatialSceneModel {
       heightFt: legalHeightFt,
       areaSqFt: envelopeArea,
       volumeCuFt: envelopeArea * legalHeightFt,
+      verification: "ASSUMPTION_DERIVED",
+      verificationNote:
+        "Edge roles (frontage from the address hint, rear = longest non-frontage edge) are a visualization heuristic — lot-line roles are not yet classified in trusted state. The height max and occupied-area percentage are sourced law; the setback polygon is assumption-derived.",
       setbacks,
       bindingNotes,
       provenance: [
@@ -407,65 +410,76 @@ export function buildSpatialScene(input: BuildSceneInput): SpatialSceneModel {
   let parkingLocal: ScenePolygon | null = null;
   if (missionParking) {
     const spaces = missionParking.normalized.spaces?.value ?? 0;
-    const rows = spaces > 12 ? 2 : 1;
-    const perRow = Math.ceil(spaces / rows);
-    const blockLen = perRow * STALL_WIDTH_FT;
-    const blockDepth = rows * STALL_DEPTH_FT + (rows - 1) * AISLE_FT;
-    const blockArea = blockLen * blockDepth;
-    // Deterministic placement search: frontage edges longest-first, then
-    // along-edge position, then inward depth.
+    // Deterministic placement search: row counts ascending, frontage edges
+    // longest-first, then along-edge position, then inward depth.
     const frontagesSorted = [...frontageEdgeIdx].sort((i, j) => {
       const lenOf = (k: number) =>
         edgeFrame(parcelRing[k], parcelRing[(k + 1) % parcelRing.length]).length;
       return lenOf(j) - lenOf(i);
     });
-    outer: for (const edgeIdx of frontagesSorted) {
-      const a = parcelRing[edgeIdx];
-      const b = parcelRing[(edgeIdx + 1) % parcelRing.length];
-      const { u, n, length } = edgeFrame(a, b);
-      const inward = { x: -n.x, y: -n.y };
-      for (let s = 0; s + blockLen <= length; s += 10) {
-        for (let d = 12; d <= 120; d += 4) {
-          const origin = {
-            x: a.x + u.x * s + inward.x * d,
-            y: a.y + u.y * s + inward.y * d,
-          };
-          const rect: ScenePolygon = {
-            exterior: orientedRect(origin, { x: u.x * blockLen, y: u.y * blockLen }, { x: inward.x * blockDepth, y: inward.y * blockDepth }),
-          };
-          const insideParcel = totalAreaSqFt(intersection(rect, parcelLocal));
-          if (insideParcel < blockArea - 1) continue;
-          let hitsStructure = false;
-          for (const st of structures) {
-            if (totalAreaSqFt(intersection(rect, st.polygon)) > 1) {
-              hitsStructure = true;
-              break;
+    const layouts = [2, 3, 4, 5, 6]
+      .map((rows) => {
+        const perRow = Math.ceil(spaces / rows);
+        return {
+          rows,
+          perRow,
+          blockLen: perRow * STALL_WIDTH_FT,
+          blockDepth: rows * STALL_DEPTH_FT + (rows - 1) * AISLE_FT,
+        };
+      })
+      .filter((l) => l.blockLen > 0);
+    outer: for (const { rows, perRow, blockLen, blockDepth } of layouts) {
+      const blockArea = blockLen * blockDepth;
+      for (const edgeIdx of frontagesSorted) {
+        const a = parcelRing[edgeIdx];
+        const b = parcelRing[(edgeIdx + 1) % parcelRing.length];
+        const { u, n, length } = edgeFrame(a, b);
+        const inward = { x: -n.x, y: -n.y };
+        for (let s = 0; s + blockLen <= length; s += 10) {
+          for (let d = 12; d <= 160; d += 4) {
+            const origin = {
+              x: a.x + u.x * s + inward.x * d,
+              y: a.y + u.y * s + inward.y * d,
+            };
+            const rect: ScenePolygon = {
+              exterior: orientedRect(origin, { x: u.x * blockLen, y: u.y * blockLen }, { x: inward.x * blockDepth, y: inward.y * blockDepth }),
+            };
+            const insideParcel = totalAreaSqFt(intersection(rect, parcelLocal));
+            if (insideParcel < blockArea - 1) continue;
+            let hitsStructure = false;
+            for (const st of structures) {
+              if (totalAreaSqFt(intersection(rect, st.polygon)) > 1) {
+                hitsStructure = true;
+                break;
+              }
             }
+            if (hitsStructure) continue;
+            if (totalAreaSqFt(intersection(rect, { exterior: setbackOnly[0]?.exterior ?? parcelRing })) < blockArea - 1) {
+              continue;
+            }
+            parkingLocal = rect;
+            parking = {
+              id: `parking:${missionParking.id}`,
+              label: `Mission parking — ${spaces} surface stalls`,
+              polygon: rect,
+              areaSqFt: blockArea,
+              stalls: { count: spaces, widthFt: STALL_WIDTH_FT, depthFt: STALL_DEPTH_FT, aisleFt: AISLE_FT },
+              requirementLabel: `min ${spaces} spaces (mission)`,
+              missionConstraintId: missionParking.id,
+              provenance: [provenance(missionParking.id, "mission-constraint", "Mission min-parking")],
+            };
+            notes.push(
+              `Parking field: ${spaces} stalls as ${rows} row(s) of ${perRow} (${blockLen} x ${blockDepth} ft = ${blockArea.toFixed(0)} sq ft), first-fit placement along frontage edge ${edgeIdx} at ${d} ft depth (search is deterministic: rows ascending, longest frontage, then along-edge, then depth).`,
+            );
+            break outer;
           }
-          if (hitsStructure) continue;
-          if (totalAreaSqFt(intersection(rect, { exterior: setbackOnly[0]?.exterior ?? parcelRing })) < blockArea - 1) {
-            continue;
-          }
-          parkingLocal = rect;
-          parking = {
-            id: `parking:${missionParking.id}`,
-            label: `Mission parking — ${spaces} surface stalls`,
-            polygon: rect,
-            areaSqFt: blockArea,
-            stalls: { count: spaces, widthFt: STALL_WIDTH_FT, depthFt: STALL_DEPTH_FT, aisleFt: AISLE_FT },
-            requirementLabel: `min ${spaces} spaces (mission)`,
-            missionConstraintId: missionParking.id,
-            provenance: [provenance(missionParking.id, "mission-constraint", "Mission min-parking")],
-          };
-          notes.push(
-            `Parking field: ${spaces} stalls as ${rows} row(s) of ${perRow} (${blockLen} x ${blockDepth} ft = ${blockArea.toFixed(0)} sq ft), first-fit placement along frontage edge ${edgeIdx} at ${d} ft depth (search is deterministic: longest frontage, then along-edge, then depth).`,
-          );
-          break outer;
         }
       }
     }
     if (!parking) {
-      notes.push("Parking field: no first-fit placement found — parking UNRESOLVED.");
+      notes.push(
+        `Parking field UNRESOLVED: no deterministic rectangular placement for ${spaces} stalls fits the setback strips without overlapping the preserved sanctuary (searched 2-6 rows along every frontage). The canonical mission's parking requirement is real; this spike's surface-lot heuristic cannot design it — solver #7 owns the parking geometry (podium/structured/multi-field). Nothing is subtracted from the mission envelope for parking.`,
+      );
     }
   }
 
@@ -542,10 +556,12 @@ export function buildSpatialScene(input: BuildSceneInput): SpatialSceneModel {
       heightFt: missionHeight,
       areaSqFt: missionArea,
       volumeCuFt: missionArea * missionHeight,
+      verification: "ASSUMPTION_DERIVED",
+      verificationNote: `${legalEnvelope.verificationNote} Mission clips remove confirmed preserve-structure footprints${parking ? " and the derived parking field" : ""}; no numeric mission height cap exists in the canonical flow.`,
       setbacks,
       bindingNotes: [
         ...legalEnvelope.bindingNotes,
-        `Mission clips: ${clips.length} removed ${clips.length > 0 ? "(sanctuary, parking, height slab)" : ""}`.trim(),
+        `Mission clips: ${clips.length} removed volume(s) (${clips.map((c) => c.label).join("; ") || "none"}).`,
       ],
       clips,
       provenance: [

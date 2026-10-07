@@ -144,7 +144,7 @@ export function ForgeSpikeFallback({ model, moment, setMoment, scenarioId, setSc
           ))}
       </svg>
       <div className="forge-fallback-notes">
-        <strong>{model.title}</strong> — {model.subtitle}. Legal{" "}
+        <strong>{model.title}</strong> — {model.subtitle}. Planning envelope (assumption-derived){" "}
         {model.legalEnvelope ? `${model.legalEnvelope.areaSqFt.toFixed(0)} sq ft × ${model.legalEnvelope.heightFt} ft` : "—"};
         mission{" "}
         {model.missionEnvelope
