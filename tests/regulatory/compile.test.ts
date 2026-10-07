@@ -1,119 +1,37 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 import { compileRegulations } from "../../src/application/regulatory/compile";
 import { selectExecutableConstraints } from "../../src/application/regulatory/executable";
 import { verifyCandidates } from "../../src/application/regulatory/verify";
-import { decideConflicts } from "../../src/application/regulatory/conflicts";
+import { decideConflicts, normalizedLegalValue } from "../../src/application/regulatory/conflicts";
 import type { CandidateRule } from "../../src/application/regulatory/candidate-rule";
 import { normalizeFeet } from "../../src/application/regulatory/normalize";
+import { ProjectCodec } from "../../src/adapters/persistence/project-codec";
 import { contextFor } from "../domain/helpers";
-import type { Project } from "../../src/domain/graph/project";
+import { bareProject, heightCandidate, PARCEL, testSource, useCandidate } from "./helpers";
 
 /**
- * Compiler pipeline tests (issue #5): deterministic verification, conflict
- * analysis, canonical compilation, and the executable solver gate — including
- * the hero adversarial case (older favorable 55 ft vs newer authoritative
- * adopted 45 ft) driven from the first-class fixture under
+ * Compiler pipeline tests (issue #5 review): semantic identity, deterministic
+ * verification, qualitative + quantitative conflicts, conflict lifecycle,
+ * true idempotency, real source hashing, and the executable solver gate —
+ * including the hero adversarial case (older favorable 55 ft vs newer
+ * authoritative adopted 45 ft) driven from the first-class fixture under
  * docs/benchmarks/adversarial/height-conflict/.
  */
 
 const ADVERSARIAL_DIR = join(import.meta.dirname, "../../docs/benchmarks/adversarial/height-conflict");
-const PARCEL = "phl:parcel:778273000";
-
-function bareProject(): Project {
-  return {
-    projectId: "test:regulatory",
-    revision: 0,
-    createdAt: "2026-10-08T00:00:00.000Z",
-    updatedAt: "2026-10-08T00:00:00.000Z",
-    nodes: {
-      [PARCEL]: {
-        id: PARCEL,
-        kind: "parcel",
-        parcelIdSystem: "test",
-        parcelNumber: "778273000",
-        geometry: {
-          geojson: {
-            type: "Polygon",
-            coordinates: [
-              [
-                [-75.056, 40.043],
-                [-75.055, 40.043],
-                [-75.055, 40.044],
-                [-75.056, 40.044],
-                [-75.056, 40.043],
-              ],
-            ],
-          },
-          crs: "EPSG:4326",
-          validity: "unchecked",
-          derived: false,
-        },
-        claimIds: [],
-        meta: { revision: 1, semanticHash: "x", createdAt: "2026-10-08T00:00:00.000Z", lastModifiedAt: "2026-10-08T00:00:00.000Z" },
-      },
-    },
-    edges: [],
-    events: [],
-  } as unknown as Project;
-}
 
 const TEST_SOURCES = [
-  {
-    sourceRef: "S5",
-    title: "Quick Guide",
-    publisher: "City Planning Commission",
-    canonicalUrl: "https://test.example/guide",
-    authority: "OFFICIAL_CITY_REFERENCE" as const,
-    retrievedAt: "2026-10-04T03:55:00Z",
-  },
-  {
-    sourceRef: "S7",
-    title: "Adopted Code",
-    publisher: "City",
-    canonicalUrl: "https://test.example/code",
-    authority: "ADOPTED_CODE" as const,
-    retrievedAt: "2026-10-04T04:21:00Z",
-  },
-  {
-    sourceRef: "A1",
-    title: "Older favorable planning memo",
-    publisher: "Test City Planning Commission",
-    canonicalUrl: "https://test.example/older-planning-memo",
-    authority: "OFFICIAL_CITY_REFERENCE" as const,
-    retrievedAt: "2025-01-15T00:00:00Z",
-  },
-  {
-    sourceRef: "A2",
-    title: "Current adopted code",
-    publisher: "Test City, codified",
-    canonicalUrl: "https://test.example/adopted-code-14-999",
-    authority: "ADOPTED_CODE" as const,
-    retrievedAt: "2026-06-01T00:00:00Z",
-  },
+  testSource({ sourceRef: "S5" }),
+  testSource({ sourceRef: "S7", authority: "ADOPTED_CODE" }),
+  testSource({ sourceRef: "A1", retrievedAt: "2025-01-15T00:00:00Z" }),
+  testSource({ sourceRef: "A2", authority: "ADOPTED_CODE", retrievedAt: "2026-06-01T00:00:00Z" }),
+  testSource({ sourceRef: "G1", authority: "OFFICIAL_GIS" }),
+  testSource({ sourceRef: "G2", authority: "OFFICIAL_GIS" }),
 ];
 
-function heightCandidate(sourceRef: string, feet: number, overrides: Partial<CandidateRule> = {}): CandidateRule {
-  return {
-    candidateId: `cand:max-height:${sourceRef}`,
-    sourceArtifactId: `phl:src:${sourceRef}@v1`,
-    sourceRef,
-    subjectNodeId: PARCEL,
-    jurisdictionKey: "philadelphia-pa",
-    predicate: "max-height",
-    proposedValue: { kind: "quantity", value: feet, unit: "ft" },
-    applicability: { district: "RM-1" },
-    codeSection: "§ test-1",
-    verbatimSupportingText: `maximum building height ... ${feet} ft`,
-    authority: sourceRef === "A2" || sourceRef === "S7" ? "ADOPTED_CODE" : "OFFICIAL_CITY_REFERENCE",
-    retrievedAt: TEST_SOURCES.find((s) => s.sourceRef === sourceRef)?.retrievedAt ?? "2026-01-01T00:00:00Z",
-    extractionMethod: "test",
-    ...overrides,
-  };
-}
-
-/** Parse the adversarial fixture captures into candidates (deterministic). */
 function adversarialHeightCandidates(): CandidateRule[] {
   const older = readFileSync(join(ADVERSARIAL_DIR, "older-favorable-height.md"), "utf-8");
   const newer = readFileSync(join(ADVERSARIAL_DIR, "newer-adopted-height.md"), "utf-8");
@@ -130,47 +48,79 @@ function adversarialHeightCandidates(): CandidateRule[] {
   ];
 }
 
-describe("verification (candidate -> accepted/rejected)", () => {
-  it("rejects a candidate whose sourceRef is not in the manifest (hallucinated citation)", () => {
-    const decisions = verifyCandidates({
-      candidates: [heightCandidate("S99", 38)],
-      sources: TEST_SOURCES,
+describe("semantic rule identity", () => {
+  it("SIX applicability and SIX ADU prohibition are DIFFERENT rules", async () => {
+    const { loadBenchmarkEvidence } = await import("../../src/adapters/regulatory/benchmark-evidence");
+    const { benchmarkExtractionAdapter } = await import("../../src/adapters/regulatory/benchmark-extractor");
+    const input = loadBenchmarkEvidence({
+      fixtureDir: join(import.meta.dirname, "../../docs/benchmarks/calvary-memorial-philadelphia"),
+      subject: { subjectNodeId: PARCEL, jurisdictionKey: "philadelphia-pa", district: "RM-1" },
+    });
+    const { candidates } = await benchmarkExtractionAdapter.extract(input);
+    const applicability = candidates.find((c) => c.semanticRuleKey === "overlay:/six:applicability");
+    const prohibition = candidates.find((c) => c.semanticRuleKey === "overlay:/six:adu-prohibition");
+    expect(applicability).toBeDefined();
+    expect(prohibition).toBeDefined();
+    expect(applicability!.candidateId).not.toBe(prohibition!.candidateId);
+
+    // Compile and prove the ADU CONSTRAINT traces specifically to the
+    // prohibition rule, regulation, claim, and quote.
+    const project = bareProject();
+    compileRegulations(contextFor(project), {
+      candidates: [applicability!, prohibition!],
+      sources: input.sources,
       subject: { district: "RM-1" },
     });
-    expect(decisions[0].status).toBe("REJECT");
-    expect(decisions[0].reasons.join(" ")).toContain("does not resolve");
+    const constraint = project.nodes["phl:constraint:overlay:/six:adu-prohibition"];
+    expect(constraint).toBeDefined();
+    expect(project.nodes["phl:reg:overlay:/six:applicability"]?.kind).toBe("regulation");
+    expect(project.nodes["phl:reg:overlay:/six:adu-prohibition"]?.kind).toBe("regulation");
+    const aduClaim = project.nodes["phl:claim:overlay:/six:adu-prohibition:S6"];
+    expect(
+      aduClaim?.kind === "claim" && aduClaim.verbatimQuote?.includes("Accessory dwelling units shall not be permitted"),
+    ).toBe(true);
+    // The applicability regulation is a separate rule with its own claim.
+    const applicabilityClaim = project.nodes["phl:claim:overlay:/six:applicability:S6"];
+    expect(applicabilityClaim?.kind === "claim").toBe(true);
+    expect(JSON.stringify(applicabilityClaim)).toContain("Applicability");
   });
 
-  it("rejects missing supporting quote and missing locator for regulatory rules", () => {
-    const noQuote = heightCandidate("S5", 38, { verbatimSupportingText: "   " });
-    const noSection = heightCandidate("S5", 38, { codeSection: undefined });
-    const decisions = verifyCandidates({
-      candidates: [noQuote, noSection],
-      sources: TEST_SOURCES,
-      subject: { district: "RM-1" },
-    });
-    expect(decisions[0].status).toBe("REJECT");
-    expect(decisions[0].reasons.join(" ")).toContain("supporting text");
-    expect(decisions[1].status).toBe("REJECT");
-    expect(decisions[1].reasons.join(" ")).toContain("locator");
-  });
-
-  it("rejects malformed quantities (0 height) and incompatible districts", () => {
-    const zero = heightCandidate("S5", 0);
-    const wrongDistrict = heightCandidate("S5", 38, { applicability: { district: "RSA-5" } });
-    const decisions = verifyCandidates({
-      candidates: [zero, wrongDistrict],
-      sources: TEST_SOURCES,
-      subject: { district: "RM-1" },
-    });
-    expect(decisions[0].status).toBe("REJECT");
-    expect(decisions[0].reasons.join(" ")).toContain("greater than 0");
-    expect(decisions[1].status).toBe("REJECT");
-    expect(decisions[1].reasons.join(" ")).toContain("not the subject district");
+  it("duplicate CandidateRule ids are rejected loudly", () => {
+    const project = bareProject();
+    const duplicate = heightCandidate("S5", 38);
+    expect(() =>
+      compileRegulations(contextFor(project), {
+        candidates: [duplicate, { ...duplicate }],
+        sources: TEST_SOURCES,
+        subject: { district: "RM-1" },
+      }),
+    ).toThrow(/duplicate CandidateRule id/);
   });
 });
 
-describe("conflict engine (order-invariant, authority-aware)", () => {
+describe("verification (candidate -> accepted/rejected)", () => {
+  it("rejects hallucinated citations, missing quotes, missing locators, malformed quantities, wrong districts", () => {
+    const decisions = verifyCandidates({
+      candidates: [
+        heightCandidate("S99", 38),
+        heightCandidate("S5", 38, { verbatimSupportingText: "   " }),
+        heightCandidate("S5", 38, { codeSection: undefined }),
+        heightCandidate("S5", 0),
+        heightCandidate("S5", 38, { applicability: { district: "RSA-5" } }),
+      ],
+      sources: TEST_SOURCES,
+      subject: { district: "RM-1" },
+    });
+    expect(decisions.map((d) => d.status)).toEqual(["REJECT", "REJECT", "REJECT", "REJECT", "REJECT"]);
+    expect(decisions[0].reasons.join(" ")).toContain("does not resolve");
+    expect(decisions[1].reasons.join(" ")).toContain("supporting text");
+    expect(decisions[2].reasons.join(" ")).toContain("locator");
+    expect(decisions[3].reasons.join(" ")).toContain("greater than 0");
+    expect(decisions[4].reasons.join(" ")).toContain("not the subject district");
+  });
+});
+
+describe("conflict engine (semantic, order-invariant, qualitative-aware)", () => {
   it("HERO: older favorable 55 ft loses to newer authoritative adopted 45 ft", () => {
     const [a1, a2] = adversarialHeightCandidates();
     expect(a1.proposedValue).toEqual({ kind: "quantity", value: 55, unit: "ft" });
@@ -192,16 +142,11 @@ describe("conflict engine (order-invariant, authority-aware)", () => {
     expect(forward.conflicts).toEqual(backward.conflicts);
   });
 
-  it("equal-authority incompatible values BLOCK with nothing executable", () => {
-    const gisA = heightCandidate("G1", 38, { authority: "OFFICIAL_GIS" });
-    const gisB = heightCandidate("G2", 45, { authority: "OFFICIAL_GIS" });
-    const sources = [
-      ...TEST_SOURCES,
-      { sourceRef: "G1", title: "GIS A", publisher: "City", canonicalUrl: "https://t", authority: "OFFICIAL_GIS" as const, retrievedAt: "2026-01-01T00:00:00Z" },
-      { sourceRef: "G2", title: "GIS B", publisher: "City", canonicalUrl: "https://t", authority: "OFFICIAL_GIS" as const, retrievedAt: "2026-01-02T00:00:00Z" },
-    ];
-    const decisions = verifyCandidates({ candidates: [gisA, gisB], sources, subject: { district: "RM-1" } });
-    expect(decisions.every((d) => d.status === "ACCEPT")).toBe(true);
+  it("QUALITATIVE: BY_RIGHT vs SPECIAL_EXCEPTION for the same rule BLOCKs", () => {
+    const gisA = useCandidate("G1", "Y[1]");
+    const gisB = useCandidate("G2", "S[2], 14-603(5)");
+    expect(normalizedLegalValue(gisA)).toBe("perm:BY_RIGHT");
+    expect(normalizedLegalValue(gisB)).toBe("perm:SPECIAL_EXCEPTION");
 
     const { dispositions, conflicts } = decideConflicts([gisA, gisB]);
     expect(dispositions.get(gisA.candidateId)?.status).toBe("BLOCKED");
@@ -209,74 +154,121 @@ describe("conflict engine (order-invariant, authority-aware)", () => {
     expect(conflicts[0].resolution).toBe("blocked");
   });
 
+  it("equal-authority incompatible quantities BLOCK with nothing executable", () => {
+    const gisA = heightCandidate("G1", 38, { authority: "OFFICIAL_GIS" });
+    const gisB = heightCandidate("G2", 45, { authority: "OFFICIAL_GIS" });
+    const { dispositions, conflicts } = decideConflicts([gisA, gisB]);
+    expect(dispositions.get(gisA.candidateId)?.status).toBe("BLOCKED");
+    expect(dispositions.get(gisB.candidateId)?.status).toBe("BLOCKED");
+    expect(conflicts[0].resolution).toBe("blocked");
+  });
+
   it("same logical source, newer capture supersedes the older one", () => {
-    const older = heightCandidate("S5", 55, {
-      retrievedAt: "2025-01-01T00:00:00Z",
-      candidateId: "cand:max-height:S5:v1",
-      sourceArtifactId: "phl:src:S5@v1",
-    });
-    const newer = heightCandidate("S5", 45, {
-      retrievedAt: "2026-06-01T00:00:00Z",
-      candidateId: "cand:max-height:S5:v2",
-      sourceArtifactId: "phl:src:S5@v2",
-    });
+    const older = heightCandidate("S5", 55, { retrievedAt: "2025-01-01T00:00:00Z", candidateId: "cand:height:max:principal:S5:v1" });
+    const newer = heightCandidate("S5", 45, { retrievedAt: "2026-06-01T00:00:00Z", candidateId: "cand:height:max:principal:S5:v2" });
     const { dispositions } = decideConflicts([older, newer]);
     expect(dispositions.get(older.candidateId)?.status).toBe("SUPERSEDED");
     expect(dispositions.get(newer.candidateId)?.status).toBe("EXECUTABLE");
   });
 });
 
+describe("source artifact truth", () => {
+  it("raw byte changes change the hash; same id + changed content fails loudly", async () => {
+    const { hashCaptureFiles } = await import("../../src/adapters/regulatory/benchmark-evidence");
+    const bytesA = Buffer.from("height 38 ft");
+    const bytesB = Buffer.from("height 39 ft");
+    const hashA = hashCaptureFiles([{ name: "raw/a.md", bytes: bytesA }]);
+    const hashB = hashCaptureFiles([{ name: "raw/a.md", bytes: bytesB }]);
+    expect(hashA).toMatch(/^[0-9a-f]{64}$/);
+    expect(hashA).not.toBe(hashB);
+    // Multi-file combination is order-invariant.
+    expect(hashCaptureFiles([
+      { name: "raw/a.md", bytes: bytesA },
+      { name: "raw/b.md", bytes: bytesB },
+    ])).toBe(hashCaptureFiles([
+      { name: "raw/b.md", bytes: bytesB },
+      { name: "raw/a.md", bytes: bytesA },
+    ]));
+
+    const project = bareProject();
+    const ctx = contextFor(project);
+    compileRegulations(ctx, { candidates: [heightCandidate("S5", 38)], sources: TEST_SOURCES, subject: { district: "RM-1" } });
+    const tampered = testSource({
+      sourceRef: "S5",
+      rawContentHash: createHash("sha256").update("different bytes").digest("hex"),
+    });
+    expect(() =>
+      compileRegulations(ctx, { candidates: [heightCandidate("S5", 38)], sources: [tampered], subject: { district: "RM-1" } }),
+    ).toThrow(/immutable/i);
+  });
+
+  it("AuthorityLevel maps to SourceType exactly and is preserved on the artifact", async () => {
+    const project = bareProject();
+    const adopted = testSource({ sourceRef: "A2", authority: "ADOPTED_CODE" });
+    const gis = testSource({ sourceRef: "G1", authority: "OFFICIAL_GIS" });
+    const tool = testSource({ sourceRef: "T1", authority: "OFFICIAL_CITY_TOOL" });
+    const reference = testSource({ sourceRef: "R1", authority: "OFFICIAL_CITY_REFERENCE" });
+    const candidates = [
+      heightCandidate("A2", 45),
+      heightCandidate("G1", 38, { semanticRuleKey: "test:gis", candidateId: "cand:test:gis:G1", applicability: { district: "RM-1" } }),
+    ];
+    compileRegulations(contextFor(project), {
+      candidates,
+      sources: [adopted, gis, tool, reference],
+      subject: { district: "RM-1" },
+    });
+    expect(project.nodes["phl:src:A2@v1"]).toMatchObject({ sourceType: "adopted_code" });
+    expect(project.nodes["phl:src:G1@v1"]).toMatchObject({ sourceType: "official_gis" });
+    expect(project.nodes["phl:src:T1@v1"]).toBeUndefined(); // unused source not materialized
+  });
+});
+
 describe("canonical compilation + executable gate", () => {
   it("compiles verified rules to claim/regulation/constraint and traverses to sources", () => {
     const project = bareProject();
-    const result = compileRegulations(contextFor(project), {
-      candidates: [
-        heightCandidate("S5", 38),
-        {
-          ...heightCandidate("S7", 0, { candidateId: "cand:parking:S7", predicate: "parking-requirement" }),
-          applicability: { district: "RM-1", use: "multi-family" },
-          proposedValue: { kind: "quantity", value: 0, unit: "spaces" },
-          verbatimSupportingText: "Multi-Family — 0 (RM-1 group)",
-        },
-        {
-          ...heightCandidate("S5", 0, { candidateId: "cand:far:S5", predicate: "far" }),
-          proposedValue: { kind: "unknown" },
-          verbatimSupportingText: "no FAR value in the captured RM-1 evidence",
-        },
-        {
-          ...heightCandidate("S5", 16, { candidateId: "cand:lot-width:S5", predicate: "lot-width" }),
-          verbatimSupportingText: "Min. Lot Width ... 16 ft.",
-        },
-      ],
+    const farCandidate: CandidateRule = {
+      ...heightCandidate("S5", 0, { candidateId: "cand:far:max:S5", semanticRuleKey: "far:max", predicate: "far" }),
+      proposedValue: { kind: "unknown" },
+      verbatimSupportingText: "no FAR value in the captured RM-1 evidence",
+    };
+    const lotWidth: CandidateRule = {
+      ...heightCandidate("S5", 16, { candidateId: "cand:lot:width:min:S5", semanticRuleKey: "lot:width:min", predicate: "lot-width" }),
+      verbatimSupportingText: "Min. Lot Width ... 16 ft.",
+    };
+    const parking: CandidateRule = {
+      ...heightCandidate("S7", 0, {
+        candidateId: "cand:parking:multi-family:minimum:S7",
+        semanticRuleKey: "parking:multi-family:minimum",
+        predicate: "parking-requirement",
+        authority: "ADOPTED_CODE",
+      }),
+      applicability: { district: "RM-1", use: "multi-family" },
+      proposedValue: { kind: "quantity", value: 0, unit: "spaces" },
+      verbatimSupportingText: "Multi-Family — 0 (RM-1 group)",
+    };
+    compileRegulations(contextFor(project), {
+      candidates: [heightCandidate("S5", 38), parking, farCandidate, lotWidth],
       sources: TEST_SOURCES,
       subject: { district: "RM-1" },
     });
 
-    // Height compiled through the full chain.
-    const height = result.outcomes.find((o) => o.predicate === "max-height");
-    expect(height?.outcome).toBe("compiled");
-    expect(project.nodes["phl:claim:max-height:S5"]).toBeDefined();
-    expect(project.nodes["phl:reg:max-height"]).toBeDefined();
-    expect(project.nodes["phl:constraint:max-height"]).toBeDefined();
+    expect(project.nodes["phl:claim:height:max:principal:S5"]).toBeDefined();
+    expect(project.nodes["phl:reg:height:max:principal"]).toBeDefined();
+    expect(project.nodes["phl:constraint:height:max:principal"]).toBeDefined();
 
-    // UNKNOWN (FAR) -> claim only; no regulation, no constraint, never 0.
-    const far = result.outcomes.find((o) => o.predicate === "far");
-    expect(far?.outcome).toBe("unknown-recorded");
-    const farClaim = project.nodes["phl:claim:far:S5"];
+    const farClaim = project.nodes["phl:claim:far:max:S5"];
     expect(farClaim?.kind === "claim" && farClaim.evidenceState === "UNKNOWN").toBe(true);
-    expect(project.nodes["phl:reg:far"]).toBeUndefined();
-    expect(project.nodes["phl:constraint:far"]).toBeUndefined();
+    expect(project.nodes["phl:reg:far:max"]).toBeDefined();
+    expect(project.nodes["phl:constraint:far:max"]).toBeUndefined();
 
-    // lot-width: claim + regulation, NO fake constraint (deferred to #7).
-    expect(project.nodes["phl:claim:lot-width:S5"]).toBeDefined();
-    expect(project.nodes["phl:reg:lot-width"]).toBeDefined();
-    expect(project.nodes["phl:constraint:lot-width"]).toBeUndefined();
+    expect(project.nodes["phl:claim:lot:width:min:S5"]).toBeDefined();
+    expect(project.nodes["phl:reg:lot:width:min"]).toBeDefined();
+    expect(project.nodes["phl:constraint:lot:width:min"]).toBeUndefined();
 
-    // Gate: height + parking executable; far/lot-width absent entirely.
     const gate = selectExecutableConstraints(project);
     const ids = gate.executable.map((c) => c.id);
-    expect(ids).toContain("phl:constraint:max-height");
-    expect(ids).toContain("phl:constraint:parking-requirement:multi-family");
+    expect(ids).toContain("phl:constraint:height:max:principal");
+    expect(ids).toContain("phl:constraint:parking:multi-family:minimum");
     expect(ids.some((id) => id.includes("far"))).toBe(false);
     for (const decision of gate.decisions.filter((d) => d.executable)) {
       expect(decision.claimIds.length).toBeGreaterThan(0);
@@ -287,111 +279,220 @@ describe("canonical compilation + executable gate", () => {
   it("HERO END-TO-END: 55 ft excluded from executable law; 45 ft compiles; discrepancy visible", () => {
     const project = bareProject();
     const [a1, a2] = adversarialHeightCandidates();
-    const result = compileRegulations(contextFor(project), {
+    compileRegulations(contextFor(project), {
       candidates: [a1, a2],
       sources: TEST_SOURCES,
       subject: { district: "RM-1" },
     });
 
-    // Only ONE height constraint exists, and it is the 45 ft one.
-    const constraint = project.nodes["phl:constraint:max-height"];
+    const constraint = project.nodes["phl:constraint:height:max:principal"];
     expect(constraint).toBeDefined();
-    expect(
-      constraint?.kind === "constraint" && constraint.constraintKind === "height" && constraint.limit.value === 45,
-    ).toBe(true);
+    expect(constraint?.kind === "constraint" && constraint.constraintKind === "height" && constraint.limit.value === 45).toBe(true);
 
-    // The 55 ft claim exists as CONFLICT evidence — visible, not erased.
-    const excludedClaimId = result.outcomes.find((o) => o.candidateId === a1.candidateId)?.claimId;
-    expect(excludedClaimId).toBeDefined();
-    const excludedClaim = project.nodes[excludedClaimId!];
+    const excludedClaim = project.nodes["phl:claim:height:max:principal:A1"];
     expect(excludedClaim?.kind === "claim" && excludedClaim.evidenceState === "CONFLICT").toBe(true);
     expect(JSON.stringify(excludedClaim)).toContain("never overrides adopted code");
 
-    // Conflict provenance is referenced from the surviving regulation.
-    const regulation = project.nodes["phl:reg:max-height"];
-    expect(
-      regulation?.kind === "regulation" && regulation.conflictRefs.length === 1,
-    ).toBe(true);
-
-    // Gate: executable, with reasons; the value in executable law is 45.
-    const gate = selectExecutableConstraints(project);
-    const heightDecision = gate.decisions.find((d) => d.constraintId === "phl:constraint:max-height");
-    expect(heightDecision?.executable).toBe(true);
-    expect(JSON.stringify(gate.executable)).not.toContain("55");
-  });
-
-  it("BLOCKED conflicts open ONE deterministic expert review and never become executable", () => {
-    const project = bareProject();
-    const gisA = heightCandidate("G1", 38, { authority: "OFFICIAL_GIS" });
-    const gisB = heightCandidate("G2", 45, { authority: "OFFICIAL_GIS" });
-    const sources = [
-      ...TEST_SOURCES,
-      { sourceRef: "G1", title: "GIS A", publisher: "City", canonicalUrl: "https://t", authority: "OFFICIAL_GIS" as const, retrievedAt: "2026-01-01T00:00:00Z" },
-      { sourceRef: "G2", title: "GIS B", publisher: "City", canonicalUrl: "https://t", authority: "OFFICIAL_GIS" as const, retrievedAt: "2026-01-02T00:00:00Z" },
-    ];
-    compileRegulations(contextFor(project), { candidates: [gisA, gisB], sources, subject: { district: "RM-1" } });
-    compileRegulations(contextFor(project), { candidates: [gisA, gisB], sources, subject: { district: "RM-1" } });
-
-    // No constraint materialized at all for the blocked predicate.
-    expect(project.nodes["phl:constraint:max-height"]).toBeUndefined();
-    // Exactly one expert-review node despite compiling twice.
-    const reviews = Object.values(project.nodes).filter((node) => node.kind === "expert-review");
-    expect(reviews).toHaveLength(1);
+    const regulation = project.nodes["phl:reg:height:max:principal"];
+    expect(regulation?.kind === "regulation" && regulation.conflictRefs.length === 1).toBe(true);
 
     const gate = selectExecutableConstraints(project);
-    expect(gate.executable).toHaveLength(0);
+    expect(gate.decisions.find((d) => d.constraintId === "phl:constraint:height:max:principal")?.executable).toBe(true);
+    expect(JSON.stringify(gate.executable)).not.toMatch(/"value":55\b/);
   });
 
-  it("IDEMPOTENT: compiling the same evidence twice leaves the semantic graph unchanged", () => {
+  it("CONFLICT LIFECYCLE: previously-valid 38 ft goes STALE when later equal-authority evidence conflicts", async () => {
+    const { recordScenario } = await import("../../src/commands");
     const project = bareProject();
-    const candidates = [heightCandidate("S5", 38), adversarialHeightCandidates()[1]];
-    const first = compileRegulations(contextFor(project), { candidates, sources: TEST_SOURCES, subject: { district: "RM-1" } });
-    const nodeIdsAfterFirst = Object.keys(project.nodes).sort();
-    const edgesAfterFirst = JSON.stringify([...project.edges].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))));
-    const claimsAfterFirst = Object.values(project.nodes).filter((n) => n.kind === "claim").length;
-    const regsAfterFirst = Object.values(project.nodes).filter((n) => n.kind === "regulation").length;
-    const reviewsAfterFirst = Object.values(project.nodes).filter((n) => n.kind === "expert-review").length;
+    const ctx = contextFor(project);
 
-    const second = compileRegulations(contextFor(project), { candidates, sources: TEST_SOURCES, subject: { district: "RM-1" } });
+    // Compile 1: trusted 38 ft, executable.
+    compileRegulations(ctx, { candidates: [heightCandidate("S5", 38)], sources: TEST_SOURCES, subject: { district: "RM-1" } });
+    let gate = selectExecutableConstraints(project);
+    expect(gate.decisions.find((d) => d.constraintId === "phl:constraint:height:max:principal")?.executable).toBe(true);
 
-    expect(Object.keys(project.nodes).sort()).toEqual(nodeIdsAfterFirst);
-    expect(
-      JSON.stringify([...project.edges].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))),
-    ).toBe(edgesAfterFirst);
-    expect(Object.values(project.nodes).filter((n) => n.kind === "claim").length).toBe(claimsAfterFirst);
-    expect(Object.values(project.nodes).filter((n) => n.kind === "regulation").length).toBe(regsAfterFirst);
-    expect(Object.values(project.nodes).filter((n) => n.kind === "expert-review").length).toBe(reviewsAfterFirst);
-    // Same outcomes both runs.
-    expect(second.outcomes.map((o) => `${o.candidateId}:${o.outcome}`)).toEqual(
-      first.outcomes.map((o) => `${o.candidateId}:${o.outcome}`),
-    );
-  });
+    // A certificate depends on the compiled height constraint.
+    recordScenario(ctx, {
+      scenarioId: "scenario:height-check",
+      label: "Height check",
+      solverVersion: "test-double@0",
+      status: "COMPUTED",
+      metrics: [{ metricId: "homes", label: "Homes", value: { value: 10, unit: "dwelling_units" } }],
+      constraintIds: ["phl:constraint:height:max:principal"],
+      missionIds: [],
+      assumptionIds: [],
+      parcelId: PARCEL,
+      results: [
+        {
+          resultId: "result:height",
+          constraintId: "phl:constraint:height:max:principal",
+          status: "SATISFIED",
+          actual: { value: 38, unit: "ft" },
+          limit: { value: 38, unit: "ft" },
+          explanation: "Massing at 38 ft.",
+        },
+      ],
+      certificateId: "scenario:height-check:certificate",
+    });
 
-  it("STALE CASCADE: a previously executable rule goes stale via typed commands and the gate excludes it", () => {
-    const project = bareProject();
-    compileRegulations(contextFor(project), {
-      candidates: [heightCandidate("S5", 38)],
+    // Compile 2: an equally authoritative source now says 45 ft.
+    const conflicting = heightCandidate("G1", 45, { authority: "OFFICIAL_CITY_REFERENCE" });
+    compileRegulations(ctx, {
+      candidates: [heightCandidate("S5", 38), conflicting],
       sources: TEST_SOURCES,
       subject: { district: "RM-1" },
     });
-    expect(selectExecutableConstraints(project).executable.map((c) => c.id)).toContain("phl:constraint:max-height");
 
-    // Newer capture of the same logical source supersedes it.
-    const { supersedeSourceArtifact, addSourceArtifact } = awaitImport();
-    addSourceArtifact(contextFor(project), {
+    // Old constraint REMAINS for audit; regulation is STALE; gate excludes.
+    expect(project.nodes["phl:constraint:height:max:principal"]).toBeDefined();
+    const regulation = project.nodes["phl:reg:height:max:principal"];
+    expect(regulation?.kind === "regulation" && regulation.currentness).toBe("STALE");
+    gate = selectExecutableConstraints(project);
+    const decision = gate.decisions.find((d) => d.constraintId === "phl:constraint:height:max:principal");
+    expect(decision?.executable).toBe(false);
+    expect(decision?.reasons.join(" ")).toContain("STALE");
+
+    // Expert review concerns REAL graph nodes — never CandidateRule ids.
+    const review = Object.values(project.nodes).find((node) => node.kind === "expert-review");
+    expect(review).toBeDefined();
+    const affected = review?.kind === "expert-review" ? review.affectedNodeIds : [];
+    expect(affected.length).toBeGreaterThan(0);
+    for (const nodeId of affected) {
+      expect(nodeId.startsWith("cand:")).toBe(false);
+      expect(project.nodes[nodeId]).toBeDefined();
+    }
+    expect(affected).toContain("phl:reg:height:max:principal");
+    expect(affected).toContain("phl:claim:height:max:principal:S5");
+
+    // Dependent certificate non-CURRENT; gate blocked via open review too.
+    const { gradeCertificate } = await import("../../src/domain");
+    expect(["STALE", "INVALIDATED"]).toContain(gradeCertificate(project, "scenario:height-check:certificate").freshness);
+    expect(decision?.reasons.join(" ")).toMatch(/expert review|STALE/);
+  });
+
+  it("TRUE IDEMPOTENCY: compiling identical evidence twice changes NOTHING", () => {
+    const project = bareProject();
+    const ctx = contextFor(project);
+    const candidates = [heightCandidate("S5", 38), adversarialHeightCandidates()[1]];
+    compileRegulations(ctx, { candidates, sources: TEST_SOURCES, subject: { district: "RM-1" } });
+
+    const revision = project.revision;
+    const eventCount = project.events.length;
+    const edges = JSON.stringify([...project.edges].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))));
+    const encoded = ProjectCodec.encode(project);
+    const regulationRevisions = Object.values(project.nodes)
+      .filter((n) => n.kind === "regulation")
+      .map((n) => `${n.id}:${n.meta.revision}`)
+      .sort();
+    const semanticHashes = Object.values(project.nodes)
+      .map((n) => `${n.id}:${n.meta.semanticHash}`)
+      .sort();
+
+    const second = compileRegulations(ctx, { candidates, sources: TEST_SOURCES, subject: { district: "RM-1" } });
+
+    expect(project.revision).toBe(revision);
+    expect(project.events.length).toBe(eventCount);
+    expect(
+      JSON.stringify([...project.edges].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))),
+    ).toBe(edges);
+    expect(ProjectCodec.encode(project)).toBe(encoded);
+    expect(
+      Object.values(project.nodes).filter((n) => n.kind === "regulation").map((n) => `${n.id}:${n.meta.revision}`).sort(),
+    ).toEqual(regulationRevisions);
+    expect(Object.values(project.nodes).map((n) => `${n.id}:${n.meta.semanticHash}`).sort()).toEqual(semanticHashes);
+    expect(second.outcomes.map((o) => `${o.candidateId}:${o.outcome}`)).toEqual(
+      compileRegulations(ctx, { candidates, sources: TEST_SOURCES, subject: { district: "RM-1" } }).outcomes
+        .map((o) => `${o.candidateId}:${o.outcome}`),
+    );
+  });
+
+  it("TRUE SOURCE-SUPERSESSION CERTIFICATE: newer artifact supersedes, gate excludes, dependents go non-CURRENT", async () => {
+    const { addSourceArtifact, supersedeSourceArtifact, recordScenario } = await import("../../src/commands");
+    const { gradeCertificate } = await import("../../src/domain");
+    const project = bareProject();
+    const ctx = contextFor(project);
+
+    const heightId = "phl:constraint:height:max:principal";
+    const parkingId = "phl:constraint:parking:multi-family:minimum";
+    const parkingCandidate: CandidateRule = {
+      ...heightCandidate("S7", 0, {
+        candidateId: "cand:parking:multi-family:minimum:S7",
+        semanticRuleKey: "parking:multi-family:minimum",
+        predicate: "parking-requirement",
+        authority: "ADOPTED_CODE",
+      }),
+      applicability: { district: "RM-1", use: "multi-family" },
+      proposedValue: { kind: "quantity", value: 0, unit: "spaces" },
+      verbatimSupportingText: "Multi-Family — 0 (RM-1 group)",
+    };
+    compileRegulations(ctx, {
+      candidates: [heightCandidate("S5", 38), parkingCandidate],
+      sources: TEST_SOURCES,
+      subject: { district: "RM-1" },
+    });
+    expect(selectExecutableConstraints(project).executable.map((c) => c.id)).toContain(heightId);
+
+    recordScenario(ctx, {
+      scenarioId: "scenario:height-dep",
+      label: "Height dep",
+      solverVersion: "test-double@0",
+      status: "COMPUTED",
+      metrics: [{ metricId: "homes", label: "Homes", value: { value: 10, unit: "dwelling_units" } }],
+      constraintIds: [heightId],
+      missionIds: [],
+      assumptionIds: [],
+      parcelId: PARCEL,
+      results: [
+        {
+          resultId: "result:height-dep",
+          constraintId: heightId,
+          status: "SATISFIED",
+          actual: { value: 38, unit: "ft" },
+          limit: { value: 38, unit: "ft" },
+          explanation: "Massing at 38 ft.",
+        },
+      ],
+      certificateId: "scenario:height-dep:certificate",
+    });
+    // Unrelated certificate depending only on S7 parking.
+    recordScenario(ctx, {
+      scenarioId: "scenario:parking-dep",
+      label: "Parking dep",
+      solverVersion: "test-double@0",
+      status: "COMPUTED",
+      metrics: [{ metricId: "homes", label: "Homes", value: { value: 10, unit: "dwelling_units" } }],
+      constraintIds: [parkingId],
+      missionIds: [],
+      assumptionIds: [],
+      parcelId: PARCEL,
+      results: [
+        {
+          resultId: "result:parking-dep",
+          constraintId: parkingId,
+          status: "SATISFIED",
+          actual: { value: 0, unit: "spaces" },
+          limit: { value: 0, unit: "spaces" },
+          explanation: "0 required.",
+        },
+      ],
+      certificateId: "scenario:parking-dep:certificate",
+    });
+
+    // Newer capture of the SAME logical source (real content, real hash).
+    addSourceArtifact(ctx, {
       id: "phl:src:S5@v2",
       kind: "source-artifact",
       logicalSourceKey: "phl:src:S5",
       version: 2,
       sourceType: "official_city_reference",
       title: "Quick Guide (later retrieval)",
-      publisher: "City Planning Commission",
-      canonicalUrl: "https://test.example/guide",
+      publisher: "Test City",
+      canonicalUrl: "https://test.example/S5",
       authority: "OFFICIAL_CITY_REFERENCE",
       retrievedAt: "2026-12-01T00:00:00Z",
-      rawContentHash: "b".repeat(64),
+      rawContentHash: createHash("sha256").update("later retrieval bytes").digest("hex"),
     });
-    supersedeSourceArtifact(contextFor(project), {
+    supersedeSourceArtifact(ctx, {
       sourceId: "phl:src:S5@v1",
       supersededBySourceId: "phl:src:S5@v2",
       conflictedRegulationIds: [],
@@ -399,15 +500,15 @@ describe("canonical compilation + executable gate", () => {
     });
 
     const gate = selectExecutableConstraints(project);
-    const decision = gate.decisions.find((d) => d.constraintId === "phl:constraint:max-height");
-    expect(decision?.executable).toBe(false);
-    expect(decision?.reasons.join(" ")).toContain("superseded");
-    expect(gate.executable.map((c) => c.id)).not.toContain("phl:constraint:max-height");
+    const heightDecision = gate.decisions.find((d) => d.constraintId === heightId);
+    expect(heightDecision?.executable).toBe(false);
+    expect(heightDecision?.reasons.join(" ")).toContain("superseded");
+    expect(gate.executable.map((c) => c.id)).not.toContain(heightId);
+
+    const heightCertificate = gradeCertificate(project, "scenario:height-dep:certificate");
+    expect(["STALE", "INVALIDATED"]).toContain(heightCertificate.freshness);
+    expect(heightCertificate.reasons.join(" ")).toContain("superseded");
+    // The unrelated certificate stays CURRENT.
+    expect(gradeCertificate(project, "scenario:parking-dep:certificate").freshness).toBe("CURRENT");
   });
 });
-
-// Static import indirection so the stale-cascade test reads like a scenario.
-import { addSourceArtifact, supersedeSourceArtifact } from "../../src/commands";
-function awaitImport() {
-  return { addSourceArtifact, supersedeSourceArtifact };
-}

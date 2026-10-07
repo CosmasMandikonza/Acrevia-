@@ -6,6 +6,8 @@ import {
   recordClaim,
   upsertRegulation,
 } from "../../commands";
+import { canonicalJson } from "../../domain/graph/serialization";
+import { stripVolatile } from "../../domain/graph/node";
 import type { ClaimValue, ClaimPredicate } from "../../domain";
 import type { CandidateRule } from "./candidate-rule";
 import type { SourceMetadata } from "./extraction";
@@ -17,19 +19,33 @@ import { verifyCandidates } from "./verify";
  * candidates become Claim -> Regulation -> Constraint through the TYPED
  * COMMAND BOUNDARY. Nothing here writes project.nodes directly.
  *
- * Idempotency: source artifacts replay exactly; claims/constraints/reviews
- * are create-only so the compiler skips ids that already exist; regulations
- * upsert with edge replacement. Running the same compile twice leaves the
- * semantic graph unchanged — no duplicate claims, regulations, constraints,
- * reviews, or conflict references.
+ * IDENTITY: candidateId/claimId are unique EVIDENCE OBSERVATIONS
+ * (`<semanticRuleKey>:<sourceRef>`); regulationId/constraintId are the
+ * SEMANTIC LEGAL RULE (`<semanticRuleKey>`). Different propositions never
+ * collapse; duplicate candidate ids are rejected loudly.
+ *
+ * IDEMPOTENCY (true): source artifacts always replay through
+ * addSourceArtifact so its immutability guard verifies exact replay; claims/
+ * constraints/reviews are create-only with deterministic ids; regulations
+ * are grouped ONE per semanticRuleKey and an exact semantic replay is
+ * SKIPPED — re-compiling identical evidence runs zero commands (revision,
+ * events, edges, semantic hashes, and encoded state all unchanged).
+ *
+ * CONFLICT LIFECYCLE: a previously-executable rule whose later evidence
+ * conflicts irreducibly keeps its constraint for audit, but the regulation
+ * is upserted to currentness STALE with conflictRefs, the solver gate
+ * excludes it, and a deterministic expert review is opened whose
+ * affectedNodeIds reference REAL graph nodes (claims, regulation, sources,
+ * constraint) — never CandidateRule ids.
  *
  * No uncited regulation enters the solver: only ACCEPT + EXECUTABLE
  * candidates reach materializeConstraint, and the executable gate
- * (selectExecutableConstraints) independently re-verifies the full chain.
+ * independently re-verifies the full chain.
  */
 
 export type CandidateOutcome = {
   candidateId: string;
+  semanticRuleKey: string;
   predicate: ClaimPredicate;
   outcome: "compiled" | "unknown-recorded" | "conflict-recorded" | "rejected";
   reasons: string[];
@@ -46,20 +62,9 @@ export type CompileResult = {
   constrained: number;
 };
 
-function slugFor(candidate: CandidateRule): string {
-  switch (candidate.predicate) {
-    case "use-permission":
-    case "parking-requirement":
-      return `${candidate.predicate}:${candidate.applicability.use ?? "unscoped"}`;
-    case "overlay-restriction": {
-      const overlay = candidate.applicability.overlay;
-      if (overlay) return `overlay-restriction:${overlay.replace(/^\/+/, "").toLowerCase()}`;
-      return `overlay-restriction:${(candidate.codeSection ?? "uncited").toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-    }
-    default:
-      return candidate.predicate;
-  }
-}
+const REGULATION_ID = (key: string) => `phl:reg:${key}`;
+const CONSTRAINT_ID = (key: string) => `phl:constraint:${key}`;
+const CLAIM_ID = (key: string, sourceRef: string) => `phl:claim:${key}:${sourceRef}`;
 
 function claimValueFor(candidate: CandidateRule): ClaimValue {
   const value = candidate.proposedValue;
@@ -104,6 +109,11 @@ function sideYardRange(text: string): { min: number; max: number } | null {
   return { min: Number(match[1]), max: Number(match[2]) };
 }
 
+/** Semantic-equality helper: compare stripped-volatile canonical JSON. */
+function semanticEquals(a: unknown, b: unknown): boolean {
+  return canonicalJson(stripVolatile(a)) === canonicalJson(stripVolatile(b));
+}
+
 export function compileRegulations(
   ctx: CommandContext,
   input: {
@@ -112,16 +122,26 @@ export function compileRegulations(
     subject: { district?: string };
   },
 ): CompileResult {
+  // HARD duplicate-candidate check — evidence observations are unique.
+  const seenCandidateIds = new Set<string>();
+  for (const candidate of input.candidates) {
+    if (seenCandidateIds.has(candidate.candidateId)) {
+      throw new Error(`duplicate CandidateRule id: ${candidate.candidateId} (evidence observations must be unique)`);
+    }
+    seenCandidateIds.add(candidate.candidateId);
+  }
+
   const verification = verifyCandidates(input);
   const accepted = verification
     .filter((decision) => decision.status === "ACCEPT")
     .map((decision) => decision.candidate);
   const { dispositions, conflicts } = decideConflicts(accepted);
-  const conflictsByPredicate = new Map<string, ConflictRecord[]>();
+  const conflictsByKey = new Map<string, ConflictRecord[]>();
   for (const conflict of conflicts) {
-    const list = conflictsByPredicate.get(conflict.predicate) ?? [];
+    const list = conflictsByKey.get(conflict.semanticRuleKey) ?? [];
     list.push(conflict);
-    conflictsByPredicate.set(conflict.predicate, list);
+    list.sort((a, b) => a.conflictId.localeCompare(b.conflictId));
+    conflictsByKey.set(conflict.semanticRuleKey, list);
   }
 
   const sourceById = new Map<string, SourceMetadata>();
@@ -137,21 +157,44 @@ export function compileRegulations(
   // Deterministic order regardless of ingestion order.
   const ordered = [...input.candidates].sort((a, b) => a.candidateId.localeCompare(b.candidateId));
 
+  // Source artifacts ALWAYS replay through the command so its immutability
+  // guard verifies exact content — real hashes, never fabricated.
+  const usedSources = new Set(ordered.filter((c) => accepted.includes(c)).map((c) => c.sourceRef));
+  for (const source of input.sources) {
+    if (!usedSources.has(source.sourceRef)) continue;
+    addSourceArtifact(ctx, {
+      id: source.sourceArtifactId,
+      kind: "source-artifact",
+      logicalSourceKey: source.logicalSourceKey,
+      version: source.version,
+      sourceType: source.sourceType as never,
+      title: source.title,
+      publisher: source.publisher,
+      canonicalUrl: source.canonicalUrl,
+      authority: source.authority,
+      retrievedAt: source.retrievedAt,
+      rawContentHash: source.rawContentHash,
+    });
+  }
+
+  // Group accepted candidates by semantic rule for ONE regulation per rule.
+  const groups = new Map<string, CandidateRule[]>();
+  for (const candidate of accepted) {
+    const list = groups.get(candidate.semanticRuleKey) ?? [];
+    list.push(candidate);
+    groups.set(candidate.semanticRuleKey, list);
+  }
+  const sortedKeys = [...groups.keys()].sort((a, b) => a.localeCompare(b));
+
   for (const candidate of ordered) {
     const decision = verification.find((d) => d.candidate.candidateId === candidate.candidateId);
     const disposition = dispositions.get(candidate.candidateId);
-    const slug = slugFor(candidate);
-    // Claims are per EVIDENCE OBSERVATION (predicate + source): the excluded
-    // 55 ft memo and the winning 45 ft code each keep their own claim, so
-    // the discrepancy stays visible while the regulation cites only the
-    // executable evidence.
-    const claimId = `phl:claim:${slug}:${candidate.sourceRef}`;
-    const regulationId = `phl:reg:${slug}`;
-    const constraintId = `phl:constraint:${slug}`;
+    const claimId = CLAIM_ID(candidate.semanticRuleKey, candidate.sourceRef);
 
     if (decision?.status === "REJECT") {
       outcomes.push({
         candidateId: candidate.candidateId,
+        semanticRuleKey: candidate.semanticRuleKey,
         predicate: candidate.predicate,
         outcome: "rejected",
         reasons: decision.reasons,
@@ -159,37 +202,17 @@ export function compileRegulations(
       continue;
     }
 
-    // 1. Source artifact — exact replay is an idempotent no-op.
-    const meta = sourceById.get(candidate.sourceRef);
-    if (meta && !ctx.project.nodes[candidate.sourceArtifactId]) {
-      addSourceArtifact(ctx, {
-        id: candidate.sourceArtifactId,
-        kind: "source-artifact",
-        logicalSourceKey: `phl:src:${meta.sourceRef}`,
-        version: 1,
-        sourceType: meta.authority === "OFFICIAL_GIS" ? "official_gis" : meta.authority === "ADOPTED_CODE" ? "adopted_code" : "official_city_reference",
-        title: meta.title,
-        publisher: meta.publisher,
-        canonicalUrl: meta.canonicalUrl,
-        authority: meta.authority,
-        retrievedAt: meta.retrievedAt,
-        rawContentHash: `raw:${meta.sourceRef}`.padEnd(64, "0").slice(0, 64),
-      });
-    }
-
-    const evidence =
-      candidate.proposedValue.kind === "unknown"
-        ? "UNKNOWN"
-        : candidate.authority === "ADOPTED_CODE"
-          ? "VERIFIED"
-          : "SOURCE_CONFIRMED";
-
-    // 2. Claim — create-only; skip when the compiler already recorded it.
-    const conflictReasons =
-      disposition && disposition.status !== "EXECUTABLE"
-        ? disposition.reasons
-        : [];
+    // Claim — create-only; skip when the compiler already recorded it.
+    const conflictReasons = disposition && disposition.status !== "EXECUTABLE" ? disposition.reasons : [];
     if (!ctx.project.nodes[claimId]) {
+      const evidence =
+        candidate.proposedValue.kind === "unknown"
+          ? "UNKNOWN"
+          : disposition?.status !== "EXECUTABLE" && disposition !== undefined
+            ? "CONFLICT"
+            : candidate.authority === "ADOPTED_CODE"
+              ? "VERIFIED"
+              : "SOURCE_CONFIRMED";
       recordClaim(ctx, {
         id: claimId,
         kind: "claim",
@@ -198,7 +221,7 @@ export function compileRegulations(
         value: claimValueFor(candidate),
         origin: { kind: "SOURCE_DERIVED" },
         sourceIds: [candidate.sourceArtifactId],
-        evidenceState: disposition?.status === "EXECUTABLE" || disposition?.status === undefined ? evidence : "CONFLICT",
+        evidenceState: evidence,
         verbatimQuote: candidate.verbatimSupportingText,
         notes: [
           candidate.notes,
@@ -213,11 +236,10 @@ export function compileRegulations(
       claimed += 1;
     }
 
-    // Non-executable paths: conflict claims stay visible; UNKNOWN claims
-    // record the deliberate abstention. No regulation, no constraint.
     if (candidate.proposedValue.kind === "unknown") {
       outcomes.push({
         candidateId: candidate.candidateId,
+        semanticRuleKey: candidate.semanticRuleKey,
         predicate: candidate.predicate,
         outcome: "unknown-recorded",
         reasons: ["no value established by captured evidence; recorded UNKNOWN, never coerced"],
@@ -228,76 +250,97 @@ export function compileRegulations(
     if (disposition && disposition.status !== "EXECUTABLE") {
       outcomes.push({
         candidateId: candidate.candidateId,
+        semanticRuleKey: candidate.semanticRuleKey,
         predicate: candidate.predicate,
         outcome: "conflict-recorded",
         reasons: conflictReasons,
         claimId,
       });
+      // continue — regulation handling is per-GROUP below.
       continue;
     }
-
-    // 3. Regulation — upsert (idempotent, replaces evidence edges). When
-    // several executable candidates corroborate the same rule, cite them all
-    // in a deterministic order.
-    const predicateConflicts = (conflictsByPredicate.get(candidate.predicate) ?? []).map((c) => c.conflictId);
-    const corroborating = accepted
-      .filter(
-        (other) =>
-          slugFor(other) === slug &&
-          dispositions.get(other.candidateId)?.status === "EXECUTABLE",
-      )
-      .map((other) => `phl:claim:${slug}:${other.sourceRef}`)
-      .sort();
-    upsertRegulation(ctx, {
-      id: regulationId,
-      kind: "regulation",
-      jurisdictionKey: candidate.jurisdictionKey,
-      codeSection: candidate.codeSection ?? candidate.verbatimSupportingText.slice(0, 80),
-      applicability: candidate.applicability,
-      claimIds: corroborating.length > 0 ? corroborating : [claimId],
-      currentness: "CURRENT",
-      conflictRefs: predicateConflicts,
-      notes: candidate.notes,
-    });
-    regulated += 1;
-
-    // 4. Constraint — only where the domain has an executable variant with
-    //    deterministic semantics for this candidate's value.
-    const materialized = materializeConstraintFor(ctx, candidate, {
-      claimId,
-      regulationId,
-      constraintId,
-    });
-    if (materialized) constrained += 1;
-
     outcomes.push({
       candidateId: candidate.candidateId,
+      semanticRuleKey: candidate.semanticRuleKey,
       predicate: candidate.predicate,
       outcome: "compiled",
       reasons: [],
       claimId,
-      regulationId,
-      constraintId: materialized ? constraintId : undefined,
+      regulationId: REGULATION_ID(candidate.semanticRuleKey),
+      constraintId: CONSTRAINT_ID(candidate.semanticRuleKey),
     });
   }
 
-  // 5. One deterministic expert-review item per BLOCKED conflict (idempotent).
-  for (const conflict of conflicts) {
-    if (conflict.resolution !== "blocked") continue;
-    const reviewId = `phl:review:${conflict.conflictId}`;
-    if (ctx.project.nodes[reviewId]) continue;
-    openExpertReviewItem(ctx, {
-      id: reviewId,
-      kind: "expert-review",
-      question: `Conflicting ${conflict.predicate} values require professional resolution`,
-      whyItMatters:
-        "Executable law cannot include either value until a qualified professional resolves the conflict.",
-      category: "regulatory-conflict",
-      affectedNodeIds: conflict.members.map((member) => member.candidateId),
-      evidenceRefs: conflict.members.map((member) => member.sourceRef),
-      severity: "blocking",
-      reviewStatus: "OPEN",
-    });
+  // ONE regulation per semanticRuleKey, desired-state computed then skipped
+  // when semantically identical to the existing node (TRUE idempotency).
+  for (const key of sortedKeys) {
+    const group = groups.get(key)!;
+    const sortedGroup = [...group].sort((a, b) => a.candidateId.localeCompare(b.candidateId));
+    const keyConflicts = conflictsByKey.get(key) ?? [];
+    const hasBlocked = keyConflicts.some((c) => c.resolution === "blocked");
+    const executableMembers = sortedGroup.filter(
+      (c) => dispositions.get(c.candidateId)?.status === "EXECUTABLE",
+    );
+    const winner = executableMembers[0];
+
+    const desired = {
+      id: REGULATION_ID(key),
+      kind: "regulation" as const,
+      jurisdictionKey: (winner ?? sortedGroup[0]).jurisdictionKey,
+      codeSection: (winner ?? sortedGroup[0]).codeSection ?? (winner ?? sortedGroup[0]).verbatimSupportingText.slice(0, 80),
+      applicability: (winner ?? sortedGroup[0]).applicability,
+      claimIds: (executableMembers.length > 0 ? executableMembers : sortedGroup)
+        .map((c) => CLAIM_ID(key, c.sourceRef))
+        .sort(),
+      currentness: (hasBlocked || executableMembers.length === 0 ? ("STALE" as const) : ("CURRENT" as const)),
+      conflictRefs: keyConflicts.map((c) => c.conflictId),
+      notes: (winner ?? sortedGroup[0]).notes,
+    };
+
+    const existing = ctx.project.nodes[desired.id];
+    if (existing && existing.kind === "regulation" && semanticEquals(existing, desired)) {
+      // Exact semantic replay — skip; no revision/event/edge movement.
+      continue;
+    }
+    upsertRegulation(ctx, desired);
+    regulated += 1;
+
+    // Constraint — only where an executable winner exists AND the domain has
+    // a variant with deterministic semantics for this candidate's value.
+    if (winner && !hasBlocked) {
+      const materialized = materializeConstraintFor(ctx, winner, {
+        regulationId: REGULATION_ID(key),
+        constraintId: CONSTRAINT_ID(key),
+      });
+      if (materialized) constrained += 1;
+    }
+
+    // Deterministic expert review per BLOCKED conflict, referencing REAL
+    // graph nodes only (claims, regulation, sources, constraint if present).
+    if (hasBlocked) {
+      const conflict = keyConflicts.find((c) => c.resolution === "blocked")!;
+      const reviewId = `phl:review:${conflict.conflictId}`;
+      if (!ctx.project.nodes[reviewId]) {
+        const affected = [
+          ...desired.claimIds,
+          desired.id,
+          ...sortedGroup.map((c) => c.sourceArtifactId),
+          ...(ctx.project.nodes[CONSTRAINT_ID(key)] ? [CONSTRAINT_ID(key)] : []),
+        ].sort();
+        openExpertReviewItem(ctx, {
+          id: reviewId,
+          kind: "expert-review",
+          question: conflict.explanation,
+          whyItMatters:
+            "Executable law cannot include this rule until a qualified professional resolves the conflict.",
+          category: "regulatory-conflict",
+          affectedNodeIds: affected,
+          evidenceRefs: sortedGroup.map((c) => c.sourceRef).sort(),
+          severity: "blocking",
+          reviewStatus: "OPEN",
+        });
+      }
+    }
   }
 
   return { outcomes, conflicts, claimed, regulated, constrained };
@@ -306,7 +349,7 @@ export function compileRegulations(
 function materializeConstraintFor(
   ctx: CommandContext,
   candidate: CandidateRule,
-  ids: { claimId: string; regulationId: string; constraintId: string },
+  ids: { regulationId: string; constraintId: string },
 ): boolean {
   if (ctx.project.nodes[ids.constraintId]) return true; // already materialized
   const base = {
@@ -414,7 +457,9 @@ function materializeConstraintFor(
         ? ("BY_RIGHT" as const)
         : /^S/i.test(value.text)
           ? ("SPECIAL_EXCEPTION" as const)
-          : null;
+          : /^N/i.test(value.text)
+            ? ("PROHIBITED" as const)
+            : null;
       if (!permission) return false;
       materializeConstraint(ctx, {
         ...base,
@@ -427,7 +472,9 @@ function materializeConstraintFor(
     case "overlay-restriction": {
       if (value.kind !== "qualitative") return false;
       const overlay = candidate.applicability.overlay;
-      const adu = /accessory dwelling unit/i.test(value.text) || /accessory dwelling unit/i.test(candidate.verbatimSupportingText);
+      const adu =
+        /accessory dwelling unit/i.test(value.text) ||
+        /accessory dwelling unit/i.test(candidate.verbatimSupportingText);
       if (!overlay || !adu) return false; // no deterministic prohibits reading
       materializeConstraint(ctx, {
         ...base,

@@ -1,18 +1,18 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { AuthorityLevel } from "../../domain/enums";
-import type {
-  RawEvidenceDocument,
-  RegulatoryExtractionInput,
-  SourceMetadata,
-} from "../../application/regulatory/extraction";
+import { SOURCE_TYPE_FOR_AUTHORITY, type RawEvidenceDocument, type RegulatoryExtractionInput, type SourceMetadata } from "../../application/regulatory/extraction";
 
 /**
  * Loads the canonical Calvary benchmark's RAW captured evidence and source
- * manifest from disk into a RegulatoryExtractionInput. This is the only path
- * by which benchmark evidence reaches the compiler — rules.expected.json is
- * a test oracle and is never read here (no circularity).
+ * manifest from disk into a RegulatoryExtractionInput. Source metadata
+ * carries REAL artifact identity: the actual SHA-256 over the source's
+ * captured bytes (multiple files combined deterministically in sorted-name
+ * order), the exact AuthorityLevel->SourceType mapping, and the raw evidence
+ * file references. rules.expected.json is a test oracle and is never read
+ * here (no circularity).
  */
 
 const Manifest = z.object({
@@ -24,9 +24,33 @@ const Manifest = z.object({
       publisher: z.string().optional(),
       url: z.string().optional(),
       retrievedAt: z.string().optional(),
+      /** Comma-separated raw evidence pointers, e.g. "raw/historic.json, raw/landmark.json". */
+      rawEvidence: z.string().optional(),
     }),
   ),
 });
+
+/** Resolve a manifest pointer like "raw/historic.json" to disk bytes. */
+function readRawFile(fixtureDir: string, pointer: string): Buffer | null {
+  const candidates = [join(fixtureDir, pointer), join(fixtureDir, pointer.replace(/^raw\//, "raw/gis/"))];
+  for (const path of candidates) {
+    if (existsSync(path) && statSync(path).isFile()) {
+      return readFileSync(path);
+    }
+  }
+  return null;
+}
+
+/** Deterministic combined hash: sorted filenames, name + NUL + bytes. */
+export function hashCaptureFiles(files: Array<{ name: string; bytes: Buffer }>): string {
+  const hash = createHash("sha256");
+  for (const file of [...files].sort((a, b) => a.name.localeCompare(b.name))) {
+    hash.update(file.name, "utf-8");
+    hash.update(Buffer.from([0]));
+    hash.update(file.bytes);
+  }
+  return hash.digest("hex");
+}
 
 export function loadBenchmarkEvidence(input: {
   fixtureDir: string;
@@ -35,14 +59,36 @@ export function loadBenchmarkEvidence(input: {
   const manifest = Manifest.parse(
     JSON.parse(readFileSync(join(input.fixtureDir, "sources.manifest.json"), "utf-8")),
   );
-  const sources: SourceMetadata[] = manifest.sources.map((source) => ({
-    sourceRef: source.id,
-    title: source.title,
-    publisher: source.publisher ?? "City of Philadelphia",
-    canonicalUrl: source.url ?? "about:blank",
-    authority: source.authorityLevel,
-    retrievedAt: source.retrievedAt ?? "1970-01-01T00:00:00Z",
-  }));
+
+  const sources: SourceMetadata[] = [];
+  for (const source of manifest.sources) {
+    const pointers = (source.rawEvidence ?? "")
+      .split(",")
+      .map((pointer) => pointer.trim())
+      .filter((pointer) => pointer.length > 0);
+    const files: Array<{ name: string; bytes: Buffer }> = [];
+    for (const pointer of pointers) {
+      const bytes = readRawFile(input.fixtureDir, pointer);
+      if (bytes) files.push({ name: pointer, bytes });
+    }
+    // Sources without captured bytes carry no evidence and cannot become
+    // artifacts — they are skipped (never fabricated).
+    if (files.length === 0) continue;
+    sources.push({
+      sourceRef: source.id,
+      sourceArtifactId: `phl:src:${source.id}@v1`,
+      logicalSourceKey: `phl:src:${source.id}`,
+      version: 1,
+      sourceType: SOURCE_TYPE_FOR_AUTHORITY[source.authorityLevel],
+      title: source.title,
+      publisher: source.publisher ?? "City of Philadelphia",
+      canonicalUrl: source.url ?? "about:blank",
+      authority: source.authorityLevel,
+      retrievedAt: source.retrievedAt ?? "1970-01-01T00:00:00Z",
+      rawContentHash: hashCaptureFiles(files),
+      rawEvidenceRefs: files.map((file) => file.name).sort(),
+    });
+  }
 
   const rawDir = join(input.fixtureDir, "raw");
   const documents: RawEvidenceDocument[] = [];

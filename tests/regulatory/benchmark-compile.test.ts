@@ -85,27 +85,27 @@ describe("benchmark full-compile (raw evidence -> executable law)", () => {
     // The oracle's regulatory constraints are all present and executable.
     const executableIds = gate.executable.map((c) => c.id);
     for (const expected of [
-      "phl:constraint:max-height",
-      "phl:constraint:setback-front",
-      "phl:constraint:setback-side",
-      "phl:constraint:setback-rear",
-      "phl:constraint:occupied-area",
-      "phl:constraint:density-formula",
-      "phl:constraint:parking-requirement:household-living-multi-family",
-      "phl:constraint:parking-requirement:religious-assembly",
-      "phl:constraint:use-permission:household-living-multi-family",
-      "phl:constraint:use-permission:religious-assembly",
-      "phl:constraint:overlay-restriction:six",
-      "phl:constraint:density-bonus",
+      "phl:constraint:height:max:principal",
+      "phl:constraint:setback:front",
+      "phl:constraint:setback:side:min",
+      "phl:constraint:setback:rear:min",
+      "phl:constraint:bulk:occupied-area:max",
+      "phl:constraint:density:min-lot-area-per-unit",
+      "phl:constraint:parking:multi-family:minimum",
+      "phl:constraint:parking:religious-assembly:minimum",
+      "phl:constraint:use:multi-family:permission",
+      "phl:constraint:use:religious-assembly:permission",
+      "phl:constraint:overlay:/six:adu-prohibition",
+      "phl:constraint:bonus:mixed-income:percent",
     ]) {
       expect(executableIds, expected).toContain(expected);
     }
 
     // Spot-check the oracle's load-bearing values in executable law.
-    const height = gate.executable.find((c) => c.id === "phl:constraint:max-height");
+    const height = gate.executable.find((c) => c.id === "phl:constraint:height:max:principal");
     expect(height?.constraintKind === "height" && height.limit.value).toBe(38);
     const parking = gate.executable.find(
-      (c) => c.id === "phl:constraint:parking-requirement:household-living-multi-family",
+      (c) => c.id === "phl:constraint:parking:multi-family:minimum",
     );
     expect(
       parking?.constraintKind === "parking-requirement" &&
@@ -121,10 +121,10 @@ describe("benchmark full-compile (raw evidence -> executable law)", () => {
     expect(gate.executable.some((c) => JSON.stringify(c).includes('"far"'))).toBe(false);
 
     // lot-width / lot-area: sourced regulation WITHOUT a fake constraint.
-    expect(project.nodes["phl:reg:lot-width"]?.kind).toBe("regulation");
-    expect(project.nodes["phl:constraint:lot-width"]).toBeUndefined();
-    expect(project.nodes["phl:reg:lot-area"]?.kind).toBe("regulation");
-    expect(project.nodes["phl:constraint:lot-area"]).toBeUndefined();
+    expect(project.nodes["phl:reg:lot:width:min"]?.kind).toBe("regulation");
+    expect(project.nodes["phl:constraint:lot:width:min"]).toBeUndefined();
+    expect(project.nodes["phl:reg:lot:area:min"]?.kind).toBe("regulation");
+    expect(project.nodes["phl:constraint:lot:area:min"]).toBeUndefined();
 
     // Every executable decision traces to claims and source artifacts.
     for (const decision of gate.decisions.filter((d) => d.executable)) {
@@ -154,7 +154,7 @@ describe("benchmark full-compile (raw evidence -> executable law)", () => {
     const seededHeight = seededConstraints.find(
       (c) => c.kind === "constraint" && c.constraintKind === "height",
     );
-    const compilerHeight = gate.executable.find((c) => c.id === "phl:constraint:max-height");
+    const compilerHeight = gate.executable.find((c) => c.id === "phl:constraint:height:max:principal");
     expect(
       compilerHeight?.kind === "constraint" && compilerHeight.constraintKind === "height" && compilerHeight.limit.value,
     ).toBe(seededHeight?.kind === "constraint" && seededHeight.constraintKind === "height" ? seededHeight.limit.value : undefined);
@@ -179,7 +179,7 @@ describe("benchmark full-compile (raw evidence -> executable law)", () => {
     const project = bareProject();
     await compileBenchmark(project);
     const gate = selectExecutableConstraints(project);
-    const heightId = "phl:constraint:max-height";
+    const heightId = "phl:constraint:height:max:principal";
     expect(gate.executable.some((c) => c.id === heightId)).toBe(true);
 
     recordScenario(contextFor(project), {
@@ -211,7 +211,7 @@ describe("benchmark full-compile (raw evidence -> executable law)", () => {
       certificate?.kind === "scenario-certificate" ? certificate.dependencies.map((d) => d.nodeId) : [],
     );
     expect(pinned.has(heightId)).toBe(true);
-    expect(pinned.has("phl:reg:max-height")).toBe(true);
+    expect(pinned.has("phl:reg:height:max:principal")).toBe(true);
     expect([...pinned].some((id) => id.startsWith("phl:src:"))).toBe(true);
   });
 });

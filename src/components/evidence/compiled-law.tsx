@@ -36,6 +36,8 @@ type ConflictRow = {
 };
 
 type CompiledLawResponse = {
+  status?: "compiled" | "needs-evidence" | "unsupported-district";
+  reason?: string;
   district?: string;
   law?: LawRow[];
   conflicts?: ConflictRow[];
@@ -88,6 +90,20 @@ export function CompiledLaw() {
     );
   }
   if (!state) return null;
+
+  if (state.status && state.status !== "compiled") {
+    return (
+      <section aria-label="Compiled law" className="rounded-md border border-stone-300 bg-white px-4 py-3">
+        <p className="text-xs font-semibold tracking-[0.14em] text-stone-500">COMPILED LAW</p>
+        <p className="mt-1 text-sm text-stone-700" data-testid="compiled-law-unavailable">
+          {state.reason ?? "Compiled law is not available for this property yet."}
+        </p>
+        <p className="mt-0.5 text-xs text-stone-500">
+          Acrevia only applies law it can prove applies to this property — never another property&apos;s rules.
+        </p>
+      </section>
+    );
+  }
 
   return (
     <section aria-label="Compiled law" className="rounded-md border border-stone-300 bg-white">

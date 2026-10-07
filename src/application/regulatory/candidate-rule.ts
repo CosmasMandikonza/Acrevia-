@@ -44,7 +44,15 @@ export type CandidateApplicability = z.infer<typeof CandidateApplicability>;
 
 export const CandidateRule = z
   .object({
+    /** UNIQUE EVIDENCE OBSERVATION id (semanticRuleKey + source). */
     candidateId: z.string().min(1),
+    /**
+     * The SEMANTIC LEGAL RULE this candidate observes — e.g.
+     * `height:max:principal`, `use:multi-family:permission`,
+     * `overlay:/six:adu-prohibition`. Different legal propositions must
+     * never share a key; the regulation/constraint identity derives from it.
+     */
+    semanticRuleKey: z.string().min(1),
     /** Graph id of the source artifact this candidate was extracted from. */
     sourceArtifactId: z.string().min(1),
     /** Manifest source reference (e.g. "S5") for human-facing provenance. */

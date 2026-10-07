@@ -1,6 +1,6 @@
 # ADR 0006 — Regulatory Compiler: extractor proposes, verifier decides, graph records, solver gate filters
 
-Status: proposed with issue #5.
+Status: proposed with issue #5 (revised after PR #28 review).
 
 ## Context
 
@@ -24,12 +24,19 @@ benchmark cannot be circular.
    contract; verification and everything downstream stay deterministic
    either way.
 
-2. **CandidateRule carries everything needed for independent checking**:
-   candidateId, sourceArtifactId + sourceRef, subject, jurisdiction,
-   predicate, proposedValue (quantity/qualitative/unknown), applicability,
-   codeSection locator, verbatimSupportingText, authority, retrieval/effective
-   metadata, extractionMethod. A candidate is NOT canonical truth and never
-   writes to project.nodes.
+2. **Semantic rule identity.** Every candidate carries a `semanticRuleKey`
+   (`height:max:principal`, `use:multi-family:permission`,
+   `overlay:/six:adu-prohibition`, `overlay:/six:applicability`, ...).
+   Identity rules: candidateId/claimId = UNIQUE EVIDENCE OBSERVATION
+   (`<semanticRuleKey>:<sourceRef>`); regulationId/constraintId = the
+   SEMANTIC LEGAL RULE (`<semanticRuleKey>`). Duplicate candidate ids are
+   rejected loudly. Different legal propositions (/SIX applies vs ADUs
+   prohibited in /SIX) never collapse; the ADU constraint traces to the
+   prohibition regulation, claim, and verbatim quote specifically.
+   CandidateRule carries everything needed for independent checking:
+   source identity + artifact id, verbatim text, locator, retrieval metadata,
+   normalized value+unit, applicability, extraction method. A candidate is
+   NOT canonical truth and never writes to project.nodes.
 
 3. **Verification decides (second pass).** Compiler-internal ACCEPT/REJECT
    decisions — deliberately NOT EvidenceState values (the domain vocabulary
@@ -40,9 +47,13 @@ benchmark cannot be circular.
    not), and applicability that does not match the subject district.
 
 4. **Conflict analysis is explicit, not a rank+date comparator.** Grouping
-   by jurisdiction+subject+predicate+applicability+dimension; only genuinely
-   disagreeing quantity values conflict. Resolution reasons about authority,
-   currentness, supersession, and applicability:
+   by SEMANTIC RULE KEY; disagreement is measured in NORMALIZED LEGAL
+   SEMANTICS — quantities (`q:<value> <unit>`), use permissions
+   (BY_RIGHT/SPECIAL_EXCEPTION/PROHIBITED), overlay prohibitions
+   (`prohibits:<subject>`), parking formulas (normalized text) — so
+   `multi-family = BY_RIGHT` vs `SPECIAL_EXCEPTION` conflicts exactly like
+   55 ft vs 45 ft. Resolution reasons about authority, currentness,
+   supersession, and applicability:
    - same logical source, newer capture → SUPERSEDED (supersession machinery);
    - adopted code vs older/lower source → lower EXCLUDED ("never overrides
      adopted code"), discrepancy stays visible as a CONFLICT claim with full
@@ -54,20 +65,30 @@ benchmark cannot be circular.
    Decisions are computed over sorted groups, so [55, 45] and [45, 55]
    produce identical results (source-order invariance, tested).
 
-5. **Claims are per evidence observation** (`phl:claim:<rule>:<sourceRef>`):
-   the excluded 55 ft memo and the winning 45 ft adopted code each keep
-   their own claim, so discrepancies stay inspectable; regulations cite only
-   executable (corroborating) claims and carry conflictRefs.
+5. **Claims are per evidence observation**
+   (`phl:claim:<semanticRuleKey>:<sourceRef>`): the excluded 55 ft memo and
+   the winning 45 ft adopted code each keep their own claim, so discrepancies
+   stay inspectable; ONE regulation per semanticRuleKey cites only executable
+   (corroborating) claims and carries conflictRefs.
 
-6. **Canonical compilation is idempotent and audited.** Source artifacts
-   replay exactly (create-only, content-immutable); claims/constraints/
-   reviews are create-only with deterministic ids (compiler skips existing);
-   regulations upsert with edge replacement. Re-running the compiler on the
-   same evidence leaves the semantic graph unchanged — no duplicate claims,
-   regulations, reviews, or conflict references. Previously-trusted rules go
-   stale through TYPED COMMANDS (supersedeSourceArtifact / upsertRegulation),
-   never by erasing history; the executable gate then excludes them and the
-   dependency-aware freshness machinery invalidates dependent certificates.
+6. **Canonical compilation is TRULY idempotent and audited.** Source
+   artifacts are constructed from REAL captured bytes (SHA-256 over the
+   source's files combined deterministically in sorted-name order; exact
+   AuthorityLevel->SourceType mapping; no fabricated hashes) and ALWAYS
+   replay through addSourceArtifact so its immutability guard verifies exact
+   content. Claims/constraints/reviews are create-only with deterministic
+   ids. Regulations are grouped ONE per semanticRuleKey and an exact
+   semantic replay is SKIPPED — re-compiling identical evidence runs ZERO
+   commands: revision, event count, edges, regulation revisions, node
+   semantic hashes, and the canonical encoded state are all unchanged.
+   CONFLICT LIFECYCLE: when later evidence creates an unresolved conflict,
+   the old constraint remains for audit, the regulation is upserted to
+   currentness STALE with conflictRefs, the gate excludes it, a deterministic
+   expert review opens whose affectedNodeIds reference REAL graph nodes
+   (claims, regulation, source artifacts, constraint — never candidate ids),
+   and dependent certificates grade non-CURRENT through the existing
+   freshness machinery. Previously-trusted rules go stale through TYPED
+   COMMANDS, never by erasing history.
 
 7. **Executable solver gate returns reasons, not just an array.**
    `selectExecutableConstraints(project)` → `{ executable, decisions }` with
@@ -86,10 +107,23 @@ benchmark cannot be circular.
    constraints until #7 defines their participation; FAR stays UNKNOWN
    (never 0, never "not applicable").
 
-9. **UI scope.** A COMPILED LAW section on the existing Evidence surface —
+9. **Property binding is fail-closed.** `/api/regulatory/compile` separates
+   JURISDICTION-LEVEL LAW from PROPERTY-SPECIFIC EVIDENCE: the signed
+   accepted session supplies property identity, base district, overlays, and
+   site facts; the reusable benchmark corpus contributes ONLY jurisdiction-
+   wide legal texts (S5/S6/S7) — never Calvary's property-specific captures
+   (S1-S4/S8-S11). RM-1-column law compiles only when the signed property is
+   actually RM-1; /SIX law only when the signed overlays prove /SIX applies;
+   a missing district NEVER defaults to RM-1 (needs-evidence); districts
+   outside the captured corpus get an honest unsupported-district state.
+   Browser-proven A->B: accepting the JFK property after Calvary shows the
+   honest unavailable state and zero Calvary rules, facts, or overlays.
+
+10. **UI scope.** A COMPILED LAW section on the existing Evidence surface —
    values, locators, sources, evidence states, honest unresolved dimensions,
-   visible conflicts with the excluded value and why it lost. Inspection
-   list, not a dashboard; the map/property remains the hero.
+   visible conflicts with the excluded value and why it lost; honest
+   unavailable states for unsupported properties. Inspection list, not a
+   dashboard; the map/property remains the hero.
 
 ## Consequences
 

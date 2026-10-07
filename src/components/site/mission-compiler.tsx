@@ -476,7 +476,6 @@ export function MissionCompiler({
               <ProposalRow
                 key={`i-${proposal.proposalId}`}
                 proposal={proposal}
-                pending={pending}
                 structureName={preserveStructureName(proposal.normalized, structures)}
                 onConfirm={() => confirmProposal(proposal)}
                 onRemove={() => removeProposal(proposal.proposalId)}
@@ -498,7 +497,6 @@ export function MissionCompiler({
               <ProposalRow
                 key={`d-${proposal.proposalId}`}
                 proposal={proposal}
-                pending={pending}
                 structureName={preserveStructureName(proposal.normalized, structures)}
                 onConfirm={() => confirmProposal(proposal)}
                 onRemove={() => removeProposal(proposal.proposalId)}
@@ -561,8 +559,7 @@ export function MissionCompiler({
                 <ConfirmedRule
                   constraint={constraint}
                   structureName={preserveStructureName(constraint.normalized, structures)}
-                  pending={pending}
-                  onEditValue={(normalized) =>
+                    onEditValue={(normalized) =>
                     void runCommand({
                       kind: "confirm",
                       input: {
@@ -625,15 +622,12 @@ export function MissionCompiler({
 
 function ProposalRow({
   proposal,
-  pending,
   structureName,
   onConfirm,
   onRemove,
   onSoftToggle,
 }: {
   proposal: MissionProposal;
-  /** Canonical mutation in flight — confirm/preference actions are locked. */
-  pending: boolean;
   structureName?: string;
   onConfirm: () => void;
   onRemove: () => void;
@@ -658,16 +652,14 @@ function ProposalRow({
         <button
           type="button"
           onClick={onConfirm}
-          disabled={pending}
-          className="rounded bg-olive-700 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-40"
+          className="rounded bg-olive-700 px-2.5 py-1 text-xs font-semibold text-white"
         >
           Confirm{proposal.hardOrSoft === "hard" ? " — must keep" : " — preference"}
         </button>
         <button
           type="button"
           onClick={() => onSoftToggle(proposal.hardOrSoft === "hard")}
-          disabled={pending}
-          className="rounded border border-stone-300 px-2 py-1 text-xs text-stone-600 hover:border-stone-500 disabled:opacity-40"
+          className="rounded border border-stone-300 px-2 py-1 text-xs text-stone-600 hover:border-stone-500"
         >
           {proposal.hardOrSoft === "hard" ? "Make preference" : "Make must keep"}
         </button>
@@ -686,14 +678,12 @@ function ProposalRow({
 function ConfirmedRule({
   constraint,
   structureName,
-  pending,
   onEditValue,
   onToggleSoft,
   onRetract,
 }: {
   constraint: MissionConstraintView;
   structureName?: string;
-  pending: boolean;
   onEditValue: (normalized: MissionNormalized) => void;
   onToggleSoft: (soft: boolean) => void;
   onRetract: () => void;
@@ -736,7 +726,6 @@ function ConfirmedRule({
           />
           <button
             type="button"
-            disabled={pending}
             onClick={() => {
               const value = Number(draft);
               if (
@@ -754,7 +743,7 @@ function ConfirmedRule({
                 setEditing(false);
               }
             }}
-            className="rounded bg-stone-900 px-2 py-1 text-xs font-medium text-ivory disabled:opacity-40"
+            className="rounded bg-stone-900 px-2 py-1 text-xs font-medium text-ivory"
           >
             Save
           </button>
@@ -782,17 +771,15 @@ function ConfirmedRule({
           ) : null}
           <button
             type="button"
-            disabled={pending}
             onClick={() => onToggleSoft(constraint.hardOrSoft === "hard")}
-            className="rounded border border-stone-300 px-2 py-0.5 text-xs text-stone-600 hover:border-stone-500 disabled:opacity-40"
+            className="rounded border border-stone-300 px-2 py-0.5 text-xs text-stone-600 hover:border-stone-500"
           >
             {constraint.hardOrSoft === "hard" ? "Change to preference" : "Change to must keep"}
           </button>
           <button
             type="button"
-            disabled={pending}
             onClick={onRetract}
-            className="rounded px-2 py-0.5 text-xs text-stone-500 underline hover:text-rust-700 disabled:opacity-40"
+            className="rounded px-2 py-0.5 text-xs text-stone-500 underline hover:text-rust-700"
           >
             Retract
           </button>

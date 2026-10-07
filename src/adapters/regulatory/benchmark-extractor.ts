@@ -39,12 +39,17 @@ function sourceMeta(sources: SourceMetadata[], sourceRef: string): SourceMetadat
   return sources.find((source) => source.sourceRef === sourceRef);
 }
 
-function candidateId(predicate: string, sourceRef: string, suffix = ""): string {
-  return `cand:${predicate}:${sourceRef}${suffix ? `:${suffix}` : ""}`;
+function candidateId(semanticRuleKey: string, sourceRef: string, suffix = ""): string {
+  return `cand:${semanticRuleKey}:${sourceRef}${suffix ? `:${suffix}` : ""}`;
 }
 
-function graphSourceId(sourceRef: string): string {
-  return `phl:src:${sourceRef}@v1`;
+/** Slug a use/overlay name into a semantic key fragment. */
+function keySlug(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/^[\/]+/, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function baseCandidate(
@@ -52,6 +57,7 @@ function baseCandidate(
   sourceRef: string,
   sources: SourceMetadata[],
   init: {
+    semanticRuleKey: string;
     predicate: CandidateRuleType["predicate"];
     proposedValue: CandidateRuleType["proposedValue"];
     applicability?: CandidateRuleType["applicability"];
@@ -65,8 +71,9 @@ function baseCandidate(
   const meta = sourceMeta(sources, sourceRef);
   if (!meta) return null;
   return CandidateRule.parse({
-    candidateId: candidateId(init.predicate, sourceRef, suffix),
-    sourceArtifactId: graphSourceId(sourceRef),
+    candidateId: candidateId(init.semanticRuleKey, sourceRef, suffix),
+    semanticRuleKey: init.semanticRuleKey,
+    sourceArtifactId: meta.sourceArtifactId,
     sourceRef,
     subjectNodeId: input.subject.subjectNodeId,
     jurisdictionKey: input.subject.jurisdictionKey,
@@ -130,6 +137,7 @@ function extractQuickGuide(
     const normalized = normalizeFeet(lotWidth);
     if (normalized) {
       push({
+        semanticRuleKey: "lot:width:min",
         predicate: "lot-width",
         proposedValue: asUnitQuantity(normalized),
         codeSection: guideLocator,
@@ -144,6 +152,7 @@ function extractQuickGuide(
     const normalized = normalizeSqFt(lotArea);
     if (normalized) {
       push({
+        semanticRuleKey: "lot:area:min",
         predicate: "lot-area",
         proposedValue: asUnitQuantity(normalized),
         codeSection: guideLocator,
@@ -158,6 +167,7 @@ function extractQuickGuide(
     const normalized = normalizePercent(occupied);
     if (normalized) {
       push({
+        semanticRuleKey: "bulk:occupied-area:max",
         predicate: "occupied-area",
         proposedValue: asUnitQuantity(normalized),
         applicability: { district: input.subject.district, lotType: "intermediate" },
@@ -172,7 +182,8 @@ function extractQuickGuide(
   const frontSetback = tableCell(text, /Min\.\s*Front\s*Setback/i);
   if (frontSetback) {
     push({
-      predicate: "setback-front",
+      semanticRuleKey: "setback:front",
+        predicate: "setback-front",
       proposedValue: {
         kind: "qualitative",
         text: `Context-based front facade placement: ${frontSetback} (table notes [5], [6] govern).`,
@@ -189,6 +200,7 @@ function extractQuickGuide(
     const normalized = minimumFeetBound(sideYard);
     if (normalized) {
       push({
+        semanticRuleKey: "setback:side:min",
         predicate: "setback-side",
         proposedValue: asUnitQuantity(normalized),
         codeSection: guideLocator,
@@ -204,6 +216,7 @@ function extractQuickGuide(
     const normalized = normalizeFeet(rearYard);
     if (normalized) {
       push({
+        semanticRuleKey: "setback:rear:min",
         predicate: "setback-rear",
         proposedValue: asUnitQuantity(normalized),
         codeSection: guideLocator,
@@ -218,6 +231,7 @@ function extractQuickGuide(
     const normalized = normalizeFeet(heightFar);
     if (normalized) {
       push({
+        semanticRuleKey: "height:max:principal",
         predicate: "max-height",
         proposedValue: asUnitQuantity(normalized),
         codeSection: guideLocator,
@@ -230,6 +244,7 @@ function extractQuickGuide(
     const farNote = text.match(/floor area ratio/i);
     if (!farNote) {
       push({
+        semanticRuleKey: "far:max",
         predicate: "far",
         proposedValue: { kind: "unknown" },
         codeSection: guideLocator,
@@ -246,7 +261,8 @@ function extractQuickGuide(
   if (densityIndex >= 0) {
     const densityStart = Math.max(0, text.lastIndexOf('[1]', densityIndex));
     push({
-      predicate: "density-formula",
+      semanticRuleKey: "density:min-lot-area-per-unit",
+        predicate: "density-formula",
       proposedValue: {
         kind: "qualitative",
         text: "Tiered minimum lot area per dwelling unit: 360 sq ft per unit for the first 1,440 sq ft of lot area; 480 sq ft per unit above 1,440; fractional units round down.",
@@ -262,6 +278,7 @@ function extractQuickGuide(
   const multiFamily = tableRowFor(text, /Multi-Family/i);
   if (multiFamily) {
     push({
+      semanticRuleKey: "use:multi-family:permission",
       predicate: "use-permission",
       proposedValue: { kind: "qualitative", text: multiFamily },
       applicability: { district: input.subject.district, use: "household-living-multi-family" },
@@ -273,6 +290,7 @@ function extractQuickGuide(
   const religious = tableRowFor(text, /Religious\s*Assembly/i);
   if (religious) {
     push({
+      semanticRuleKey: "use:religious-assembly:permission",
       predicate: "use-permission",
       proposedValue: { kind: "qualitative", text: religious },
       applicability: { district: input.subject.district, use: "religious-assembly" },
@@ -285,6 +303,7 @@ function extractQuickGuide(
   const familyChildCare = tableRowFor(text, /Family\s*Child\s*Care/i);
   if (childCareCenter && familyChildCare) {
     push({
+      semanticRuleKey: "use:child-care:permission",
       predicate: "use-permission",
       proposedValue: { kind: "qualitative", text: `${childCareCenter} / ${familyChildCare}` },
       applicability: { district: input.subject.district, use: "child-care" },
@@ -298,7 +317,8 @@ function extractQuickGuide(
   const bonus = text.match(/Mixed Income Housing[^]*?Moderate Income:\s*(\d+)%/);
   if (bonus) {
     push({
-      predicate: "density-bonus",
+      semanticRuleKey: "bonus:mixed-income:percent",
+        predicate: "density-bonus",
       proposedValue: { kind: "quantity", value: Number(bonus[1]), unit: "percent" as const },
       applicability: { district: input.subject.district, use: "mixed-income-housing" },
       codeSection: "The Philadelphia Code § 14-702(7) (guide bonus summary)",
@@ -326,6 +346,7 @@ function extractParkingCode(
     const normalized = normalizeCount(multiFamily[2]);
     if (normalized) {
       const candidate = baseCandidate(input, "S7", sources, {
+        semanticRuleKey: "parking:multi-family:minimum",
         predicate: "parking-requirement",
         proposedValue: asUnitQuantity(normalized),
         applicability: { district: input.subject.district, use: "household-living-multi-family" },
@@ -341,6 +362,7 @@ function extractParkingCode(
   const religious = text.match(/Religious Assembly — "([^"]+)"/);
   if (religious) {
     const candidate = baseCandidate(input, "S7", sources, {
+      semanticRuleKey: "parking:religious-assembly:minimum",
       predicate: "parking-requirement",
       proposedValue: { kind: "qualitative", text: religious[1] },
       applicability: { use: "religious-assembly" },
@@ -365,6 +387,7 @@ function extractOverlayCode(
 
   if (/Accessory dwelling units shall not be permitted/.test(text)) {
     const candidate = baseCandidate(input, "S6", sources, {
+      semanticRuleKey: "overlay:/six:adu-prohibition",
       predicate: "overlay-restriction",
       proposedValue: {
         kind: "qualitative",
@@ -378,8 +401,9 @@ function extractOverlayCode(
     if (candidate) out.push(candidate);
   }
 
-  if (/\(1\)\. Applicability\./.test(text)) {
+  if (/\(1\)\s+Applicability\./.test(text)) {
     const candidate = baseCandidate(input, "S6", sources, {
+      semanticRuleKey: "overlay:/six:applicability",
       predicate: "overlay-restriction",
       proposedValue: {
         kind: "qualitative",
@@ -444,6 +468,7 @@ function extractGis(
       const area = props.square_ft !== undefined ? normalizeRecordedNumber(props.square_ft as string | number, "sq_ft") : null;
       if (area) {
         const candidate = baseCandidate(input, doc.sourceRef, sources, {
+          semanticRuleKey: "site:building-footprint",
           predicate: "building-footprint-area",
           proposedValue: asUnitQuantity(area),
           codeSection: "building_footprints GIS layer (recorded square_ft)",
@@ -464,6 +489,7 @@ function extractGis(
       const area = row.gross_area !== undefined ? normalizeRecordedNumber(row.gross_area as string | number, "sq_ft") : null;
       if (area) {
         const candidate = baseCandidate(input, doc.sourceRef, sources, {
+          semanticRuleKey: "site:parcel-area",
           predicate: "parcel-area",
           proposedValue: asUnitQuantity(area),
           codeSection: "PWD Parcels registry record (gross_area)",
@@ -494,6 +520,7 @@ function extractGis(
       const zoning = String(attrs(0).long_code ?? attrs(0).zoning ?? "");
       if (zoning) {
         push({
+          semanticRuleKey: "zoning:district",
           predicate: "zoning-district",
           proposedValue: { kind: "qualitative", text: zoning },
           codeSection: "L&I Zoning_BaseDistricts GIS layer (parcel centroid query)",
@@ -501,6 +528,7 @@ function extractGis(
           extractionMethod: "gis-feature-attribute",
         });
         push({
+          semanticRuleKey: "jurisdiction:frame",
           predicate: "zoning-district",
           proposedValue: {
             kind: "qualitative",
@@ -521,6 +549,7 @@ function extractGis(
         const section = String(a.code_section ?? "");
         if (!name || !section) continue;
         push({
+          semanticRuleKey: `overlay:${keySlug(name)}:applicability`,
           predicate: "overlay-restriction",
           proposedValue: {
             kind: "qualitative",
@@ -539,6 +568,7 @@ function extractGis(
       const normalized = normalizeSqFt(String(attrs(0).parcel_area ?? ""));
       if (normalized) {
         push({
+          semanticRuleKey: "site:parcel-area",
           predicate: "parcel-area",
           proposedValue: asUnitQuantity(normalized),
           codeSection: "PWD Parcels GIS layer (registry parcel)",
@@ -552,6 +582,7 @@ function extractGis(
       const area = normalizeSqFt(String(attrs(0).shape_area ?? attrs(0).SHAPE_Area ?? ""));
       if (area) {
         push({
+          semanticRuleKey: "site:building-footprint",
           predicate: "building-footprint-area",
           proposedValue: asUnitQuantity(area),
           codeSection: "building_footprints GIS layer",
@@ -565,6 +596,7 @@ function extractGis(
       const zone = String(attrs(0).fld_zone ?? "");
       if (zone) {
         push({
+          semanticRuleKey: "site:flood-zone",
           predicate: "site-flood",
           proposedValue: { kind: "qualitative", text: zone },
           codeSection: "fema_floodplain_2023 (City republication)",
@@ -577,6 +609,7 @@ function extractGis(
     case "historic.json": {
       const featureCount = json.features?.length ?? 0;
       push({
+        semanticRuleKey: "site:historic-screen",
         predicate: "site-historic-screen",
         proposedValue: {
           kind: "qualitative",
@@ -594,6 +627,7 @@ function extractGis(
     case "rco.json": {
       const count = json.features?.length ?? 0;
       push({
+        semanticRuleKey: "governance:rco-coverage",
         predicate: "rco-coverage",
         proposedValue: {
           kind: "qualitative",
