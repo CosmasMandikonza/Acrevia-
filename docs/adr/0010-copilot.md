@@ -55,11 +55,18 @@ subsystem.
    path exists for them to mutate anything (mutations require an explicit UI
    confirmation of a typed payload).
 
-6. **Honest degradation.** The provider is a single dependency-free
-   OpenAI-compatible adapter (`src/adapters/ai/copilot-provider.ts`) gated on
-   `ACREVIA_AI_BASE_URL` / `ACREVIA_AI_API_KEY` / `ACREVIA_AI_MODEL`.
-   Unconfigured → `ai-unavailable` with no canned prose; provider failure →
-   `ai-error` with the honest reason. Deterministic Acrevia is unaffected.
+6. **Honest degradation.** Providers sit behind the `CopilotProvider`
+   contract and a configuration-only selector
+   (`src/adapters/ai/provider-selection.ts`): Gloo AI Studio (dependency-free
+   OpenAI-compatible adapter, `ACREVIA_AI_BASE_URL` / `ACREVIA_AI_API_KEY` /
+   `ACREVIA_AI_MODEL`) is the intended provider; Anthropic Messages API
+   (`ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL`, `anthropic-provider.ts`) is the
+   fallback while Gloo promo funding is unavailable. `ACREVIA_AI_PROVIDER`
+   (`auto` default, `gloo`, `anthropic`) resolves precedence; an explicitly
+   selected provider with incomplete configuration never falls through, and
+   unavailability reasons list missing variable NAMES only. Unconfigured →
+   `ai-unavailable` with no canned prose; provider failure → `ai-error` with
+   the honest reason. Deterministic Acrevia is unaffected.
 
 7. **Sidecar UI.** The rail stays a right drawer over the canvas; tool runs,
    proposals, and the board brief render as structured cards that visually

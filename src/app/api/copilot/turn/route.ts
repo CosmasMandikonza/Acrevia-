@@ -5,11 +5,8 @@ import type { CommitReceipt } from "../../../../adapters/gis/commit-receipt";
 import { MissionCommandLog } from "../../../../application/mission/rebuild";
 import { buildTrustedProofContext } from "../../../../application/proof/trusted-context";
 import { runCopilotTurn } from "../../../../application/copilot/orchestrate";
-import {
-  COPILOT_AI_ENV_KEYS,
-  CopilotProviderError,
-  copilotProviderFromEnv,
-} from "../../../../adapters/ai/copilot-provider";
+import { CopilotProviderError } from "../../../../adapters/ai/copilot-provider";
+import { selectCopilotProvider } from "../../../../adapters/ai/provider-selection";
 
 /**
  * POST /api/copilot/turn — the Copilot trust boundary (issue #10).
@@ -90,13 +87,16 @@ export async function POST(request: Request) {
 
   // AI availability is checked FIRST so an unconfigured server answers
   // honestly without any rebuild cost — and never substitutes canned prose.
-  const provider = copilotProviderFromEnv();
-  if (!provider) {
+  // Gloo is the intended provider; Anthropic is the configured fallback
+  // (selection rules in src/adapters/ai/provider-selection.ts).
+  const selection = selectCopilotProvider();
+  if (selection.status === "unavailable") {
     return NextResponse.json({
       status: "ai-unavailable",
-      reason: `Copilot AI is not configured on this server. Set ${COPILOT_AI_ENV_KEYS.join(", ")} to enable it. All deterministic Acrevia surfaces (Site, Scenarios, Forge, Evidence) keep working without the Copilot.`,
+      reason: selection.reason,
     });
   }
+  const provider = selection.provider;
 
   try {
     const trusted = await buildTrustedProofContext(
