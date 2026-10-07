@@ -44,6 +44,15 @@ const SiteResolution = nextDynamic(
     ),
   },
 );
+const ScenarioSolver = nextDynamic(
+  () => import("@/components/site/scenario-solver").then((m) => m.ScenarioSolver),
+  {
+    ssr: false,
+    loading: () => (
+      <p className="text-sm text-stone-500">Preparing the scenario solver…</p>
+    ),
+  },
+);
 
 export function Workspace() {
   const params = useSearchParams();
@@ -166,6 +175,10 @@ export function Workspace() {
             </section>
           ) : surface.id === "evidence" && accepted ? (
             <EvidenceLedger record={accepted} />
+          ) : surface.id === "scenarios" && accepted ? (
+            <section className="spatial-canvas spatial-canvas-live overflow-y-auto" aria-label="Scenario solver">
+              <ScenarioSolver />
+            </section>
           ) : (
           <section
             className="spatial-canvas"
