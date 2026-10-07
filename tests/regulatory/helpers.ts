@@ -74,7 +74,7 @@ export function useCandidate(
     sourceRef,
     evidenceAnchor: {
       documentId: `${sourceRef}.md`,
-      exactText: `Multi-Family | ${permissionText}`,
+      exactText: `| Multi-Family | ${permissionText} |`,
     },
     subjectNodeId: PARCEL,
     jurisdictionKey: "philadelphia-pa",

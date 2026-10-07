@@ -124,7 +124,7 @@ export function compileRegulations(
   input: {
     candidates: CandidateRule[];
     sources: SourceMetadata[];
-    subject: { district?: string };
+    subject: { district?: string; parcelNodeId?: string; jurisdictionKey?: string };
     /** Raw captures, so the verifier can bind every candidate to evidence. */
     documents?: RawEvidenceDocument[];
     /**
@@ -154,6 +154,10 @@ export function compileRegulations(
     sources: input.sources,
     subject: input.subject,
     documents: input.documents ?? [],
+    trustedContext: {
+      subjectNodeId: input.subject.parcelNodeId ?? "",
+      jurisdictionKey: input.subject.jurisdictionKey ?? "",
+    },
   });
 
   // Source artifacts ALWAYS replay through the command so its immutability
@@ -191,44 +195,48 @@ export function compileRegulations(
   const outcomes: CandidateOutcome[] = [];
   for (const decision of verification) {
     const candidate = decision.candidate;
-    const claimId = CLAIM_ID(candidate.semanticRuleKey, candidate.sourceArtifactId);
+    const v = decision.verified;
+    const key = v ? v.verifiedSemanticRuleKey : candidate.semanticRuleKey;
+    const predicate: ClaimPredicate = v ? v.verifiedPredicate : candidate.predicate;
+    const claimId = v
+      ? CLAIM_ID(v.verifiedSemanticRuleKey, v.candidate.sourceArtifactId)
+      : CLAIM_ID(candidate.semanticRuleKey, candidate.sourceArtifactId);
     if (decision.status === "REJECT") {
       outcomes.push({
         candidateId: candidate.candidateId,
-        semanticRuleKey: candidate.semanticRuleKey,
-        predicate: candidate.predicate,
+        semanticRuleKey: key,
+        predicate,
         outcome: "rejected",
         reasons: decision.reasons,
       });
       continue;
     }
-    const verified = decision.verified;
-    if (!verified || verified.verifiedValue.kind === "abstain") {
+    if (!v || v.verifiedValue.kind === "abstain") {
       const isUnknown = candidate.proposedValue.kind === "unknown";
       outcomes.push({
         candidateId: candidate.candidateId,
-        semanticRuleKey: candidate.semanticRuleKey,
-        predicate: candidate.predicate,
+        semanticRuleKey: key,
+        predicate,
         outcome: isUnknown ? "unknown-recorded" : "abstained",
-        reasons: verified
-          ? [verified.verifiedValue.kind === "abstain" ? verified.verifiedValue.reason : "abstained"]
+        reasons: v
+          ? [v.verifiedValue.kind === "abstain" ? v.verifiedValue.reason : "abstained"]
           : ["no verifier-owned semantics"],
       });
       // ABSTAIN path: record the sourced Claim (create-only) and STOP —
       // no Regulation, no Constraint, no conflict participation.
-      recordAbstainingClaim(ctx, verified ?? null, decision, claimId);
+      recordAbstainingClaim(ctx, v ?? null, decision, claimId);
       continue;
     }
-    verifiedRules.push(verified);
+    verifiedRules.push(v);
     outcomes.push({
       candidateId: candidate.candidateId,
-      semanticRuleKey: candidate.semanticRuleKey,
-      predicate: candidate.predicate,
+      semanticRuleKey: v.verifiedSemanticRuleKey,
+      predicate: v.verifiedPredicate,
       outcome: "compiled",
       reasons: [],
       claimId,
-      regulationId: REGULATION_ID(candidate.semanticRuleKey),
-      constraintId: CONSTRAINT_ID(candidate.semanticRuleKey),
+      regulationId: REGULATION_ID(v.verifiedSemanticRuleKey),
+      constraintId: CONSTRAINT_ID(v.verifiedSemanticRuleKey),
     });
   }
 
@@ -266,7 +274,7 @@ export function compileRegulations(
   // Verified claims (executable or conflict-visible) — create-only.
   for (const verified of verifiedRules) {
     const candidate = verified.candidate;
-    const claimId = CLAIM_ID(candidate.semanticRuleKey, candidate.sourceArtifactId);
+    const claimId = CLAIM_ID(verified.verifiedSemanticRuleKey, candidate.sourceArtifactId);
     if (ctx.project.nodes[claimId]) continue;
     const disposition = dispositions.get(candidate.candidateId);
     const evidence =
@@ -278,8 +286,8 @@ export function compileRegulations(
     recordClaim(ctx, {
       id: claimId,
       kind: "claim",
-      subjectNodeId: candidate.subjectNodeId,
-      predicate: candidate.predicate,
+      subjectNodeId: verified.verifiedSubjectNodeId,
+      predicate: verified.verifiedPredicate,
       value: claimValueFromVerified(verified),
       origin: { kind: "SOURCE_DERIVED" },
       sourceIds: [candidate.sourceArtifactId],
@@ -330,12 +338,19 @@ export function compileRegulations(
     // PARCEL — semantically validated, fail closed.
     const applicabilityClaimIds: string[] = [];
     const applicabilityProblems: string[] = [];
-    const needsDistrict = Boolean(anchor.candidate.applicability.district);
-    const needsOverlay = Boolean(anchor.candidate.applicability.overlay);
+    const needsDistrict = Boolean(anchor.verifiedApplicability.district);
+    const needsOverlay = Boolean(anchor.verifiedApplicability.overlay);
     if (needsDistrict) {
       const claimId = input.applicabilityClaims?.zoningBaseClaimId;
       const claim = claimId ? ctx.project.nodes[claimId] : undefined;
-      const problems = claimId ? validateZoningBaseApplicability(claim, anchor.candidate, claimId, ctx) : ["missing"];
+      const problems = claimId
+        ? validateZoningBaseApplicability(
+            claim,
+            { subjectNodeId: anchor.verifiedSubjectNodeId, applicability: anchor.verifiedApplicability },
+            claimId,
+            ctx,
+          )
+        : ["missing"];
       if (problems.length > 0) {
         applicabilityProblems.push(
           problems[0] === "missing"
@@ -352,7 +367,12 @@ export function compileRegulations(
       const overlayProblems: string[] = [];
       for (const claimId of overlayClaims) {
         const claim = ctx.project.nodes[claimId];
-        const problems = validateOverlayApplicability(claim, anchor.candidate, claimId, ctx);
+        const problems = validateOverlayApplicability(
+          claim,
+          { subjectNodeId: anchor.verifiedSubjectNodeId, applicability: anchor.verifiedApplicability },
+          claimId,
+          ctx,
+        );
         if (problems.length === 0) {
           applicabilityClaimIds.push(claimId);
           proven = true;
@@ -375,13 +395,13 @@ export function compileRegulations(
     const desired = {
       id: REGULATION_ID(key),
       kind: "regulation" as const,
-      jurisdictionKey: anchor.candidate.jurisdictionKey,
+      jurisdictionKey: anchor.verifiedJurisdictionKey,
       codeSection: anchor.verifiedLocator,
-      applicability: anchor.candidate.applicability,
+      applicability: anchor.verifiedApplicability,
       claimIds: [
         ...new Set([
           ...(executableMembers.length > 0 ? executableMembers : sortedGroup)
-            .map((v) => CLAIM_ID(key, v.candidate.sourceArtifactId)),
+            .map((v) => CLAIM_ID(v.verifiedSemanticRuleKey, v.candidate.sourceArtifactId)),
           ...applicabilityClaimIds,
         ]),
       ].sort(),
@@ -444,16 +464,15 @@ function recordAbstainingClaim(
 ): void {
   if (ctx.project.nodes[claimId]) return;
   const candidate = decision.candidate;
-  const isUnknown = candidate.proposedValue.kind === "unknown";
   recordClaim(ctx, {
     id: claimId,
     kind: "claim",
-    subjectNodeId: candidate.subjectNodeId,
-    predicate: candidate.predicate,
+    subjectNodeId: verified ? verified.verifiedSubjectNodeId : candidate.subjectNodeId,
+    predicate: verified ? verified.verifiedPredicate : candidate.predicate,
     value: verified ? claimValueFromVerified(verified) : { type: "null", reason: "unknown" },
     origin: { kind: "SOURCE_DERIVED" },
     sourceIds: [candidate.sourceArtifactId],
-    evidenceState: isUnknown ? "UNKNOWN" : "UNKNOWN",
+    evidenceState: "UNKNOWN",
     verbatimQuote: verified ? verified.verifiedExcerpt : candidate.evidenceAnchor.exactText,
     notes: [
       candidate.notes,
@@ -494,11 +513,11 @@ function verifiedConstraintPayload(
     regulationId: ids.regulationId,
   };
   const value: CanonicalVerifiedValue = verified.verifiedValue;
-  const candidate = verified.candidate;
+  const predicate = verified.verifiedPredicate;
 
   switch (value.kind) {
     case "quantity":
-      switch (candidate.predicate) {
+      switch (predicate) {
         case "max-height":
           return {
             ...base,
@@ -517,7 +536,7 @@ function verifiedConstraintPayload(
           return {
             ...base,
             constraintKind: "parking-requirement",
-            use: candidate.applicability.use ?? "unscoped",
+            use: verified.verifiedApplicability.use ?? "unscoped",
             requirement: { type: "fixed", spaces: { value: value.value, unit: "spaces" } },
           };
         default:
@@ -527,7 +546,7 @@ function verifiedConstraintPayload(
       return {
         ...base,
         constraintKind: "use-permission",
-        use: candidate.applicability.use ?? "unscoped",
+        use: verified.verifiedApplicability.use ?? "unscoped",
         permission: value.permission,
       };
     case "prohibition":
@@ -613,7 +632,7 @@ function sourceIdsOf(claim: unknown): string[] {
  */
 function validateZoningBaseApplicability(
   claim: unknown,
-  anchor: CandidateRule,
+  anchor: { subjectNodeId: string; applicability: { district?: string; overlay?: string; lotType?: string; use?: string } },
   claimId: string,
   ctx: CommandContext,
 ): string[] {
@@ -654,7 +673,7 @@ function validateZoningBaseApplicability(
 
 function validateOverlayApplicability(
   claim: unknown,
-  anchor: CandidateRule,
+  anchor: { subjectNodeId: string; applicability: { overlay?: string } },
   claimId: string,
   ctx: CommandContext,
 ): string[] {

@@ -27,9 +27,10 @@ benchmark cannot be circular.
 2. **Semantic rule identity.** Every candidate carries a `semanticRuleKey`
    (`height:max:principal`, `use:multi-family:permission`,
    `overlay:/six:adu-prohibition`, `overlay:/six:applicability`, ...).
-   Identity rules: candidateId/claimId = UNIQUE EVIDENCE OBSERVATION
-   (`<semanticRuleKey>:<sourceRef>`); regulationId/constraintId = the
-   SEMANTIC LEGAL RULE (`<semanticRuleKey>`). Duplicate candidate ids are
+   Identity rules: candidateId/claimId = UNIQUE EVIDENCE OBSERVATION keyed
+   by the CAPTURED VERSION (`<verifiedSemanticRuleKey>:<sourceArtifactId>`);
+   regulationId/constraintId = the SEMANTIC LEGAL RULE
+   (`<verifiedSemanticRuleKey>`). Duplicate candidate ids are
    rejected loudly. Different legal propositions (/SIX applies vs ADUs
    prohibited in /SIX) never collapse; the ADU constraint traces to the
    prohibition regulation, claim, and verbatim quote specifically.

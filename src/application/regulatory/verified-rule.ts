@@ -1,74 +1,41 @@
 import { z } from "zod";
-import { CandidateRule as CandidateRuleSchema, type CandidateRule } from "./candidate-rule";
-import { normalizeFeet, normalizeSqFt } from "./normalize";
+import {
+  CandidateRule as CandidateRuleSchema,
+  type CandidateApplicability,
+} from "./candidate-rule";
+import { ClaimPredicate as ClaimPredicateSchema, type ClaimPredicate } from "../../domain/enums";
 
 /**
- * VerifiedRule — the verifier-owned canonical semantic result (PR #28 final
- * closeout). The model/extractor can PROPOSE meaning; only evidence-derived
- * semantics can execute. Everything downstream of the verifier — conflict
- * comparison, canonical Claim values, Regulation construction, and the
- * executable constraint payload — consumes THIS type, never raw
- * `candidate.proposedValue` or `candidate.verbatimSupportingText`.
+ * VerifiedRule — the verifier-owned canonical semantic result (PR #28 merge
+ * gate). The extractor may PROPOSE anything; only evidence-derived semantics
+ * AND identity AND applicability can execute or be shown as legal
+ * provenance. Everything capable of changing Regulation identity,
+ * applicability, Constraint semantics, conflict grouping, solver output, or
+ * user-visible provenance is verifier-owned here:
  *
- * A VerifiedRule exists only when the second pass independently established
- * ALL consequential semantics from the captured evidence:
+ *   verifiedPredicate / verifiedSemanticRuleKey — re-derived from the anchor
+ *     content (row labels, code text, table shape), cross-checked against
+ *     the candidate's claim; mismatch REJECTS.
+ *   verifiedApplicability — derived from the capture and the TRUSTED
+ *     compile subject context, never copied from the candidate.
+ *   verifiedLocator — token-checked against the capture; fabricated
+ *     locators are replaced by the anchor excerpt.
+ *   verifiedSubjectNodeId / verifiedJurisdictionKey — must equal the
+ *     trusted caller/project context or the candidate is rejected.
  *
- *   quantity rules     — value (already) + every secondary number (ranges,
- *                        tier breakpoints, by-lot-type percentages, bonus
- *                        tiers) re-parsed from the verified anchor/capture;
- *   use-permission     — permission letter re-read from the anchor row;
- *   parking formula    — formula text taken from the capture span, with the
- *                        candidate's rendering required to agree;
- *   overlay rules      — prohibition subject re-read from the anchor;
- *   density tiers      — all three tier numbers from the anchor;
- *   contextual setback — the ONLY extractor-informed shape left, and it is
- *                        NON-EXECUTABLE-VALUE by design (no number derives
- *                        from prose; the constraint carries a contextual
- *                        rule id that #7 evaluates against geometry).
- *
- * Predicates whose semantics cannot be fully derived (FAR, GIS site facts,
- * lot width/area) never produce a VerifiedRule with an executable value —
- * they abstain (Claim/Regulation only or Claim only).
+ * When identity or applicability cannot be independently established, the
+ * rule ABSTAINS — never invented to preserve coverage.
  */
 
 export const CanonicalVerifiedValue = z.discriminatedUnion("kind", [
-  z
-    .object({
-      kind: z.literal("quantity"),
-      value: z.number().finite(),
-      unit: z.string().min(1),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("permission"),
-      permission: z.enum(["BY_RIGHT", "SPECIAL_EXCEPTION", "PROHIBITED"]),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("prohibition"),
-      overlay: z.string().min(1),
-      prohibits: z.string().min(1),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("parking-formula"),
-      use: z.string().min(1),
-      formula: z.string().min(1),
-    })
-    .strict(),
+  z.object({ kind: z.literal("quantity"), value: z.number().finite(), unit: z.string().min(1) }).strict(),
+  z.object({ kind: z.literal("permission"), permission: z.enum(["BY_RIGHT", "SPECIAL_EXCEPTION", "PROHIBITED"]) }).strict(),
+  z.object({ kind: z.literal("prohibition"), overlay: z.string().min(1), prohibits: z.string().min(1) }).strict(),
+  z.object({ kind: z.literal("parking-formula"), use: z.string().min(1), formula: z.string().min(1) }).strict(),
   z
     .object({
       kind: z.literal("density-tiers"),
-      tiers: z
-        .array(
-          z
-            .object({ firstSqFt: z.number().finite(), perUnit: z.number().finite() })
-            .strict(),
-        )
-        .min(1),
+      tiers: z.array(z.object({ firstSqFt: z.number().finite(), perUnit: z.number().finite() }).strict()).min(1),
     })
     .strict(),
   z
@@ -78,27 +45,9 @@ export const CanonicalVerifiedValue = z.discriminatedUnion("kind", [
       corner: z.number().finite().optional(),
     })
     .strict(),
-  z
-    .object({
-      kind: z.literal("side-yard-range"),
-      min: z.number().finite(),
-      max: z.number().finite(),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("bonus-tiers"),
-      tiers: z.record(z.string(), z.number().finite()),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("contextual-setback"),
-      face: z.enum(["front"]),
-      ruleId: z.string().min(1),
-    })
-    .strict(),
-  /** Deliberate abstention — evidence establishes no executable value. */
+  z.object({ kind: z.literal("side-yard-range"), min: z.number().finite(), max: z.number().finite() }).strict(),
+  z.object({ kind: z.literal("bonus-tiers"), tiers: z.record(z.string(), z.number().finite()) }).strict(),
+  z.object({ kind: z.literal("contextual-setback"), face: z.enum(["front"]), ruleId: z.string().min(1) }).strict(),
   z.object({ kind: z.literal("abstain"), reason: z.string().min(1) }).strict(),
 ]);
 export type CanonicalVerifiedValue = z.infer<typeof CanonicalVerifiedValue>;
@@ -107,28 +56,160 @@ export const VerifiedRule = z
   .object({
     /** The original proposal, retained verbatim for audit. */
     candidate: CandidateRuleSchema,
+    /** Verifier-owned identity — derived from captured evidence. */
+    verifiedPredicate: ClaimPredicateSchema,
+    verifiedSemanticRuleKey: z.string().min(1),
     /** Capture-backed excerpt (the verified anchor itself). */
     verifiedExcerpt: z.string().min(1),
+    /** Verifier-owned locator — token-checked or anchor-derived. */
     verifiedLocator: z.string().min(1),
     /** Verifier-owned semantics — never extractor-owned. */
     verifiedValue: CanonicalVerifiedValue,
-    verifiedApplicability: CandidateRuleSchema.shape.applicability ?? z.never().optional(),
+    /** Verifier-owned applicability — derived from capture + trusted subject. */
+    verifiedApplicability: CandidateRuleSchema.shape.applicability,
+    /** Trusted project context (cross-checked, then used downstream). */
+    verifiedSubjectNodeId: z.string().min(1),
+    verifiedJurisdictionKey: z.string().min(1),
     verificationNotes: z.array(z.string()).default([]),
   })
   .strict();
 export type VerifiedRule = z.infer<typeof VerifiedRule>;
 
+/** The trusted compile context the caller supplies (project truth). */
+export type TrustedCompileContext = {
+  subjectNodeId: string;
+  jurisdictionKey: string;
+  district?: string;
+};
+
+export type VerifiedIdentity = {
+  predicate: ClaimPredicate;
+  semanticRuleKey: string;
+  applicability: CandidateApplicability;
+};
+
 /**
- * Independently derive the canonical semantics for a candidate from its
- * VERIFIED anchor text (already proven to exist in the captured bytes).
- * Returns null when the predicate's consequential semantics cannot be fully
- * derived from evidence — callers must abstain then, not fall back to the
- * extractor's rendering.
+ * Derive semantic identity from the ANCHOR text (what the capture actually
+ * says) plus the trusted subject district. This is the evidence's own claim
+ * about which rule it is — independent of what the extractor labeled it.
  */
+export function deriveIdentityFromEvidence(
+  anchor: string,
+  captureText: string,
+  subject: TrustedCompileContext,
+): VerifiedIdentity | null {
+  const combined = `${anchor}\n${captureText}`;
+  const district = subject.district ? { district: subject.district } : {};
+
+  // Overlay tokens appear in adopted-code anchors themselves (/SIX, ...).
+  const overlayToken =
+    /\/([A-Z]{2,4})(?=[\s,.:'])/.exec(anchor)?.[0] ??
+    /\/([A-Z]{2,4})(?=[\s,.:'])/.exec(captureText.slice(0, 400))?.[0] ??
+    null;
+
+  if (/accessory dwelling units?\s+(shall not be permitted|are not permitted|not permitted)/i.test(anchor)) {
+    if (overlayToken) {
+      return {
+        predicate: "overlay-restriction",
+        semanticRuleKey: `overlay:${overlayToken.toLowerCase()}:adu-prohibition`,
+        applicability: { overlay: overlayToken },
+      };
+    }
+  }
+  if (/Applicability\.\s+The\s+\S+\s+Overlay District applies to/i.test(anchor)) {
+    if (overlayToken) {
+      return {
+        predicate: "overlay-restriction",
+        semanticRuleKey: `overlay:${overlayToken.toLowerCase()}:applicability`,
+        applicability: { overlay: overlayToken },
+      };
+    }
+  }
+
+  if (/Multi-Family\s+—/.test(anchor)) {
+    return {
+      predicate: "parking-requirement",
+      semanticRuleKey: "parking:multi-family:minimum",
+      applicability: { ...district, use: "household-living-multi-family" },
+    };
+  }
+  if (/Religious Assembly\s+—\s*"/.test(anchor)) {
+    return {
+      predicate: "parking-requirement",
+      semanticRuleKey: "parking:religious-assembly:minimum",
+      applicability: { use: "religious-assembly" },
+    };
+  }
+
+  const useRow = /\|\s*([^|]+)\|\s*(Y|S|N)\[?\d?\]?[^|]*\|?\s*$/i.exec(anchor.trim());
+  if (useRow) {
+    const use = slugFromUseLabel(useRow[1].trim());
+    if (use) {
+      return {
+        predicate: "use-permission",
+        semanticRuleKey: `use:${use}:permission`,
+        applicability: { ...district, use },
+      };
+    }
+  }
+
+  // Prose height (adopted-code sentence shape).
+  if (/maximum building height[\s\S]*?\d+\s*ft/i.test(anchor)) {
+    return {
+      predicate: "max-height",
+      semanticRuleKey: "height:max:principal",
+      applicability: { ...district },
+    };
+  }
+
+  const dimensional: Array<[RegExp, string, string]> = [
+    [/Min\.\s*Lot\s*Width/i, "lot-width", "lot:width:min"],
+    [/Min\.\s*Lot\s*Area/i, "lot-area", "lot:area:min"],
+    [/Max\.\s*Occupied\s*Area/i, "occupied-area", "bulk:occupied-area:max"],
+    [/Min\.\s*Front\s*Setback/i, "setback-front", "setback:front"],
+    [/Side\s*Yard\s*Width/i, "setback-side", "setback:side:min"],
+    [/Rear\s*Yard\s*Depth/i, "setback-rear", "setback:rear:min"],
+    [/Max\.\s*Height\s*\/\s*FAR/i, "max-height", "height:max:principal"],
+  ];
+  for (const [pattern, predicate, key] of dimensional) {
+    if (pattern.test(anchor)) {
+      const applicability: CandidateApplicability = { ...district };
+      if (predicate === "occupied-area") applicability.lotType = "intermediate";
+      return { predicate: predicate as ClaimPredicate, semanticRuleKey: key, applicability };
+    }
+  }
+
+  if (/minimum (?:[\d,.]+ sq\.?\s*ft\.?(?:\s+of)?\s+)?lot area (?:is )?required per dwelling unit/i.test(anchor)) {
+    return {
+      predicate: "density-formula",
+      semanticRuleKey: "density:min-lot-area-per-unit",
+      applicability: { ...district },
+    };
+  }
+
+  if (/Mixed Income Housing/i.test(anchor) && /Moderate Income/i.test(combined)) {
+    return {
+      predicate: "density-bonus",
+      semanticRuleKey: "bonus:mixed-income:percent",
+      applicability: { ...district, use: "mixed-income-housing" },
+    };
+  }
+
+  return null;
+}
+
+function slugFromUseLabel(label: string): string | null {
+  if (/Multi-Family/i.test(label)) return "multi-family";
+  if (/Religious\s*Assembly/i.test(label)) return "religious-assembly";
+  if (/Child Care Center/i.test(label)) return "child-care";
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Verifier-owned value derivation (identity + trusted subject only)
+// ---------------------------------------------------------------------------
 
 function permissionFromText(text: string): "BY_RIGHT" | "SPECIAL_EXCEPTION" | "PROHIBITED" | null {
-  // Use-permission anchors are table rows: the permission cell is the LAST
-  // pipe-delimited cell ("| Multi-Family | Y[1] |") or the whole span.
   const cells = text.split("|").map((c) => c.trim()).filter(Boolean);
   const cell = cells[cells.length - 1] ?? text.trim();
   const probe = cell.replace(/\[\d+\]/g, "").trim();
@@ -139,8 +220,6 @@ function permissionFromText(text: string): "BY_RIGHT" | "SPECIAL_EXCEPTION" | "P
 }
 
 function parkingFormulaFromExcerpt(excerpt: string): string | null {
-  // Adopted-code formula rows carry the ratio text in quotes or after the
-  // em-dash in the anchor span; extract the formula-shaped fragment.
   const quoted = /"([^"]*(?:seats|sq\.?\s*ft|spaces)[^"]*)"/i.exec(excerpt);
   if (quoted) return quoted[1];
   const afterDash = /—\s*([^|"]*(?:seats|sq\.?\s*ft|spaces)[^|"]*)/i.exec(excerpt);
@@ -188,27 +267,31 @@ function bonusTiersFromText(text: string): Record<string, number> | null {
   return Object.keys(tiers).length > 0 ? tiers : null;
 }
 
-function prohibitionFromText(text: string, overlay: string | undefined): { overlay: string; prohibits: string } | null {
-  if (!overlay) return null;
-  if (/accessory dwelling units?\s+(shall not be permitted|are not permitted|not permitted)/i.test(text)) {
-    return { overlay, prohibits: "accessory-dwelling-units" };
-  }
-  return null;
+function normalizeFeet(text: string): { value: number } | null {
+  const match = /(\d+(?:\.\d+)?)\s*(?:ft\.?|feet|')(?![\w])/i.exec(text);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? { value } : null;
+}
+
+function normalizeSqFt(text: string): { value: number } | null {
+  const match = /([\d,]+(?:\.\d+)?)\s*(?:sq\.?\s*ft\.?|sf)\b/i.exec(text);
+  if (!match) return null;
+  const value = Number(match[1].replace(/,/g, ""));
+  return Number.isFinite(value) ? { value } : null;
 }
 
 /**
- * Derive verifier-owned semantics. `captureText` is the document text the
- * anchor was proven against — some secondary numbers (tier breakpoints,
- * by-lot-type percentages) legitimately live in adjacent captured lines, so
- * the verifier reads them from the CAPTURE, never from candidate prose.
+ * Derive verifier-owned semantics using ONLY evidence-derived identity +
+ * trusted subject context — never candidate applicability/identity.
  */
 export function deriveVerifiedValue(
-  candidate: CandidateRule,
+  identity: VerifiedIdentity,
   verifiedExcerpt: string,
   captureText: string,
 ): CanonicalVerifiedValue | null {
-  const anchor = candidate.evidenceAnchor.exactText;
-  switch (candidate.predicate) {
+  const anchor = verifiedExcerpt;
+  switch (identity.predicate) {
     case "max-height":
     case "lot-width":
     case "setback-rear": {
@@ -216,22 +299,16 @@ export function deriveVerifiedValue(
       return feet ? { kind: "quantity", value: feet.value, unit: "ft" } : null;
     }
     case "setback-side": {
-      // Range semantics (5–12) must BOTH come from the capture.
       const range = sideYardRangeFromText(anchor) ?? sideYardRangeFromText(captureText);
       if (range) return { kind: "side-yard-range", ...range };
       const min = normalizeFeet(anchor);
       return min ? { kind: "side-yard-range", min: min.value, max: min.value } : null;
     }
-    case "setback-front": {
-      // Contextual rule: the executable semantic is the RULE ID, not any
-      // number. The rule id names the guide's notes [5],[6] mechanism which
-      // #7 evaluates against blockface geometry — no prose value executes.
+    case "setback-front":
       return { kind: "contextual-setback", face: "front", ruleId: "adjacent-facades" };
-    }
     case "occupied-area": {
       const byLot = occupiedAreaFromText(anchor) ?? occupiedAreaFromText(captureText);
-      if (!byLot) return null;
-      if (byLot.intermediate === undefined && byLot.corner === undefined) return null;
+      if (!byLot || (byLot.intermediate === undefined && byLot.corner === undefined)) return null;
       return { kind: "occupied-area-by-lot-type", ...byLot };
     }
     case "density-formula": {
@@ -239,21 +316,15 @@ export function deriveVerifiedValue(
       return tiers ? { kind: "density-tiers", tiers } : null;
     }
     case "parking-requirement": {
-      // Adopted-code parking anchors are pipe-delimited district-group rows
-      // ("Multi-Family — 1 | 0 | 3/10 units"): column group 2 is the RM-1
-      // value. The verifier reads the SECOND numeric cell — never the
-      // extractor's claim — so the correct district's requirement executes.
       const cells = anchor.split("|").map((c) => c.trim());
       if (cells.length >= 3 && /Multi-Family/i.test(cells[0]) && /^\d+$/.test(cells[1])) {
         return { kind: "quantity", value: Number(cells[1]), unit: "spaces" };
       }
       const single = /^\s*(\d+)\s*$/.exec(anchor.trim());
-      if (single) {
-        return { kind: "quantity", value: Number(single[1]), unit: "spaces" };
-      }
+      if (single) return { kind: "quantity", value: Number(single[1]), unit: "spaces" };
       const formula = parkingFormulaFromExcerpt(anchor) ?? parkingFormulaFromExcerpt(verifiedExcerpt);
       if (formula) {
-        return { kind: "parking-formula", use: candidate.applicability.use ?? "unscoped", formula };
+        return { kind: "parking-formula", use: identity.applicability.use ?? "unscoped", formula };
       }
       return null;
     }
@@ -262,8 +333,14 @@ export function deriveVerifiedValue(
       return permission ? { kind: "permission", permission } : null;
     }
     case "overlay-restriction": {
-      const prohibition = prohibitionFromText(anchor, candidate.applicability.overlay);
-      return prohibition ? { kind: "prohibition", ...prohibition } : null;
+      if (/accessory dwelling units?\s+(shall not be permitted|are not permitted|not permitted)/i.test(anchor)) {
+        return {
+          kind: "prohibition",
+          overlay: identity.applicability.overlay ?? "",
+          prohibits: "accessory-dwelling-units",
+        };
+      }
+      return null;
     }
     case "density-bonus": {
       const tiers = bonusTiersFromText(anchor) ?? bonusTiersFromText(captureText);
@@ -275,7 +352,8 @@ export function deriveVerifiedValue(
     }
     case "far":
     default:
-      // FAR and GIS site facts: no executable semantics derivable — abstain.
       return null;
   }
 }
+
+export type { CandidateApplicability };

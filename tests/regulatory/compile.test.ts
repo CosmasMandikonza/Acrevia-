@@ -29,14 +29,14 @@ function standardDocuments(extra: Record<string, string> = {}): RawEvidenceDocum
       "no FAR value in the captured RM-1 evidence",
       "Min. Lot Width ... 16 ft.",
     ].join("\n"),
-    S7: "Multi-Family — 1 | 0 | 3/10 units\nMulti-Family | Y[1]",
+    S7: "Multi-Family — 1 | 0 | 3/10 units\n| Multi-Family | Y[1] |",
     A1: "Maximum building height in the RM-1 district: 55 ft.",
     A2: [
       "(.1) In the RM-1 zoning district, the maximum building height is 45 ft.",
       "maximum building height ... 45 ft",
     ].join("\n"),
-    G1: "maximum building height ... 38 ft\nMulti-Family | Y[1]",
-    G2: "maximum building height ... 45 ft\nMulti-Family | S[2], 14-603(5)",
+    G1: "maximum building height ... 38 ft\n| Multi-Family | Y[1] |",
+    G2: "maximum building height ... 45 ft\n| Multi-Family | S[2], 14-603(5) |",
     ...extra,
   });
 }
@@ -291,17 +291,20 @@ describe("source artifact truth", () => {
     const candidates = [
       heightCandidate("A2", 45, { verbatimSupportingText: "maximum building height ... 45 ft" }),
       heightCandidate("G1", 38, {
-        semanticRuleKey: "test:gis",
-        candidateId: "cand:test:gis:phl:src:G1@v1",
+        semanticRuleKey: "lot:width:min",
+        candidateId: "cand:lot:width:min:phl:src:G1@v1",
+        predicate: "lot-width",
         applicability: { district: "RM-1" },
         authority: "OFFICIAL_GIS",
+        verbatimSupportingText: "| Min. Lot Width | 38 ft. |",
+        evidenceAnchor: { documentId: "G1.md", exactText: "| Min. Lot Width | 38 ft. |" },
       }),
     ];
     compileRegulations(contextFor(project), {
       candidates,
       sources: [adopted, gis, tool, reference],
       subject: { district: "RM-1" },
-      documents: standardDocuments(),
+      documents: standardDocuments({ G1: "maximum building height ... 45 ft\n| Min. Lot Width | 38 ft. |" }),
       ...applicabilityInput(),
     });
     expect(project.nodes["phl:src:A2@v1"]).toMatchObject({ sourceType: "adopted_code" });

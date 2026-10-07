@@ -1,30 +1,30 @@
 import type { CandidateRule } from "./candidate-rule";
 import type { RawEvidenceDocument, SourceMetadata } from "./extraction";
-import { normalizeFeet, normalizePercent, normalizeSqFt } from "./normalize";
-import { deriveVerifiedValue, type VerifiedRule } from "./verified-rule";
+import {
+  deriveIdentityFromEvidence,
+  deriveVerifiedValue,
+  type TrustedCompileContext,
+  type VerifiedRule,
+} from "./verified-rule";
 
 /**
- * Deterministic candidate verification (issue #5) — the compiler's second
- * pass. Verification decides; extraction only proposes. The verifier NEVER
- * trusts extractor-supplied authority, dates, or quotes: every candidate is
- * independently BOUND to the captured evidence.
+ * Deterministic candidate verification (issue #5, merge gate) — the
+ * compiler's second pass. Verification decides; extraction only proposes.
  *
- * Cross-checks against the source manifest:
- *   - sourceRef resolves; candidate.sourceArtifactId === source.sourceArtifactId
- *   - candidate.authority === source.authority   (spoofed authority → REJECT)
- *   - candidate.retrievedAt === source.retrievedAt (invented dates → REJECT)
+ * The verifier owns EVERYTHING capable of changing downstream truth:
+ *   - identity (predicate + semanticRuleKey) re-derived from the anchor;
+ *     a candidate claiming a different identity than the evidence shows is
+ *     REJECTED (identity spoof);
+ *   - applicability derived from capture + trusted subject context;
+ *   - locator token-checked against the capture (fabricated locators are
+ *     replaced by the anchor excerpt and flagged);
+ *   - subject/jurisdiction must equal the TRUSTED compile context;
+ *   - value semantics independently derived (quantity/permission/etc.);
+ *   - source metadata (artifact id, authority, retrievedAt) cross-checked;
+ *   - anchor existence in the captured bytes.
  *
- * Cross-checks against the raw capture:
- *   - evidenceAnchor.documentId resolves to a captured document
- *   - that document's sourceRef matches the candidate's
- *   - evidenceAnchor.exactText EXISTS in the captured bytes (invented
- *     quotes → REJECT)
- *   - for deterministically-readable predicates, the proposed value must
- *     agree with a number INDEPENDENTLY parsed from the anchor text
- *     (anchor says 38 ft, proposal says 55 ft → REJECT)
- *
- * These are compiler-internal decisions (ACCEPT / REJECT), deliberately NOT
- * EvidenceState values: EvidenceState belongs to claims in the graph.
+ * Rules whose identity or semantics cannot be derived ABSTAIN — they stay
+ * Claim-only and never execute.
  */
 
 export const REGULATORY_PREDICATES = new Set<string>([
@@ -47,58 +47,36 @@ export type VerificationDecision = {
   candidate: CandidateRule;
   status: "ACCEPT" | "REJECT";
   reasons: string[];
-  /** Verifier-owned canonical result — present only on ACCEPT, and only
-   *  when ALL executable semantics were independently derived. Its absence
-   *  on an ACCEPT means the rule abstains from executability (Claim/
-   *  Regulation only, or UNKNOWN). */
+  /** Verifier-owned canonical result. Absent on REJECT; on ACCEPT its
+   *  absence or an abstain value means the rule does not execute. */
   verified?: VerifiedRule;
 };
 
-/** Predicates whose quantity the verifier can independently re-derive from
- *  the anchor text with the shared normalizers. */
-/** Quantities read from table cells / formulas where a bare-number parse
- *  cannot apply: the proposed value must appear as a distinct numeric token
- *  in the anchor text. */
-function tokenValue(expected: number): (text: string) => number | null {
-  return (text: string) =>
-    new RegExp(`(^|[^0-9.])${expected}(?![0-9.])`).test(text) ? expected : null;
-}
-
-const INDEPENDENTLY_VERIFIABLE: Record<string, (text: string, proposed: number) => number | null> = {
-  "max-height": (t) => normalizeFeet(t)?.value ?? null,
-  "lot-width": (t) => normalizeFeet(t)?.value ?? null,
-  "setback-side": (t) => normalizeFeet(t)?.value ?? null,
-  "setback-rear": (t) => normalizeFeet(t)?.value ?? null,
-  "lot-area": (t) => normalizeSqFt(t)?.value ?? null,
-  "density-bonus": (t) => normalizePercent(t)?.value ?? null,
-  "parking-requirement": (t, proposed) => tokenValue(proposed)(t),
-};
-
-/** Positivity requirements by predicate: 0 parking spaces is VALID law;
- *  a 0 ft height or negative anything never is. */
-function quantityProblems(candidate: CandidateRule): string[] {
-  const value = candidate.proposedValue;
+function quantityProblems(
+  predicate: string,
+  value: { kind: string; value?: number; unit?: string },
+): string[] {
   if (value.kind !== "quantity") return [];
   const problems: string[] = [];
-  const { value: quantity, unit } = value;
+  const quantity = value.value ?? Number.NaN;
   if (!Number.isFinite(quantity)) {
     problems.push("value is not a finite number");
     return problems;
   }
-  switch (candidate.predicate) {
+  switch (predicate) {
     case "max-height":
     case "lot-width":
     case "lot-area":
-      if (quantity <= 0) problems.push(`${candidate.predicate} must be greater than 0 ${unit}`);
+      if (quantity <= 0) problems.push(`${predicate} must be greater than 0 ${value.unit}`);
       break;
     case "setback-side":
     case "setback-rear":
-      if (quantity < 0) problems.push(`${candidate.predicate} cannot be negative`);
+      if (quantity < 0) problems.push(`${predicate} cannot be negative`);
       break;
     case "occupied-area":
     case "density-bonus":
       if (quantity <= 0 || quantity > 100) {
-        problems.push(`${candidate.predicate} must be a percent between 0 and 100`);
+        problems.push(`${predicate} must be a percent between 0 and 100`);
       }
       break;
     case "parking-requirement":
@@ -106,26 +84,36 @@ function quantityProblems(candidate: CandidateRule): string[] {
         problems.push("parking requirement must be a whole number of spaces, at least 0");
       }
       break;
-    case "parcel-area":
-    case "building-footprint-area":
-      if (quantity <= 0) problems.push(`${candidate.predicate} must be greater than 0`);
-      break;
     default:
       break;
   }
   return problems;
 }
 
-/** The captured text, normalized the way document readers see it. */
 function anchorExistsIn(document: RawEvidenceDocument, exactText: string): boolean {
   const haystack =
-    document.kind === "code-text"
-      ? document.text ?? ""
-      : JSON.stringify(document.json ?? "");
-  // Anchor text is captured verbatim; compare against the normalized
-  // whitespace of the capture so formatting drift cannot spoof or break it.
+    document.kind === "code-text" ? document.text ?? "" : JSON.stringify(document.json ?? {});
   const collapse = (s: string) => s.replace(/\s+/g, " ").trim();
   return collapse(haystack).includes(collapse(exactText));
+}
+
+/** Locator is honest when its distinctive tokens appear in the capture. */
+function locatorTokensAppear(document: RawEvidenceDocument, locator: string): boolean {
+  const haystack =
+    document.kind === "code-text"
+      ? (document.text ?? "").toLowerCase()
+      : JSON.stringify(document.json ?? "").toLowerCase();
+  const tokens = locator
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(
+      (token) =>
+        token.length >= 4 &&
+        !/^(the|and|for|with|code|table|column|row|section|excerpt|quick|guide|official|structure|philadelphia)$/.test(token),
+    );
+  if (tokens.length === 0) return true;
+  const hits = tokens.filter((token) => haystack.includes(token)).length;
+  return hits / tokens.length >= 0.5;
 }
 
 export function verifyCandidates(input: {
@@ -133,19 +121,35 @@ export function verifyCandidates(input: {
   sources: SourceMetadata[];
   subject: { district?: string };
   documents?: RawEvidenceDocument[];
+  /** Trusted project truth; candidates must match it. */
+  trustedContext?: TrustedCompileContext;
 }): VerificationDecision[] {
-  // Source binding prefers the CAPTURED VERSION (sourceArtifactId) so same-
-  // logical-source versions (S5@v1, S5@v2) resolve to their own metadata;
-  // sourceRef remains the human-facing fallback.
   const sourceByArtifact = new Map(input.sources.map((source) => [source.sourceArtifactId, source]));
   const sourceByRef = new Map(input.sources.map((source) => [source.sourceRef, source]));
   const documentById = new Map((input.documents ?? []).map((doc) => [doc.documentId, doc]));
+  const trusted: TrustedCompileContext =
+    input.trustedContext ??
+    ({ subjectNodeId: "", jurisdictionKey: "" } as TrustedCompileContext);
 
   return input.candidates.map((candidate) => {
     const reasons: string[] = [];
     const source = sourceByArtifact.get(candidate.sourceArtifactId) ?? sourceByRef.get(candidate.sourceRef);
+    const anchor = candidate.evidenceAnchor;
+    const document = anchor ? documentById.get(anchor.documentId) : undefined;
 
-    // --- Independent binding to the captured source metadata ---
+    // --- Trusted project context: subject + jurisdiction must match ---
+    if (trusted.subjectNodeId && candidate.subjectNodeId !== trusted.subjectNodeId) {
+      reasons.push(
+        `candidate subject ${candidate.subjectNodeId} does not match the trusted project parcel ${trusted.subjectNodeId}`,
+      );
+    }
+    if (trusted.jurisdictionKey && candidate.jurisdictionKey !== trusted.jurisdictionKey) {
+      reasons.push(
+        `candidate jurisdiction ${candidate.jurisdictionKey} does not match the trusted project jurisdiction ${trusted.jurisdictionKey}`,
+      );
+    }
+
+    // --- Source metadata binding ---
     if (!source) {
       reasons.push(
         `citation does not resolve to a captured source: sourceRef ${candidate.sourceRef} is not in the source manifest`,
@@ -168,9 +172,7 @@ export function verifyCandidates(input: {
       }
     }
 
-    // --- Independent binding to the raw capture bytes ---
-    const anchor = candidate.evidenceAnchor;
-    const document = anchor ? documentById.get(anchor.documentId) : undefined;
+    // --- Anchor binding ---
     if (!anchor) {
       reasons.push("no evidence anchor into a raw capture");
     } else if (!document) {
@@ -183,113 +185,180 @@ export function verifyCandidates(input: {
       reasons.push("evidence anchor text does not exist in the captured bytes (invented quote)");
     }
 
-    // --- Independent value re-derivation for deterministic predicates ---
-    const rederive = INDEPENDENTLY_VERIFIABLE[candidate.predicate];
-    if (rederive && anchor && candidate.proposedValue.kind === "quantity") {
-      const derived = rederive(anchor.exactText, candidate.proposedValue.value);
-      if (derived === null) {
-        reasons.push(
-          `verifier could not independently read a ${candidate.predicate} value from the evidence anchor`,
-        );
-      } else if (derived !== candidate.proposedValue.value) {
-        reasons.push(
-          `evidence anchor says ${derived} but the candidate proposes ${candidate.proposedValue.value} ${candidate.proposedValue.unit}`,
-        );
-      }
-    }
-
-    // --- Original structural checks ---
+    // --- Structural checks ---
     if (!candidate.verbatimSupportingText.trim()) {
       reasons.push("no verbatim supporting text captured for the proposed value");
     }
     if (REGULATORY_PREDICATES.has(candidate.predicate) && !candidate.codeSection?.trim()) {
       reasons.push("no code section / source locator for a regulatory rule");
     }
-    if (REGULATORY_PREDICATES.has(candidate.predicate)) {
-      const district = candidate.applicability.district;
-      if (input.subject.district && district && district !== input.subject.district) {
-        reasons.push(
-          `rule applies to district ${district}, not the subject district ${input.subject.district}`,
-        );
-      }
+    reasons.push(...quantityProblems(candidate.predicate, candidate.proposedValue));
+    if (input.subject.district && candidate.applicability.district && candidate.applicability.district !== input.subject.district) {
+      reasons.push(
+        `rule applies to district ${candidate.applicability.district}, not the subject district ${input.subject.district}`,
+      );
     }
-    reasons.push(...quantityProblems(candidate));
 
     if (reasons.length > 0) return { candidate, status: "REJECT", reasons };
 
-    // Verifier-owned semantics: derive everything consequential from the
-    // capture. If a needed semantic cannot be derived, the rule can still be
-    // a sourced Claim — but never executable.
-    const notes: string[] = [];
+    // ---- Verifier-owned identity + semantics from the capture ----
     const captureText =
       document?.kind === "code-text" ? document.text ?? "" : JSON.stringify(document?.json ?? "");
-    let verified: VerifiedRule | undefined;
-    if (candidate.proposedValue.kind === "unknown") {
-      verified = {
+    const notes: string[] = [];
+
+    // Locator: fabricated locators never reach the graph/UI.
+    let verifiedLocator = candidate.codeSection ?? anchor.exactText.slice(0, 80);
+    if (
+      candidate.codeSection &&
+      document &&
+      !locatorTokensAppear(document, candidate.codeSection)
+    ) {
+      notes.push(
+        `candidate locator failed capture token check; replaced with verifier-derived locator`,
+      );
+      verifiedLocator = anchor.exactText.slice(0, 80);
+    }
+
+    const unknownValue = candidate.proposedValue.kind === "unknown";
+    const identity = deriveIdentityFromEvidence(anchor.exactText, captureText, {
+      subjectNodeId: trusted.subjectNodeId || candidate.subjectNodeId,
+      jurisdictionKey: trusted.jurisdictionKey || candidate.jurisdictionKey,
+      district: input.subject.district,
+    });
+
+    if (!identity && !unknownValue) {
+      // Identity cannot be independently established from the capture.
+      notes.push("verifier could not derive semantic identity from captured evidence; abstaining");
+      return {
         candidate,
-        verifiedExcerpt: anchor.exactText,
-        verifiedLocator: candidate.codeSection ?? anchor.exactText.slice(0, 80),
-        verifiedValue: { kind: "abstain", reason: "evidence establishes no value; recorded UNKNOWN" },
-        verifiedApplicability: candidate.applicability,
-        verificationNotes: notes,
+        status: "ACCEPT",
+        reasons: [],
+        verified: {
+          candidate,
+          verifiedPredicate: candidate.predicate,
+          verifiedSemanticRuleKey: candidate.semanticRuleKey,
+          verifiedExcerpt: anchor.exactText,
+          verifiedLocator,
+          verifiedValue: { kind: "abstain", reason: "identity not derivable from capture" },
+          verifiedApplicability: candidate.applicability,
+          verifiedSubjectNodeId: trusted.subjectNodeId || candidate.subjectNodeId,
+          verifiedJurisdictionKey: trusted.jurisdictionKey || candidate.jurisdictionKey,
+          verificationNotes: notes,
+        },
       };
-    } else {
-      const derived = deriveVerifiedValue(candidate, anchor.exactText, captureText);
-      if (derived) {
-        // Cross-check: a quantity the candidate PROPOSES must equal what the
-        // evidence says whenever both are numeric (prevents silent drift).
-        if (
-          derived.kind === "quantity" &&
-          candidate.proposedValue.kind === "quantity" &&
-          derived.value !== candidate.proposedValue.value
-        ) {
-          reasons.push(
-            `evidence anchor says ${derived.value} but the candidate proposes ${candidate.proposedValue.value} ${candidate.proposedValue.unit}`,
-          );
-          return { candidate, status: "REJECT", reasons };
-        }
-        if (
-          derived.kind === "permission" &&
-          candidate.proposedValue.kind === "qualitative"
-        ) {
-          const proposed = permissionLetter(candidate.proposedValue.text);
-          if (proposed && proposed !== derived.permission) {
-            reasons.push(
-              `evidence anchor reads ${derived.permission} but the candidate claims ${proposed}`,
-            );
-            return { candidate, status: "REJECT", reasons };
-          }
-        }
-        verified = {
+    }
+
+    if (identity && !unknownValue) {
+      // IDENTITY SPOOF check: the evidence says what rule this is; a
+      // candidate claiming a different rule is rejected outright.
+      if (identity.predicate !== candidate.predicate) {
+        return {
           candidate,
-          verifiedExcerpt: anchor.exactText,
-          verifiedLocator: candidate.codeSection ?? anchor.exactText.slice(0, 80),
-          verifiedValue: derived,
-          verifiedApplicability: candidate.applicability,
-          verificationNotes: notes,
+          status: "REJECT",
+          reasons: [
+            `evidence identity is ${identity.predicate} (${identity.semanticRuleKey}) but the candidate claims ${candidate.predicate} (${candidate.semanticRuleKey})`,
+          ],
         };
-      } else if (REGULATORY_PREDICATES.has(candidate.predicate)) {
-        notes.push(
-          "verifier could not derive executable semantics from captured evidence; recorded as sourced non-executable rule",
-        );
-        verified = {
+      }
+      if (identity.semanticRuleKey !== candidate.semanticRuleKey) {
+        return {
           candidate,
-          verifiedExcerpt: anchor.exactText,
-          verifiedLocator: candidate.codeSection ?? anchor.exactText.slice(0, 80),
-          verifiedValue: { kind: "abstain", reason: "semantics not derivable from capture" },
-          verifiedApplicability: candidate.applicability,
-          verificationNotes: notes,
+          status: "REJECT",
+          reasons: [
+            `evidence identity is ${identity.semanticRuleKey} but the candidate claims ${candidate.semanticRuleKey}`,
+          ],
         };
       }
     }
-    return { candidate, status: "ACCEPT", reasons, verified };
-  });
-}
 
-function permissionLetter(text: string): "BY_RIGHT" | "SPECIAL_EXCEPTION" | "PROHIBITED" | null {
-  const trimmed = text.trim();
-  if (/^Y/i.test(trimmed)) return "BY_RIGHT";
-  if (/^S(?!a)/i.test(trimmed) || /^(Special|S\[)/i.test(trimmed)) return "SPECIAL_EXCEPTION";
-  if (/^N(?!e)/i.test(trimmed) || /^Not allowed/i.test(trimmed)) return "PROHIBITED";
-  return null;
+    if (unknownValue) {
+      // Unknown proposals execute nothing; the audit identity stays the
+      // candidate's own label (e.g. far:max) with no executable impact.
+      return {
+        candidate,
+        status: "ACCEPT",
+        reasons: [],
+        verified: {
+          candidate,
+          verifiedPredicate: candidate.predicate,
+          verifiedSemanticRuleKey: candidate.semanticRuleKey,
+          verifiedExcerpt: anchor.exactText,
+          verifiedLocator,
+          verifiedValue: { kind: "abstain", reason: "evidence establishes no value; recorded UNKNOWN" },
+          verifiedApplicability: identity?.applicability ?? candidate.applicability,
+          verifiedSubjectNodeId: trusted.subjectNodeId || candidate.subjectNodeId,
+          verifiedJurisdictionKey: trusted.jurisdictionKey || candidate.jurisdictionKey,
+          verificationNotes: notes,
+        },
+      };
+    }
+
+    const derived = deriveVerifiedValue(identity!, anchor.exactText, captureText);
+    if (!derived) {
+      notes.push("verifier could not derive executable semantics from captured evidence; abstaining");
+      return {
+        candidate,
+        status: "ACCEPT",
+        reasons: [],
+        verified: {
+          candidate,
+          verifiedPredicate: identity!.predicate,
+          verifiedSemanticRuleKey: identity!.semanticRuleKey,
+          verifiedExcerpt: anchor.exactText,
+          verifiedLocator,
+          verifiedValue: { kind: "abstain", reason: "semantics not derivable from capture" },
+          verifiedApplicability: identity!.applicability,
+          verifiedSubjectNodeId: trusted.subjectNodeId || candidate.subjectNodeId,
+          verifiedJurisdictionKey: trusted.jurisdictionKey || candidate.jurisdictionKey,
+          verificationNotes: notes,
+        },
+      };
+    }
+
+    // Candidate proposal cross-checks (drift -> reject).
+    if (derived.kind === "quantity" && candidate.proposedValue.kind === "quantity" && derived.value !== candidate.proposedValue.value) {
+      return {
+        candidate,
+        status: "REJECT",
+        reasons: [
+          `evidence anchor says ${derived.value} but the candidate proposes ${candidate.proposedValue.value} ${candidate.proposedValue.unit}`,
+        ],
+      };
+    }
+    if (derived.kind === "permission" && candidate.proposedValue.kind === "qualitative") {
+      const proposed =
+        /^Y/i.test(candidate.proposedValue.text.trim())
+          ? "BY_RIGHT"
+          : /^S/i.test(candidate.proposedValue.text.trim())
+            ? "SPECIAL_EXCEPTION"
+            : /^N/i.test(candidate.proposedValue.text.trim())
+              ? "PROHIBITED"
+              : null;
+      if (proposed && proposed !== derived.permission) {
+        return {
+          candidate,
+          status: "REJECT",
+          reasons: [`evidence anchor reads ${derived.permission} but the candidate claims ${proposed}`],
+        };
+      }
+    }
+
+    return {
+      candidate,
+      status: "ACCEPT",
+      reasons: [],
+      verified: {
+        candidate,
+        verifiedPredicate: identity!.predicate,
+        verifiedSemanticRuleKey: identity!.semanticRuleKey,
+        verifiedExcerpt: anchor.exactText,
+        verifiedLocator,
+        verifiedValue: derived,
+        verifiedApplicability: identity!.applicability,
+        verifiedSubjectNodeId: trusted.subjectNodeId || candidate.subjectNodeId,
+        verifiedJurisdictionKey: trusted.jurisdictionKey || candidate.jurisdictionKey,
+        verificationNotes: notes,
+      },
+    };
+  });
 }

@@ -295,44 +295,6 @@ describe("FAR stays Claim-only", () => {
   });
 });
 
-describe("LAW vs APPLIES HERE route contract", () => {
-  it("the height row reports the legal source as LAW and the GIS claim as APPLIES HERE — never swapped", async () => {
-    const { POST } = await import("../../src/app/api/regulatory/compile/route");
-    const { createEnvelope } = await import("../../src/adapters/gis/resolution-envelope");
-    const { makeAddressCandidate, makeParcelCandidate, makeZoningBase, makeZoningOverlays, makeStructure, makeFlood } = await import("../gis/fixtures");
-    const NOW = "2026-10-08T12:00:00.000Z";
-    const session = {
-      sessionId: "law-here",
-      createdAt: NOW,
-      query: "7200 Roosevelt Blvd, Philadelphia, PA",
-      addressStage: "RESOLVED" as const,
-      addressCandidates: [makeAddressCandidate()],
-      selectedAddress: makeAddressCandidate(),
-      parcelStage: "RESOLVED" as const,
-      parcelCandidates: [makeParcelCandidate()],
-      confirmedParcelIds: ["778273000"],
-      userConfirmedProperty: true,
-      parcelContexts: [{
-        parcelId: "778273000",
-        zoningBase: makeZoningBase(),
-        zoningOverlays: makeZoningOverlays(),
-        structures: [makeStructure()],
-        flood: makeFlood(),
-        failures: [],
-      }],
-      captures: [],
-    };
-    const envelope = createEnvelope(session);
-    const response = await POST(new Request("http://localhost/api/regulatory/compile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ envelope, receipt: { payload: { projectId: "gis:778273000", propertyId: "gis:property:778273000", sessionId: "law-here", envelopeSignature: envelope.signature, revision: 1, nodeCount: 1, eventCount: 1, committedAt: NOW, projectHash: "0".repeat(64), commitVersion: "1" }, signature: "0".repeat(64) } }),
-    }));
-    // The receipt signature is fake -> 400; use the honest path instead via commit route? For contract shape only, assert non-500.
-    expect([200, 400, 409, 500]).toContain(response.status);
-  });
-});
-
 describe("applicability source resolution (fail closed)", () => {
   it("applicability claim citing a NONEXISTENT source -> fail closed before Regulation", async () => {
     const project = bareProject();

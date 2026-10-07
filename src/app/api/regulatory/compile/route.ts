@@ -122,7 +122,7 @@ export async function POST(request: Request) {
     const compile = compileRegulations(ctx, {
       candidates: lawCandidates,
       sources: evidence.sources,
-      subject: { district },
+      subject: { district, parcelNodeId: subjectNodeId, jurisdictionKey: "philadelphia-pa" },
       documents: evidence.documents,
       applicabilityClaims: {
         zoningBaseClaimId,

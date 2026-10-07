@@ -151,7 +151,7 @@ describe("sequential resolved-law updates change the executable constraint", () 
       candidates: [useCandidate("G1", "Y[1]")],
       sources: [gis],
       subject: { district: "RM-1" },
-      documents: testDocuments(["G1"], { G1: "Multi-Family | Y[1]" }),
+      documents: testDocuments(["G1"], { G1: "| Multi-Family | Y[1] |" }),
       ...applicabilityInput(),
     });
     const USE_ID = "phl:constraint:use:multi-family:permission";
@@ -171,7 +171,7 @@ describe("sequential resolved-law updates change the executable constraint", () 
       candidates: [later],
       sources: [adopted],
       subject: { district: "RM-1" },
-      documents: testDocuments(["A2"], { A2: "Multi-Family | S[2], 14-603(5)" }),
+      documents: testDocuments(["A2"], { A2: "| Multi-Family | S[2], 14-603(5) |" }),
       ...applicabilityInput(),
     });
 
