@@ -1,6 +1,6 @@
 # ADR 0011 — Proof: a trusted projection over existing truth
 
-Status: proposed with issue #11.
+Status: accepted with issue #11 (reviewed; benchmark-specific expert questions property-gated).
 
 ## Context
 

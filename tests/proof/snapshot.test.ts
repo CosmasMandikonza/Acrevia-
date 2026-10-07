@@ -20,6 +20,7 @@ import {
   buildProofSnapshot,
   OpenQuestionDoc,
   seedBenchmarkOpenQuestions,
+  seedBenchmarkOpenQuestionsForProperty,
   type ProofSnapshot,
 } from "../../src/application/proof/snapshot";
 import { solve } from "../../src/application/solver/solve";
@@ -429,6 +430,47 @@ describe("POST /api/proof/snapshot — trusted projection of the canonical flow"
     for (const result of snapshot.results) {
       expect(/far/i.test(result.constraintId)).toBe(false);
     }
+  });
+
+  it("property gate: canonical Calvary seeds the 14 benchmark ExpertReviews; another RM-1 property seeds none", () => {
+    const questions = OpenQuestionDoc.parse(
+      JSON.parse(readFileSync(join(FIXTURE_DIR, "open-questions.json"), "utf8")),
+    );
+
+    // Canonical Calvary (OPA/BRT parcel 778273000): all 14 seed and project.
+    const canonical = canonicalProject();
+    const canonicalCtx = contextFor(canonical);
+    seedSolverAssumptions(canonicalCtx);
+    expect(seedBenchmarkOpenQuestionsForProperty(canonicalCtx, questions, "778273000")).toBe(14);
+    const solvedCanonical = solve(canonical);
+    if (solvedCanonical.status !== "SOLVED") throw new Error("SOLVED canonical");
+    const canonicalSnapshot = buildProofSnapshot(canonical, {
+      solve: solvedCanonical,
+      recorded: recordSolverScenarios(canonicalCtx, solvedCanonical),
+      conflicts: [],
+      identity: { query: "q", district: "RM-1", parcelNodeId: "gis:parcel:778273000" },
+    });
+    expect(canonicalSnapshot.expertReviews.length).toBe(14);
+
+    // A different RM-1 property: ZERO Calvary benchmark nodes — its proof
+    // keeps its real unresolved computation questions, never Calvary's
+    // title/history/FAR/site context.
+    const other = canonicalProject();
+    const otherCtx = contextFor(other);
+    seedSolverAssumptions(otherCtx);
+    expect(seedBenchmarkOpenQuestionsForProperty(otherCtx, questions, "884012345")).toBe(0);
+    const solvedOther = solve(other);
+    if (solvedOther.status !== "SOLVED") throw new Error("SOLVED other");
+    const otherSnapshot = buildProofSnapshot(other, {
+      solve: solvedOther,
+      recorded: recordSolverScenarios(otherCtx, solvedOther),
+      conflicts: [],
+      identity: { query: "q", district: "RM-1", parcelNodeId: "gis:parcel:884012345" },
+    });
+    expect(otherSnapshot.expertReviews.length).toBe(0);
+    expect(otherSnapshot.expertReviews.some((review) => review.id.startsWith("phl:review:oq-"))).toBe(false);
+    // The honest lane survives: unresolved computation questions remain.
+    expect(otherSnapshot.computationQuestions.length).toBeGreaterThan(0);
   });
 
   it("seeds all 14 benchmark open questions as real ExpertReview nodes", () => {

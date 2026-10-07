@@ -22,8 +22,9 @@ import { recordSolverScenarios } from "../../../../application/solver/record";
 import { SolveRefusal } from "../../../../application/solver/inputs";
 import {
   buildProofSnapshot,
+  CANONICAL_BENCHMARK_PARCEL_KEY,
   OpenQuestionDoc,
-  seedBenchmarkOpenQuestions,
+  seedBenchmarkOpenQuestionsForProperty,
 } from "../../../../application/proof/snapshot";
 import type { CommandContext } from "../../../../commands";
 
@@ -41,9 +42,11 @@ import type { CommandContext } from "../../../../commands";
  *
  * The canonical benchmark's open questions seed as REAL ExpertReview nodes
  * through the typed command boundary (same deterministic ids as the legacy
- * seed) so the expert queue shows the actual unresolved questions — gated to
- * the same compiled-corpus path as the law itself, so a property the corpus
- * does not cover never sees them.
+ * seed) — but ONLY when the accepted property IS the canonical benchmark
+ * property (exact confirmed-parcel identity, never district-level matching).
+ * Another RM-1 property gets an honest empty expert-review state and keeps
+ * its own unresolved computation questions; Calvary's title/history/FAR
+ * questions never attach to another church.
  */
 
 export const dynamic = "force-dynamic";
@@ -172,12 +175,17 @@ export async function POST(request: Request) {
     });
     seedSolverAssumptions(ctx);
 
-    // Real ExpertReview nodes for the benchmark's open questions — same path
-    // as the law itself, so the expert queue is graph truth, not UI fiction.
-    const openQuestions = OpenQuestionDoc.parse(
-      JSON.parse(readFileSync(join(FIXTURE_DIR, "open-questions.json"), "utf-8")),
-    );
-    seedBenchmarkOpenQuestions(ctx, openQuestions);
+    // Real ExpertReview nodes for the benchmark's open questions — ONLY for
+    // the canonical benchmark property (exact confirmed-parcel identity).
+    // The questions are Calvary-specific validation context; another RM-1
+    // property keeps its own unresolved computation questions and an honest
+    // empty expert-review state instead.
+    if (parcelKey === CANONICAL_BENCHMARK_PARCEL_KEY) {
+      const openQuestions = OpenQuestionDoc.parse(
+        JSON.parse(readFileSync(join(FIXTURE_DIR, "open-questions.json"), "utf-8")),
+      );
+      seedBenchmarkOpenQuestionsForProperty(ctx, openQuestions, parcelKey);
+    }
 
     const result = solve(project);
     if (result.status !== "SOLVED") {

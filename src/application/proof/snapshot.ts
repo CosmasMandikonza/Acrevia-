@@ -330,6 +330,31 @@ const OpenQuestionDoc = {
 };
 
 /**
+ * The canonical benchmark property: Calvary Memorial Church, OPA/BRT parcel
+ * 778273000 (graph node `gis:parcel:778273000`). The benchmark's open
+ * questions are THIS property's validation context — they may never appear
+ * on another church's proof, even in the same district.
+ */
+export const CANONICAL_BENCHMARK_PARCEL_KEY = "778273000";
+
+/**
+ * Property-gated seeding: benchmark open questions become ExpertReview nodes
+ * ONLY when the accepted property is the canonical benchmark property (exact
+ * confirmed-parcel identity — never district-level or fuzzy matching). A
+ * different RM-1 property gets an honest empty expert-review state and keeps
+ * its real unresolved ConstraintResults; Calvary-specific title/history/FAR
+ * questions never attach to another property.
+ */
+export function seedBenchmarkOpenQuestionsForProperty(
+  ctx: CommandContext,
+  questions: Array<{ id: string; category: string; kind: string; question: string; whyItMatters: string }>,
+  confirmedParcelKey: string,
+): number {
+  if (confirmedParcelKey !== CANONICAL_BENCHMARK_PARCEL_KEY) return 0;
+  return seedBenchmarkOpenQuestions(ctx, questions);
+}
+
+/**
  * Seed the canonical benchmark's open questions as REAL ExpertReview nodes
  * (same deterministic ids and fields as the legacy benchmark seed:
  * `phl:review:<oq-id>`). Idempotent — existing nodes are left untouched.
