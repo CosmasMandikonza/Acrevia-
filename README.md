@@ -39,7 +39,7 @@ Today, those answers are scattered across zoning codes, GIS portals, spreadsheet
 
 Acrevia is **not** intended to replace architects, planners, land-use attorneys, developers, lenders, or city officials.
 
-It is the intelligence layer that helps a non-expert church reach the *first serious conversation* with far more clarity.
+It is the intelligence layer that helps a non-expert church reach the _first serious conversation_ with far more clarity.
 
 ---
 
@@ -57,7 +57,7 @@ That means mission requirements are not decorative text in a report.
 
 They become first-class constraints alongside zoning, geometry, parking, ownership, affordability, and capital assumptions.
 
-~~~text
+```text
 LAW
   +
 SITE
@@ -71,7 +71,7 @@ EVIDENCE
 EXECUTABLE DEVELOPMENT MODEL
   ↓
 VERIFIED SCENARIOS
-~~~
+```
 
 ---
 
@@ -79,7 +79,7 @@ VERIFIED SCENARIOS
 
 Acrevia is designed so a church leader can move from **"We have land"** to **"We understand the next credible step"** without becoming a real-estate expert.
 
-~~~mermaid
+```mermaid
 flowchart TD
     A[Enter church address] --> B[Resolve parcel + jurisdiction]
     B --> C[Collect zoning + public property evidence]
@@ -92,7 +92,7 @@ flowchart TD
     I --> J[Prepare Board / Council view]
     J --> K[Generate expert handoff package]
     K --> L[Watch for future changes]
-~~~
+```
 
 ## 1. Start with an address
 
@@ -121,7 +121,7 @@ Acrevia converts the property into a shared computational model.
 
 The Development Twin contains:
 
-~~~text
+```text
 PROPERTY
 ├── parcel
 ├── existing buildings
@@ -160,7 +160,7 @@ EVIDENCE
 ├── retrieval time
 ├── confidence
 └── verification state
-~~~
+```
 
 The Twin becomes the shared state for the entire product.
 
@@ -194,12 +194,12 @@ Acrevia does not pretend there is one magical "best" answer.
 
 It generates alternatives that expose trade-offs.
 
-| Scenario | Homes | Sunday Parking | Ownership | Complexity |
-|---|---:|---:|---|---|
-| Preserve | 22 | 108 | Church retained | Lower |
-| Balance | 34 | 86 | Ground lease | Moderate |
-| Community | 41 + shared space | 78 | Church retained | Moderate |
-| Maximum Impact | 53 | 68 | Flexible | Higher / variance |
+| Scenario       |             Homes | Sunday Parking | Ownership       | Complexity        |
+| -------------- | ----------------: | -------------: | --------------- | ----------------- |
+| Preserve       |                22 |            108 | Church retained | Lower             |
+| Balance        |                34 |             86 | Ground lease    | Moderate          |
+| Community      | 41 + shared space |             78 | Church retained | Moderate          |
+| Maximum Impact |                53 |             68 | Flexible        | Higher / variance |
 
 The point is not to choose for the church.
 
@@ -219,7 +219,7 @@ The 3D model is not generated from a visual prompt.
 
 It is produced from the same project constraints used by the feasibility engine.
 
-~~~mermaid
+```mermaid
 flowchart LR
     A[Authoritative rules] --> B[Typed constraints]
     C[Mission constraints] --> B
@@ -227,7 +227,7 @@ flowchart LR
     B --> E[Scenario solver]
     E --> F[Valid buildable geometry]
     F --> G[Interactive 3D Twin]
-~~~
+```
 
 In Forge, a user can:
 
@@ -328,7 +328,7 @@ An issue Acrevia refuses to resolve autonomously because it requires professiona
 
 Example:
 
-~~~text
+```text
 34 HOMES — DERIVATION
 
 Parcel area                 76,418 ft²
@@ -346,7 +346,7 @@ Evidence state
 ✓ 3 regulatory constraints verified
 • 1 planning assumption
 ! Utility capacity requires expert review
-~~~
+```
 
 ---
 
@@ -364,7 +364,7 @@ User:
 
 Acrevia:
 
-~~~text
+```text
 NO VERIFIED SOLUTION
 
 Binding constraints:
@@ -377,13 +377,13 @@ Closest verified alternatives:
 48 homes — 120 parking — no variance
 61 homes — 84 parking — no variance
 70 homes — 84 parking — height variance required
-~~~
+```
 
 ### Conflicting regulation
 
 If two sources disagree:
 
-~~~text
+```text
 REGULATORY CONFLICT
 
 55 ft
@@ -396,7 +396,7 @@ Acrevia will not use the 55 ft assumption.
 
 41-home scenario rejected.
 Human verification requested.
-~~~
+```
 
 Acrevia is designed to **prove opportunity — or explain why it cannot yet be proven.**
 
@@ -412,7 +412,7 @@ For denominations, dioceses, networks, and other multi-property organizations.
 
 Screen many properties and identify where deeper feasibility work may be worth doing.
 
-~~~text
+```text
 642 properties
     ↓
 underused-land signals
@@ -424,7 +424,7 @@ development pathway
 mission + financial fit
     ↓
 priority properties for diligence
-~~~
+```
 
 ## Site
 
@@ -522,7 +522,7 @@ Different explanations.
 
 Acrevia is intentionally not an "LLM does everything" system.
 
-~~~mermaid
+```mermaid
 flowchart TB
     A[Address / Portfolio] --> B[Property + Jurisdiction Resolver]
 
@@ -565,7 +565,7 @@ flowchart TB
 
     L --> M[Watch / Re-evaluation]
     M --> G
-~~~
+```
 
 ---
 
@@ -660,7 +660,7 @@ Retrieval is **not the product**.
 
 The core system is:
 
-~~~text
+```text
 unstructured regulation
         ↓
 candidate typed constraints
@@ -674,7 +674,7 @@ geometry / optimization
 valid scenarios
         ↓
 interactive 3D + decision system
-~~~
+```
 
 RAG can tell you what a document says.
 
@@ -730,13 +730,13 @@ Click the verified scenario.
 
 Show:
 
-~~~text
+```text
 law
 → typed constraint
 → geometry
 → unit count
 → evidence
-~~~
+```
 
 ### Beat 5 — Move forward
 
@@ -834,10 +834,10 @@ Acrevia is designed around the challenge's central outcome:
 
 ## Repository
 
-~~~bash
+```bash
 git clone https://github.com/CosmasMandikonza/Acrevia-.git
 cd Acrevia-
-~~~
+```
 
 See the local-development section below for setup and the current implementation boundaries.
 
@@ -870,11 +870,15 @@ services are required. Address text is stored only in the URL, so it appears in
 browser history; it is not geocoded, verified, or saved as a project. To reset,
 return to `/` or open `/workspace` without query parameters.
 
-The Copilot rail (workspace header) additionally needs an OpenAI-compatible
-chat-completions provider (Gloo AI Studio works): set `ACREVIA_AI_BASE_URL`,
-`ACREVIA_AI_API_KEY`, and `ACREVIA_AI_MODEL` (see `.env.example`). Without
-them the Copilot reports AI unavailable and every deterministic surface keeps
-working. The Copilot never mutates project state directly — mission changes
+The Copilot rail (workspace header) needs an AI provider (see `.env.example`):
+Gloo AI Studio (any OpenAI-compatible endpoint) via `ACREVIA_AI_BASE_URL` /
+`ACREVIA_AI_API_KEY` / `ACREVIA_AI_MODEL` is the intended hackathon provider;
+Anthropic (`ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL`) is the fallback.
+`ACREVIA_AI_PROVIDER` selects `auto` (default: Gloo when complete, else
+Anthropic), `gloo`, or `anthropic` — an explicitly selected provider with an
+incomplete configuration never silently falls through. Without a configured
+provider the Copilot reports AI unavailable and every deterministic surface
+keeps working. The Copilot never mutates project state directly — mission changes
 are typed proposals the user confirms through the standard mission command
 boundary.
 

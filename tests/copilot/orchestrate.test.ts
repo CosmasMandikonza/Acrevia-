@@ -264,9 +264,12 @@ describe("honest failure surfacing", () => {
 
 describe("POST /api/copilot/turn — route trust boundary", () => {
   const ENV_KEYS = [
+    "ACREVIA_AI_PROVIDER",
     "ACREVIA_AI_BASE_URL",
     "ACREVIA_AI_API_KEY",
     "ACREVIA_AI_MODEL",
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_MODEL",
   ] as const;
   let saved: Record<string, string | undefined>;
 
