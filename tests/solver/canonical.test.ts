@@ -863,6 +863,127 @@ describe("canonical Calvary solver benchmark", () => {
     expect(gradeCertificate(project4, "scenario:unrelated-law-only:certificate").freshness).toBe("CURRENT");
     expect(gradeCertificate(project4, unrelated[0].certificateId).freshness).not.toBe("CURRENT");
   });
+
+  it("scenario identity includes dependency SEMANTIC state: same point + changed law → new CURRENT certificate, replay reuses it", () => {
+    const project = canonicalProject();
+    const ctx = contextFor(project);
+    const before = solve(project);
+    if (before.status !== "SOLVED") throw new Error("SOLVED");
+    const recordedA = recordSolverScenarios(ctx, before);
+    for (const entry of recordedA) expect(entry.freshness).toBe("CURRENT");
+
+    // Consequential LAW change that does NOT move the selected point:
+    // occupied-area 75% → 76% relaxes a NON-binding ceiling (the physical
+    // area budget still binds), so every homes/floors/parking point stays
+    // identical while the law node's revision + semanticHash change.
+    replaceExecutableConstraint(ctx, {
+      id: "phl:constraint:bulk:occupied-area:max",
+      kind: "constraint",
+      constraintKind: "occupied-area",
+      regulationId: "phl:reg:bulk:occupied-area:max",
+      byLotType: { intermediate: 76 },
+      unit: "percent",
+    });
+    for (const entry of recordedA) {
+      expect(gradeCertificate(project, entry.certificateId).freshness).not.toBe("CURRENT");
+    }
+
+    const after = solve(project);
+    if (after.status !== "SOLVED") throw new Error("still SOLVED");
+    // The selected point is deliberately identical — only the identity of
+    // the proof changed.
+    expect(JSON.stringify(after.scenarios.map((s) => s.point))).toBe(
+      JSON.stringify(before.scenarios.map((s) => s.point)),
+    );
+    const recordedB = recordSolverScenarios(ctx, after);
+    expect(recordedB.length).toBe(recordedA.length);
+    for (let i = 0; i < recordedB.length; i += 1) {
+      expect(recordedB[i].scenarioId).not.toBe(recordedA[i].scenarioId);
+      expect(recordedB[i].certificateId).not.toBe(recordedA[i].certificateId);
+      expect(recordedB[i].freshness).toBe("CURRENT");
+    }
+
+    // Replay of the unchanged new state reuses cert B's identity.
+    const replayB = recordSolverScenarios(ctx, after);
+    expect(replayB.map((r) => r.scenarioId)).toEqual(recordedB.map((r) => r.scenarioId));
+    for (const entry of replayB) expect(entry.freshness).toBe("CURRENT");
+  });
+
+  it("scenario identity includes dependency SEMANTIC state: same point + changed mission text → new CURRENT certificate, replay reuses it", () => {
+    const project = canonicalProject();
+    const ctx = contextFor(project);
+    const before = solve(project);
+    if (before.status !== "SOLVED") throw new Error("SOLVED");
+    const recordedA = recordSolverScenarios(ctx, before);
+    for (const entry of recordedA) expect(entry.freshness).toBe("CURRENT");
+
+    // Consequential MISSION change that does NOT move the selected point:
+    // retain-ownership wording changes the mission node's semantics while
+    // leaving every homes/floors/parking value identical.
+    confirmMissionConstraint(ctx, {
+      id: "mission:retain-ownership",
+      kind: "mission-constraint",
+      intentText: "We will never sell the land — not now, not later.",
+      normalized: { type: "retain-ownership" },
+      origin: { kind: "USER_DECLARED", actorId: "board-chair", declaredAt: NOW },
+      confirmationState: "CONFIRMED",
+      hardOrSoft: "hard",
+    });
+    for (const entry of recordedA) {
+      expect(gradeCertificate(project, entry.certificateId).freshness).not.toBe("CURRENT");
+    }
+
+    const after = solve(project);
+    if (after.status !== "SOLVED") throw new Error("still SOLVED");
+    expect(JSON.stringify(after.scenarios.map((s) => s.point))).toBe(
+      JSON.stringify(before.scenarios.map((s) => s.point)),
+    );
+    const recordedB = recordSolverScenarios(ctx, after);
+    for (let i = 0; i < recordedB.length; i += 1) {
+      expect(recordedB[i].scenarioId).not.toBe(recordedA[i].scenarioId);
+      expect(recordedB[i].freshness).toBe("CURRENT");
+    }
+    const replayB = recordSolverScenarios(ctx, after);
+    expect(replayB.map((r) => r.scenarioId)).toEqual(recordedB.map((r) => r.scenarioId));
+  });
+
+  it("scenario identity includes dependency SEMANTIC state: same point + changed assumption → new CURRENT certificate, replay reuses it", () => {
+    const project = canonicalProject();
+    const ctx = contextFor(project);
+    const before = solve(project);
+    if (before.status !== "SOLVED") throw new Error("SOLVED");
+    const recordedA = recordSolverScenarios(ctx, before);
+    for (const entry of recordedA) expect(entry.freshness).toBe("CURRENT");
+
+    // Consequential ASSUMPTION change that does NOT move the selected point:
+    // the planning-envelope setback only shapes the conceptual massing note,
+    // never homes/floors/parking.
+    setAssumption(ctx, {
+      id: "assumption:planning-envelope-uniform-setback",
+      kind: "assumption",
+      statement: "planning envelope",
+      value: { type: "quantity", quantity: { value: 10, unit: "ft" } },
+      rationale: "conceptual massing only",
+      origin: { kind: "MODELER_DECLARED", actorId: "t" },
+      active: true,
+    });
+    for (const entry of recordedA) {
+      expect(gradeCertificate(project, entry.certificateId).freshness).not.toBe("CURRENT");
+    }
+
+    const after = solve(project);
+    if (after.status !== "SOLVED") throw new Error("still SOLVED");
+    expect(JSON.stringify(after.scenarios.map((s) => s.point))).toBe(
+      JSON.stringify(before.scenarios.map((s) => s.point)),
+    );
+    const recordedB = recordSolverScenarios(ctx, after);
+    for (let i = 0; i < recordedB.length; i += 1) {
+      expect(recordedB[i].scenarioId).not.toBe(recordedA[i].scenarioId);
+      expect(recordedB[i].freshness).toBe("CURRENT");
+    }
+    const replayB = recordSolverScenarios(ctx, after);
+    expect(replayB.map((r) => r.scenarioId)).toEqual(recordedB.map((r) => r.scenarioId));
+  });
 });
 
 export { canonicalProject };

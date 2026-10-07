@@ -33,11 +33,11 @@ function labelSlug(label: string | null): string {
   return (label ?? "unlabeled").toLowerCase().replace(/[^a-z0-9]+/g, "-");
 }
 
-function toResultRows(prefix: string, results: EvaluatedConstraint[]) {
+function toResultRows(digest: string, results: EvaluatedConstraint[]) {
   return results
     .filter((r) => r.constraintId !== undefined)
     .map((r) => ({
-      resultId: `result:${prefix}:${r.constraintId}`,
+      resultId: `result:${digest}:${r.constraintId}`,
       constraintId: r.constraintId as string,
       status: r.status,
       actual:
@@ -57,15 +57,39 @@ export function recordSolverScenarios(ctx: CommandContext, result: SolveSuccess)
     throw new Error("recordSolverScenarios requires a SOLVED result");
   }
   const recorded: RecordedScenario[] = [];
+
+  // Exact semantic identity of every direct dependency, mirroring what the
+  // certificate closure pins: {nodeId, revision, semanticHash}. IDs alone
+  // are NOT enough — a consequential edit can leave the selected point
+  // identical, and reusing the old scenario id would return the old STALE
+  // certificate instead of issuing a fresh CURRENT one. Never timestamps:
+  // revision + semanticHash are semantic, createdAt/lastModifiedAt are not.
+  const dependencyState = (ids: string[]) =>
+    ids.map((nodeId) => {
+      const node = ctx.project.nodes[nodeId] as
+        | { meta?: { revision?: number; semanticHash?: string } }
+        | undefined;
+      return {
+        nodeId,
+        revision: node?.meta?.revision ?? -1,
+        semanticHash: node?.meta?.semanticHash ?? "",
+      };
+    });
+
+  const lawState = dependencyState(result.inputs.law.map((c) => c.id));
+  const missionState = dependencyState(result.inputs.missions.map((m) => m.id));
+  const assumptionState = dependencyState(result.inputs.assumptionIds);
+  const parcelState = dependencyState([result.inputs.parcelId]);
+
   for (const scenario of result.scenarios) {
-    // Digest over exactly what the certificate closure pins + the point.
+    // Digest over the exact dependency semantic state + the selected point.
     const digest = createSha256(
       canonicalJson({
         projectId: result.inputs.projectId,
-        parcelId: result.inputs.parcelId,
-        law: result.inputs.law.map((c) => c.id),
-        missions: result.inputs.missions.map((m) => m.id),
-        assumptions: result.inputs.assumptionIds,
+        parcel: parcelState,
+        law: lawState,
+        missions: missionState,
+        assumptions: assumptionState,
         label: scenario.label,
         point: scenario.point,
       }),
@@ -105,7 +129,7 @@ export function recordSolverScenarios(ctx: CommandContext, result: SolveSuccess)
         missionIds: result.inputs.missions.map((m) => m.id),
         assumptionIds: result.inputs.assumptionIds,
         parcelId: result.inputs.parcelId,
-        results: toResultRows(labelSlug(scenario.label), scenario.results),
+        results: toResultRows(digest, scenario.results),
         certificateId,
       });
     }
