@@ -1,6 +1,7 @@
 import type { CandidateRule } from "./candidate-rule";
 import type { RawEvidenceDocument, SourceMetadata } from "./extraction";
 import { normalizeFeet, normalizePercent, normalizeSqFt } from "./normalize";
+import { deriveVerifiedValue, type VerifiedRule } from "./verified-rule";
 
 /**
  * Deterministic candidate verification (issue #5) — the compiler's second
@@ -46,6 +47,11 @@ export type VerificationDecision = {
   candidate: CandidateRule;
   status: "ACCEPT" | "REJECT";
   reasons: string[];
+  /** Verifier-owned canonical result — present only on ACCEPT, and only
+   *  when ALL executable semantics were independently derived. Its absence
+   *  on an ACCEPT means the rule abstains from executability (Claim/
+   *  Regulation only, or UNKNOWN). */
+  verified?: VerifiedRule;
 };
 
 /** Predicates whose quantity the verifier can independently re-derive from
@@ -209,6 +215,81 @@ export function verifyCandidates(input: {
     }
     reasons.push(...quantityProblems(candidate));
 
-    return { candidate, status: reasons.length === 0 ? "ACCEPT" : "REJECT", reasons };
+    if (reasons.length > 0) return { candidate, status: "REJECT", reasons };
+
+    // Verifier-owned semantics: derive everything consequential from the
+    // capture. If a needed semantic cannot be derived, the rule can still be
+    // a sourced Claim — but never executable.
+    const notes: string[] = [];
+    const captureText =
+      document?.kind === "code-text" ? document.text ?? "" : JSON.stringify(document?.json ?? "");
+    let verified: VerifiedRule | undefined;
+    if (candidate.proposedValue.kind === "unknown") {
+      verified = {
+        candidate,
+        verifiedExcerpt: anchor.exactText,
+        verifiedLocator: candidate.codeSection ?? anchor.exactText.slice(0, 80),
+        verifiedValue: { kind: "abstain", reason: "evidence establishes no value; recorded UNKNOWN" },
+        verifiedApplicability: candidate.applicability,
+        verificationNotes: notes,
+      };
+    } else {
+      const derived = deriveVerifiedValue(candidate, anchor.exactText, captureText);
+      if (derived) {
+        // Cross-check: a quantity the candidate PROPOSES must equal what the
+        // evidence says whenever both are numeric (prevents silent drift).
+        if (
+          derived.kind === "quantity" &&
+          candidate.proposedValue.kind === "quantity" &&
+          derived.value !== candidate.proposedValue.value
+        ) {
+          reasons.push(
+            `evidence anchor says ${derived.value} but the candidate proposes ${candidate.proposedValue.value} ${candidate.proposedValue.unit}`,
+          );
+          return { candidate, status: "REJECT", reasons };
+        }
+        if (
+          derived.kind === "permission" &&
+          candidate.proposedValue.kind === "qualitative"
+        ) {
+          const proposed = permissionLetter(candidate.proposedValue.text);
+          if (proposed && proposed !== derived.permission) {
+            reasons.push(
+              `evidence anchor reads ${derived.permission} but the candidate claims ${proposed}`,
+            );
+            return { candidate, status: "REJECT", reasons };
+          }
+        }
+        verified = {
+          candidate,
+          verifiedExcerpt: anchor.exactText,
+          verifiedLocator: candidate.codeSection ?? anchor.exactText.slice(0, 80),
+          verifiedValue: derived,
+          verifiedApplicability: candidate.applicability,
+          verificationNotes: notes,
+        };
+      } else if (REGULATORY_PREDICATES.has(candidate.predicate)) {
+        notes.push(
+          "verifier could not derive executable semantics from captured evidence; recorded as sourced non-executable rule",
+        );
+        verified = {
+          candidate,
+          verifiedExcerpt: anchor.exactText,
+          verifiedLocator: candidate.codeSection ?? anchor.exactText.slice(0, 80),
+          verifiedValue: { kind: "abstain", reason: "semantics not derivable from capture" },
+          verifiedApplicability: candidate.applicability,
+          verificationNotes: notes,
+        };
+      }
+    }
+    return { candidate, status: "ACCEPT", reasons, verified };
   });
+}
+
+function permissionLetter(text: string): "BY_RIGHT" | "SPECIAL_EXCEPTION" | "PROHIBITED" | null {
+  const trimmed = text.trim();
+  if (/^Y/i.test(trimmed)) return "BY_RIGHT";
+  if (/^S(?!a)/i.test(trimmed) || /^(Special|S\[)/i.test(trimmed)) return "SPECIAL_EXCEPTION";
+  if (/^N(?!e)/i.test(trimmed) || /^Not allowed/i.test(trimmed)) return "PROHIBITED";
+  return null;
 }

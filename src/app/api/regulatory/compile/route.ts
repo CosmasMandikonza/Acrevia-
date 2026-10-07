@@ -17,21 +17,11 @@ import type { CommandContext } from "../../../../commands";
 
 /**
  * POST /api/regulatory/compile — the compiled-law view for an accepted
- * property (issue #5). PROPERTY BINDING is fail-closed:
- *
- *   - the signed accepted session provides property identity, base district,
- *     overlays, and property-specific GIS facts;
- *   - the reusable benchmark corpus contributes ONLY jurisdiction-wide legal
- *     texts (S5 quick guide, S6 adopted /SIX code, S7 adopted parking code) —
- *     never Calvary's property-specific captures (S1-S4/S8-S11);
- *   - RM-1-column law compiles only when the signed property is actually
- *     RM-1; /SIX law only when the signed overlays prove /SIX applies;
- *   - a missing district NEVER defaults to RM-1 (needs-evidence);
- *   - districts outside the captured corpus return an honest
- *     unsupported-district state, not someone else's law.
- *
- * Stateless and deterministic; verified pair + hash-gated rebuild (ADR 0005
- * trust model).
+ * property (issue #5). PROPERTY BINDING is fail-closed and provenance is
+ * TWO-STRANDED: every rule reports LAW (the legal claim/source/locator the
+ * rule comes from) separately from APPLIES HERE (the site's own zoning-base
+ * or overlay claim + official-GIS source proving the law applies to THIS
+ * parcel). Never the first arbitrary claim from the closure.
  */
 
 export const dynamic = "force-dynamic";
@@ -73,8 +63,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Multi-parcel accepted properties fail closed: the first parcel's law
-    // is never presented as property-wide law.
+    // Multi-parcel accepted properties fail closed.
     if (session.confirmedParcelIds.length > 1 || session.parcelContexts.length > 1) {
       return NextResponse.json({
         status: "multi-parcel-unsupported",
@@ -88,8 +77,6 @@ export async function POST(request: Request) {
     const district = canonicalDistrict(rawDistrict);
     const subjectNodeId = `gis:parcel:${session.confirmedParcelIds[0]}`;
 
-    // Applicability proof nodes from the accepted property's OWN signed GIS
-    // session (already in the rebuilt project as claims + GIS artifacts).
     const parcelKey = session.confirmedParcelIds[0];
     const zoningBaseClaimId = `gis:claim:zoning-base:${parcelKey}`;
     const overlayClaimId = `gis:claim:zoning-overlays:${parcelKey}`;
@@ -125,8 +112,6 @@ export async function POST(request: Request) {
       subject: { subjectNodeId, jurisdictionKey: "philadelphia-pa", district },
     });
     const extraction = await benchmarkExtractionAdapter.extract(evidence);
-    // PROPERTY BINDING FILTER: jurisdiction-wide legal texts only; /SIX
-    // adopted code only when the signed session proves the overlay applies.
     const lawCandidates: CandidateRule[] = extraction.candidates.filter((candidate) => {
       if (!LAW_SOURCES.has(candidate.sourceRef)) return false;
       if (candidate.sourceRef === "S6" && !sixProven) return false;
@@ -145,31 +130,62 @@ export async function POST(request: Request) {
       },
     });
     const gate = selectExecutableConstraints(project);
-    const sourceTitles = new Map(evidence.sources.map((s) => [s.sourceRef, s.title]));
+
+    const supportedBy = (claimIds: string[]): string | undefined => {
+      const edge = project.edges.find(
+        (e) => e.role === "supported-by" && claimIds.includes(e.dependentId),
+      );
+      return edge ? edge.dependencyId : undefined;
+    };
 
     const law = gate.decisions
       .filter((decision) => decision.executable)
       .map((decision) => {
         const constraint = gate.executable.find((c) => c.id === decision.constraintId);
-        const claim = decision.claimIds
+        const regulation = project.nodes[decision.regulationId];
+
+        // TWO-STRAND provenance: LAW claims (phl:claim:<rule>) vs APPLIES
+        // HERE claims (gis:claim:zoning-*). Never "first found".
+        const legalClaimIds = decision.claimIds.filter((id) => id.startsWith("phl:claim:"));
+        const applicabilityClaimIds = decision.claimIds.filter((id) => id.startsWith("gis:claim:"));
+        const legalClaim = legalClaimIds
           .map((id) => project.nodes[id])
           .find((node) => node?.kind === "claim");
-        const regulation = project.nodes[decision.regulationId];
-        const sourceRef = decision.sourceIds
-          .map((id) => project.nodes[id])
-          .find((node) => node?.kind === "source-artifact");
+        const legalSourceId = supportedBy(legalClaimIds);
+        const legalSource = legalSourceId ? project.nodes[legalSourceId] : undefined;
+        const applicabilitySourceId = supportedBy(applicabilityClaimIds);
+        const applicabilitySource = applicabilitySourceId
+          ? project.nodes[applicabilitySourceId]
+          : undefined;
+
         return {
           constraintId: decision.constraintId,
           constraint,
           value: describeConstraint(constraint),
-          codeSection:
-            regulation?.kind === "regulation" ? regulation.codeSection : undefined,
-          evidence: claim?.kind === "claim" ? claim.evidenceState : undefined,
-          verbatim: claim?.kind === "claim" ? claim.verbatimQuote : undefined,
-          sourceRef: sourceRef?.kind === "source-artifact"
-            ? sourceRef.logicalSourceKey.replace(/^phl:src:/, "")
-            : undefined,
-          sourceTitle: sourceRef?.kind === "source-artifact" ? sourceRef.title : undefined,
+          law: {
+            codeSection: regulation?.kind === "regulation" ? regulation.codeSection : undefined,
+            evidence: legalClaim?.kind === "claim" ? legalClaim.evidenceState : undefined,
+            verbatim: legalClaim?.kind === "claim" ? legalClaim.verbatimQuote : undefined,
+            sourceRef: legalSource?.kind === "source-artifact"
+              ? legalSource.logicalSourceKey.replace(/^phl:src:/, "")
+              : undefined,
+            sourceTitle: legalSource?.kind === "source-artifact" ? legalSource.title : undefined,
+          },
+          appliesHere: {
+            claimId: applicabilityClaimIds[0],
+            district: zoningBaseClaim.kind === "claim"
+              ? (zoningBaseClaim.value as { text?: string } | undefined)?.text
+              : undefined,
+            overlay: overlayClaim?.kind === "claim"
+              ? (overlayClaim.value as { text?: string } | undefined)?.text?.slice(0, 80)
+              : undefined,
+            sourceTitle: applicabilitySource?.kind === "source-artifact"
+              ? applicabilitySource.title
+              : undefined,
+            sourceKind: applicabilitySource?.kind === "source-artifact"
+              ? "official GIS"
+              : "official GIS",
+          },
         };
       });
 
@@ -180,10 +196,7 @@ export async function POST(request: Request) {
       conflicts: compile.conflicts.map((conflict) => ({
         predicate: conflict.predicate,
         semanticRuleKey: conflict.semanticRuleKey,
-        members: conflict.members.map((member) => ({
-          ...member,
-          sourceTitle: sourceTitles.get(member.sourceRef) ?? member.sourceRef,
-        })),
+        members: conflict.members.map((member) => ({ ...member })),
         resolution: conflict.resolution,
         explanation: conflict.explanation,
       })),
@@ -193,8 +206,8 @@ export async function POST(request: Request) {
         reasons,
       })),
       unknowns: compile.outcomes
-        .filter((outcome) => outcome.outcome === "unknown-recorded")
-        .map((outcome) => outcome.predicate),
+        .filter((outcome) => outcome.outcome === "unknown-recorded" || outcome.outcome === "abstained")
+        .map((outcome) => outcome.semanticRuleKey),
     });
   } catch (error) {
     const name = error instanceof Error ? error.name : "Error";

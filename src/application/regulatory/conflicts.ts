@@ -1,22 +1,15 @@
 import type { CandidateRule } from "./candidate-rule";
+import type { CanonicalVerifiedValue, VerifiedRule } from "./verified-rule";
 
 /**
  * Conflict and currentness analysis (issue #5).
  *
- * Authority rank + date is NOT a simplistic winner algorithm: AuthorityLevel
- * is source authority, not automatic legal precedence. Candidates group by
- * SEMANTIC RULE KEY — different legal propositions never collide, and the
- * same proposition from different sources must agree in NORMALIZED LEGAL
- * SEMANTICS, not just raw numbers:
- *
- *   quantity            -> `q:<value> <unit>`
- *   use-permission      -> BY_RIGHT | SPECIAL_EXCEPTION | PROHIBITED
- *   overlay prohibition -> `prohibits:<subject>`
- *   parking formula     -> `f:<collapsed normalized text>`
- *   other qualitative   -> `t:<collapsed normalized text>`
- *
- * Resolution reasons explicitly about authority, currentness, effective/
- * supersession, and applicability:
+ * Comparison semantics are VERIFIER-OWNED: grouping and disagreement use
+ * CanonicalVerifiedValue (derived from captured evidence), never raw
+ * `candidate.proposedValue` or extractor prose. Authority rank + date is
+ * NOT a simplistic winner algorithm: AuthorityLevel is source authority,
+ * not automatic legal precedence. Resolution reasons explicitly about
+ * authority, currentness, supersession, and applicability:
  *
  *   same logical source, newer capture          -> SUPERSEDED (supersession machinery)
  *   adopted code vs older/lower source          -> lower EXCLUDED, discrepancy visible,
@@ -24,8 +17,12 @@ import type { CandidateRule } from "./candidate-rule";
  *   equal authority, incompatible, unresolved    -> BLOCKED + EXPERT_REQUIRED
  *   newer lower-authority vs adopted code        -> never silently overrides
  *
- * The decision function sees the group as a sorted whole, so results are
- * source-order invariant: [55, 45] and [45, 55] decide identically.
+ * ABSTAINING rules (verifier could not derive executable semantics, or
+ * deliberate UNKNOWN) never group as legal values — they cannot conflict
+ * with, supersede, or outvote known evidence.
+ *
+ * Decisions are computed over sorted groups, so results are source-order
+ * invariant: [55, 45] and [45, 55] decide identically.
  */
 
 export type ConflictStatus = "EXECUTABLE" | "EXCLUDED" | "BLOCKED" | "SUPERSEDED";
@@ -56,53 +53,73 @@ export type ConflictRecord = {
   explanation: string;
 };
 
-/** Deterministic normalized legal semantics for a candidate's value. */
-export function normalizedLegalValue(candidate: CandidateRule): string {
-  const value = candidate.proposedValue;
-  if (value.kind === "quantity") return `q:${value.value} ${value.unit}`;
-  if (value.kind === "unknown") return "u:unknown";
-  const text = value.text.replace(/\s+/g, " ").trim().toLowerCase();
-  switch (candidate.predicate) {
-    case "use-permission":
-      if (/^y/.test(text)) return "perm:BY_RIGHT";
-      if (/^s/.test(text)) return "perm:SPECIAL_EXCEPTION";
-      if (/^n/.test(text)) return "perm:PROHIBITED";
-      return `t:${text}`;
-    case "overlay-restriction":
-      if (text.includes("accessory dwelling unit")) return "prohibits:accessory-dwelling-units";
-      if (text.includes("not be permitted") || text.includes("prohibited")) {
-        return `prohibits:${text.slice(0, 60)}`;
-      }
-      return `t:${text}`;
-    case "parking-requirement":
-      return `f:${text}`;
-    default:
-      return `t:${text}`;
+/** Normalized legal semantics of a VERIFIED value (verifier-owned). */
+export function normalizedVerifiedLegalValue(value: CanonicalVerifiedValue): string {
+  switch (value.kind) {
+    case "quantity":
+      return `q:${value.value} ${value.unit}`;
+    case "permission":
+      return `perm:${value.permission}`;
+    case "prohibition":
+      return `prohibits:${value.prohibits}@${value.overlay}`;
+    case "parking-formula":
+      return `f:${value.formula.replace(/\s+/g, " ").trim().toLowerCase()}`;
+    case "density-tiers":
+      return `tiers:${value.tiers.map((t) => `${t.firstSqFt}:${t.perUnit}`).join("|")}`;
+    case "occupied-area-by-lot-type":
+      return `occ:${value.intermediate ?? "-"}:${value.corner ?? "-"}`;
+    case "side-yard-range":
+      return `side:${value.min}-${value.max}`;
+    case "bonus-tiers":
+      return `bonus:${Object.entries(value.tiers).sort().map(([k, v]) => `${k}=${v}`).join("|")}`;
+    case "contextual-setback":
+      return `ctx:${value.face}:${value.ruleId}`;
+    case "abstain":
+      return "u:abstain";
   }
 }
 
-function valueSummary(candidate: CandidateRule): string {
-  const value = candidate.proposedValue;
-  if (value.kind === "quantity") return `${value.value} ${value.unit}`;
-  if (value.kind === "qualitative") return value.text.slice(0, 60);
-  return "unknown";
+function valueSummary(value: CanonicalVerifiedValue): string {
+  switch (value.kind) {
+    case "quantity":
+      return `${value.value} ${value.unit}`;
+    case "permission":
+      return value.permission;
+    case "prohibition":
+      return `${value.overlay} prohibits ${value.prohibits}`;
+    case "parking-formula":
+      return value.formula.slice(0, 60);
+    case "density-tiers":
+      return value.tiers.map((t) => `${t.perUnit}/${t.firstSqFt}`).join("+");
+    case "occupied-area-by-lot-type":
+      return `int ${value.intermediate ?? "?"}% / corner ${value.corner ?? "?"}%`;
+    case "side-yard-range":
+      return `${value.min}-${value.max} ft`;
+    case "bonus-tiers":
+      return Object.entries(value.tiers).map(([k, v]) => `${k} ${v}%`).join(", ");
+    case "contextual-setback":
+      return `contextual ${value.face}`;
+    case "abstain":
+      return "unknown";
+  }
 }
 
-function memberOf(candidate: CandidateRule): ConflictMember {
+function memberOf(verified: VerifiedRule): ConflictMember {
+  const candidate = verified.candidate;
   return {
     candidateId: candidate.candidateId,
     semanticRuleKey: candidate.semanticRuleKey,
     sourceRef: candidate.sourceRef,
     authority: candidate.authority,
     retrievedAt: candidate.retrievedAt,
-    valueSummary: valueSummary(candidate),
-    normalizedLegalValue: normalizedLegalValue(candidate),
+    valueSummary: valueSummary(verified.verifiedValue),
+    normalizedLegalValue: normalizedVerifiedLegalValue(verified.verifiedValue),
   };
 }
 
 /** Stable conflict id from the sorted member ids — order invariant. */
-function conflictIdFor(members: CandidateRule[]): string {
-  const digest = members.map((m) => m.candidateId).sort().join("~");
+function conflictIdFor(members: VerifiedRule[]): string {
+  const digest = members.map((m) => m.candidate.candidateId).sort().join("~");
   let hash = 0;
   for (let i = 0; i < digest.length; i += 1) {
     hash = (hash * 31 + digest.charCodeAt(i)) >>> 0;
@@ -110,108 +127,121 @@ function conflictIdFor(members: CandidateRule[]): string {
   return `conflict:${hash.toString(16)}`;
 }
 
-export function decideConflicts(accepted: CandidateRule[]): {
+const EXECUTABLE_KINDS = new Set(["quantity", "permission", "prohibition", "parking-formula"]);
+
+/** Abstaining values (unknown/undeducible/contextual) never conflict as numbers. */
+function isConflictingValue(value: CanonicalVerifiedValue): boolean {
+  return EXECUTABLE_KINDS.has(value.kind);
+}
+
+export function decideConflicts(verifiedRules: VerifiedRule[]): {
   dispositions: Map<string, ConflictDisposition>;
   conflicts: ConflictRecord[];
 } {
   const dispositions = new Map<string, ConflictDisposition>();
   const conflicts: ConflictRecord[] = [];
 
-  const groups = new Map<string, CandidateRule[]>();
-  for (const candidate of accepted) {
-    dispositions.set(candidate.candidateId, { candidateId: candidate.candidateId, status: "EXECUTABLE", reasons: [] });
-    const key = `${candidate.jurisdictionKey}|${candidate.subjectNodeId}|${candidate.semanticRuleKey}`;
+  const groups = new Map<string, VerifiedRule[]>();
+  for (const verified of verifiedRules) {
+    dispositions.set(verified.candidate.candidateId, {
+      candidateId: verified.candidate.candidateId,
+      status: "EXECUTABLE",
+      reasons: [],
+    });
+    const key = `${verified.candidate.jurisdictionKey}|${verified.candidate.subjectNodeId}|${verified.candidate.semanticRuleKey}`;
     const group = groups.get(key) ?? [];
-    group.push(candidate);
+    group.push(verified);
     groups.set(key, group);
   }
 
   for (const group of groups.values()) {
-    // Deterministic member order inside every decision.
     const sorted = [...group].sort(
-      (a, b) => a.sourceRef.localeCompare(b.sourceRef) || a.retrievedAt.localeCompare(b.retrievedAt) || a.candidateId.localeCompare(b.candidateId),
+      (a, b) =>
+        a.candidate.sourceRef.localeCompare(b.candidate.sourceRef) ||
+        a.candidate.retrievedAt.localeCompare(b.candidate.retrievedAt) ||
+        a.candidate.candidateId.localeCompare(b.candidate.candidateId),
     );
 
-    const distinctValues = new Set(sorted.map((c) => normalizedLegalValue(c)));
-    if (sorted.length < 2 || distinctValues.size < 2) continue; // no disagreement
+    const conflicting = sorted.filter((v) => isConflictingValue(v.verifiedValue));
+    const distinctValues = new Set(conflicting.map((v) => normalizedVerifiedLegalValue(v.verifiedValue)));
+    if (conflicting.length < 2 || distinctValues.size < 2) continue;
+
+    const sortedConflicting = conflicting;
 
     // Same logical source, different captures -> supersession by recency.
-    const sourceRefs = new Set(sorted.map((c) => c.sourceRef));
+    const sourceRefs = new Set(sortedConflicting.map((v) => v.candidate.sourceRef));
     if (sourceRefs.size === 1) {
-      const newest = sorted.reduce((a, b) => (b.retrievedAt > a.retrievedAt ? b : a));
-      for (const member of sorted) {
+      const newest = sortedConflicting.reduce((a, b) =>
+        b.candidate.retrievedAt > a.candidate.retrievedAt ? b : a,
+      );
+      for (const member of sortedConflicting) {
         if (member === newest) continue;
-        dispositions.set(member.candidateId, {
-          candidateId: member.candidateId,
+        dispositions.set(member.candidate.candidateId, {
+          candidateId: member.candidate.candidateId,
           status: "SUPERSEDED",
           reasons: [
-            `superseded by a newer capture of the same logical source (${member.sourceRef} at ${newest.retrievedAt})`,
+            `superseded by a newer capture of the same logical source (${member.candidate.sourceRef} at ${newest.candidate.retrievedAt})`,
           ],
         });
       }
       conflicts.push({
-        conflictId: conflictIdFor(sorted),
-        subjectNodeId: sorted[0].subjectNodeId,
-        semanticRuleKey: sorted[0].semanticRuleKey,
-        predicate: sorted[0].predicate,
-        members: sorted.map(memberOf),
+        conflictId: conflictIdFor(sortedConflicting),
+        subjectNodeId: sortedConflicting[0].candidate.subjectNodeId,
+        semanticRuleKey: sortedConflicting[0].candidate.semanticRuleKey,
+        predicate: sortedConflicting[0].candidate.predicate,
+        members: sortedConflicting.map(memberOf),
         resolution: "superseded",
-        explanation: `Newer capture of ${sorted[0].sourceRef} supersedes the older value; supersession machinery invalidates dependents.`,
+        explanation: `Newer capture of ${sortedConflicting[0].candidate.sourceRef} supersedes the older value; supersession machinery invalidates dependents.`,
       });
       continue;
     }
 
-    // Cross-source disagreement: does ADOPTED_CODE settle it?
-    const adopted = sorted.filter((c) => c.authority === "ADOPTED_CODE");
-    const adoptedValues = new Set(adopted.map((c) => normalizedLegalValue(c)));
+    const adopted = sortedConflicting.filter((v) => v.candidate.authority === "ADOPTED_CODE");
+    const adoptedValues = new Set(adopted.map((v) => normalizedVerifiedLegalValue(v.verifiedValue)));
 
     if (adopted.length >= 1 && adoptedValues.size === 1) {
-      // Exactly one adopted-code position: lower-authority contradictions are
-      // excluded and stay visible; they never silently override the code.
-      for (const member of sorted) {
-        if (member.authority === "ADOPTED_CODE") continue;
-        dispositions.set(member.candidateId, {
-          candidateId: member.candidateId,
+      for (const member of sortedConflicting) {
+        if (member.candidate.authority === "ADOPTED_CODE") continue;
+        dispositions.set(member.candidate.candidateId, {
+          candidateId: member.candidate.candidateId,
           status: "EXCLUDED",
           reasons: [
-            `contradicts adopted code (${valueSummary(adopted[0])} per ${adopted[0].sourceRef}); a ${member.authority} source never overrides adopted code`,
-            ...(member.retrievedAt > adopted[0].retrievedAt
+            `contradicts adopted code (${valueSummary(adopted[0].verifiedValue)} per ${adopted[0].candidate.sourceRef}); a ${member.candidate.authority} source never overrides adopted code`,
+            ...(member.candidate.retrievedAt > adopted[0].candidate.retrievedAt
               ? ["newer lower-authority capture flagged for re-verification of the adopted text"]
               : []),
           ],
         });
       }
       conflicts.push({
-        conflictId: conflictIdFor(sorted),
-        subjectNodeId: sorted[0].subjectNodeId,
-        semanticRuleKey: sorted[0].semanticRuleKey,
-        predicate: sorted[0].predicate,
-        members: sorted.map(memberOf),
+        conflictId: conflictIdFor(sortedConflicting),
+        subjectNodeId: sortedConflicting[0].candidate.subjectNodeId,
+        semanticRuleKey: sortedConflicting[0].candidate.semanticRuleKey,
+        predicate: sortedConflicting[0].candidate.predicate,
+        members: sortedConflicting.map(memberOf),
         resolution: "authority-resolved",
-        explanation: `Adopted code (${adopted[0].sourceRef}, ${valueSummary(adopted[0])}) governs; the competing value is excluded from executable law but remains visible with full provenance.`,
+        explanation: `Adopted code (${adopted[0].candidate.sourceRef}, ${valueSummary(adopted[0].verifiedValue)}) governs; the competing value is excluded from executable law but remains visible with full provenance.`,
       });
       continue;
     }
 
-    // Equal-authority (or multi-position adopted) incompatibility with no
-    // reliable resolution: nothing executable, expert review required.
-    for (const member of sorted) {
-      dispositions.set(member.candidateId, {
-        candidateId: member.candidateId,
+    for (const member of sortedConflicting) {
+      dispositions.set(member.candidate.candidateId, {
+        candidateId: member.candidate.candidateId,
         status: "BLOCKED",
         reasons: [
-          `incompatible ${member.semanticRuleKey} values from sources of comparable authority (${sorted
-            .map((m) => `${m.sourceRef}:${valueSummary(m)}`)
+          `incompatible ${member.candidate.semanticRuleKey} values from sources of comparable authority (${sortedConflicting
+            .map((m) => `${m.candidate.sourceRef}:${valueSummary(m.verifiedValue)}`)
             .join(", ")}); Acrevia does not pick a winner`,
         ],
       });
     }
     conflicts.push({
-      conflictId: conflictIdFor(sorted),
-      subjectNodeId: sorted[0].subjectNodeId,
-      semanticRuleKey: sorted[0].semanticRuleKey,
-      predicate: sorted[0].predicate,
-      members: sorted.map(memberOf),
+      conflictId: conflictIdFor(sortedConflicting),
+      subjectNodeId: sortedConflicting[0].candidate.subjectNodeId,
+      semanticRuleKey: sortedConflicting[0].candidate.semanticRuleKey,
+      predicate: sortedConflicting[0].candidate.predicate,
+      members: sortedConflicting.map(memberOf),
       resolution: "blocked",
       explanation:
         "Competing values with no reliable authority/currentness resolution; blocked from executable law pending expert review.",

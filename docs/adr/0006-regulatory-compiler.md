@@ -1,6 +1,6 @@
 # ADR 0006 — Regulatory Compiler: extractor proposes, verifier decides, graph records, solver gate filters
 
-Status: proposed with issue #5 (revised twice after PR #28 review).
+Status: accepted with issue #5 (final closeout after three PR #28 review rounds).
 
 ## Context
 
@@ -135,7 +135,35 @@ benchmark cannot be circular.
    Browser-proven A->B: accepting the JFK property after Calvary shows the
    honest unavailable state and zero Calvary rules, facts, or overlays.
 
-10. **Resolved-law updates change the executable constraint.** When later,
+10. **Verifier-owned semantics (VerifiedRule).** The verifier returns a
+   canonical result carrying `verifiedExcerpt` (the capture-backed anchor),
+   `verifiedLocator`, and `verifiedValue` — a `CanonicalVerifiedValue`
+   (quantity / permission / prohibition / parking-formula / density-tiers /
+   occupied-area-by-lot-type / side-yard-range / bonus-tiers /
+   contextual-setback / abstain) DERIVED FROM THE CAPTURE, never from
+   `candidate.proposedValue` or `verbatimSupportingText`. Everything
+   downstream — conflict comparison (`normalizedVerifiedLegalValue`),
+   canonical Claim values, Regulation construction, and the constraint
+   payload — consumes ONLY the VerifiedRule. Quantities and permissions the
+   candidate PROPOSES are cross-checked against the derived values and drift
+   is rejected. Rules whose semantics cannot be fully derived (FAR, GIS
+   site facts, overlay listings, lot width/area) ABSTAIN: sourced Claim
+   only, no Regulation, no Constraint, no grouping as a legal value. The
+   benchmark's Multi-Family parking value is read from column group 2 of
+   the pipe-delimited adopted-code row, not from the extractor's number.
+   Adversarial property (meta-tested over the whole corpus): mutating every
+   extractor-owned field while leaving the capture unchanged changes
+   NOTHING executable — the model can propose meaning, but only
+   evidence-derived semantics can execute.
+
+11. **Two-strand provenance.** Compiled-law responses and the Evidence UI
+   report LAW (the legal claim / source / locator) separately from APPLIES
+   HERE (the site's own zoning-base or overlay claim + official-GIS source)
+   — classified by claim namespace (`phl:claim:` vs `gis:claim:`), never
+   "first claim found". Applicability sources must resolve to live
+   source-artifacts in the project (already-superseded sources fail closed).
+
+12. **Resolved-law updates change the executable constraint.** When later,
    current evidence resolves the SAME semantic rule to a different value
    (55 ft -> 45 ft; BY_RIGHT -> SPECIAL_EXCEPTION), a dedicated typed
    command (`replaceExecutableConstraint`, audited `constraint.replaced`
@@ -144,12 +172,12 @@ benchmark cannot be circular.
    new value, prior certificates go STALE, and new certificates are CURRENT
    against the updated law.
 
-11. **Canonical quotes come from verified captures.** `Claim.verbatimQuote`
+   (renumbered) **Canonical quotes come from verified captures.** `Claim.verbatimQuote`
    is set from the verifier-anchored `evidenceAnchor.exactText` — extractor
    renderings survive only in `notes` and never masquerade as verbatim
    source text.
 
-12. **UI scope.** A COMPILED LAW section on the existing Evidence surface —
+13. **UI scope.** A COMPILED LAW section on the existing Evidence surface —
    values, locators, sources, evidence states, honest unresolved dimensions,
    visible conflicts with the excluded value and why it lost; honest
    unavailable states for unsupported properties. Inspection list, not a

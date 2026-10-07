@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { compileRegulations } from "../../src/application/regulatory/compile";
 import { selectExecutableConstraints } from "../../src/application/regulatory/executable";
+import { decideConflicts, normalizedVerifiedLegalValue } from "../../src/application/regulatory/conflicts";
 import { verifyCandidates } from "../../src/application/regulatory/verify";
-import { decideConflicts, normalizedLegalValue } from "../../src/application/regulatory/conflicts";
 import type { CandidateRule } from "../../src/application/regulatory/candidate-rule";
 import { normalizeFeet } from "../../src/application/regulatory/normalize";
 import { ProjectCodec } from "../../src/adapters/persistence/project-codec";
@@ -29,7 +29,7 @@ function standardDocuments(extra: Record<string, string> = {}): RawEvidenceDocum
       "no FAR value in the captured RM-1 evidence",
       "Min. Lot Width ... 16 ft.",
     ].join("\n"),
-    S7: "Multi-Family — 0 (RM-1 group)\nMulti-Family | Y[1]",
+    S7: "Multi-Family — 1 | 0 | 3/10 units\nMulti-Family | Y[1]",
     A1: "Maximum building height in the RM-1 district: 55 ft.",
     A2: [
       "(.1) In the RM-1 zoning district, the maximum building height is 45 ft.",
@@ -106,7 +106,8 @@ describe("semantic rule identity", () => {
     });
     const constraint = project.nodes["phl:constraint:overlay:/six:adu-prohibition"];
     expect(constraint).toBeDefined();
-    expect(project.nodes["phl:reg:overlay:/six:applicability"]?.kind).toBe("regulation");
+    // Applicability listings are Claim-only by design (no executable semantics).
+    expect(project.nodes["phl:reg:overlay:/six:applicability"]).toBeUndefined();
     expect(project.nodes["phl:reg:overlay:/six:adu-prohibition"]?.kind).toBe("regulation");
     const aduClaim = project.nodes["phl:claim:overlay:/six:adu-prohibition:phl:src:S6@v1"];
     expect(
@@ -155,13 +156,25 @@ describe("verification (candidate -> accepted/rejected)", () => {
   });
 });
 
+/** Verify candidates against their documents, returning VerifiedRules. */
+function verifiedOf(candidates: Parameters<typeof verifyCandidates>[0]["candidates"], docs: Parameters<typeof verifyCandidates>[0]["documents"], sources: Parameters<typeof verifyCandidates>[0]["sources"]) {
+  return verifyCandidates({
+    candidates,
+    sources,
+    subject: { district: "RM-1" },
+    documents: docs,
+  })
+    .filter((d) => d.status === "ACCEPT" && d.verified && d.verified.verifiedValue.kind !== "abstain")
+    .map((d) => d.verified!);
+}
+
 describe("conflict engine (semantic, order-invariant, qualitative-aware)", () => {
   it("HERO: older favorable 55 ft loses to newer authoritative adopted 45 ft", () => {
     const [a1, a2] = adversarialHeightCandidates();
     expect(a1.proposedValue).toEqual({ kind: "quantity", value: 55, unit: "ft" });
     expect(a2.proposedValue).toEqual({ kind: "quantity", value: 45, unit: "ft" });
 
-    const { dispositions, conflicts } = decideConflicts([a1, a2]);
+    const { dispositions, conflicts } = decideConflicts(verifiedOf([a1, a2], standardDocuments(), TEST_SOURCES));
     expect(dispositions.get(a1.candidateId)?.status).toBe("EXCLUDED");
     expect(dispositions.get(a1.candidateId)?.reasons.join(" ")).toContain("never overrides adopted code");
     expect(dispositions.get(a2.candidateId)?.status).toBe("EXECUTABLE");
@@ -171,8 +184,8 @@ describe("conflict engine (semantic, order-invariant, qualitative-aware)", () =>
 
   it("SOURCE-ORDER INVARIANCE: [55, 45] and [45, 55] decide identically", () => {
     const [a1, a2] = adversarialHeightCandidates();
-    const forward = decideConflicts([a1, a2]);
-    const backward = decideConflicts([a2, a1]);
+    const forward = decideConflicts(verifiedOf([a1, a2], standardDocuments(), TEST_SOURCES));
+    const backward = decideConflicts(verifiedOf([a2, a1], standardDocuments(), TEST_SOURCES));
     expect(forward.dispositions).toEqual(backward.dispositions);
     expect(forward.conflicts).toEqual(backward.conflicts);
   });
@@ -180,10 +193,11 @@ describe("conflict engine (semantic, order-invariant, qualitative-aware)", () =>
   it("QUALITATIVE: BY_RIGHT vs SPECIAL_EXCEPTION for the same rule BLOCKs", () => {
     const gisA = useCandidate("G1", "Y[1]");
     const gisB = useCandidate("G2", "S[2], 14-603(5)");
-    expect(normalizedLegalValue(gisA)).toBe("perm:BY_RIGHT");
-    expect(normalizedLegalValue(gisB)).toBe("perm:SPECIAL_EXCEPTION");
+    const verifiedUse = verifiedOf([gisA, gisB], standardDocuments(), TEST_SOURCES);
+    expect(verifiedUse.map((v) => normalizedVerifiedLegalValue(v.verifiedValue))).toContain("perm:BY_RIGHT");
+    expect(verifiedUse.map((v) => normalizedVerifiedLegalValue(v.verifiedValue))).toContain("perm:SPECIAL_EXCEPTION");
 
-    const { dispositions, conflicts } = decideConflicts([gisA, gisB]);
+    const { dispositions, conflicts } = decideConflicts(verifiedUse);
     expect(dispositions.get(gisA.candidateId)?.status).toBe("BLOCKED");
     expect(dispositions.get(gisB.candidateId)?.status).toBe("BLOCKED");
     expect(conflicts[0].resolution).toBe("blocked");
@@ -192,16 +206,35 @@ describe("conflict engine (semantic, order-invariant, qualitative-aware)", () =>
   it("equal-authority incompatible quantities BLOCK with nothing executable", () => {
     const gisA = heightCandidate("G1", 38, { authority: "OFFICIAL_GIS" });
     const gisB = heightCandidate("G2", 45, { authority: "OFFICIAL_GIS" });
-    const { dispositions, conflicts } = decideConflicts([gisA, gisB]);
+    const { dispositions, conflicts } = decideConflicts(
+      verifiedOf([gisA, gisB], standardDocuments({ G2: "maximum building height ... 45 ft" }), TEST_SOURCES),
+    );
     expect(dispositions.get(gisA.candidateId)?.status).toBe("BLOCKED");
     expect(dispositions.get(gisB.candidateId)?.status).toBe("BLOCKED");
     expect(conflicts[0].resolution).toBe("blocked");
   });
 
   it("same logical source, newer capture supersedes the older one", () => {
-    const older = heightCandidate("S5", 55, { retrievedAt: "2025-01-01T00:00:00Z", candidateId: "cand:height:max:principal:S5:v1" });
-    const newer = heightCandidate("S5", 45, { retrievedAt: "2026-06-01T00:00:00Z", candidateId: "cand:height:max:principal:S5:v2" });
-    const { dispositions } = decideConflicts([older, newer]);
+    const older = heightCandidate("S5", 55, {
+      retrievedAt: "2025-01-01T00:00:00Z",
+      candidateId: "cand:height:max:principal:S5@v1",
+      sourceArtifactId: "phl:src:S5@v1",
+    });
+    const newer = heightCandidate("S5", 45, {
+      retrievedAt: "2026-06-01T00:00:00Z",
+      candidateId: "cand:height:max:principal:S5@v2",
+      sourceArtifactId: "phl:src:S5@v2",
+    });
+    const { dispositions } = decideConflicts(
+      verifiedOf(
+        [older, newer],
+        testDocuments(["S5"], { S5: "maximum building height ... 55 ft\nmaximum building height ... 45 ft" }),
+        [
+          testSource({ sourceRef: "S5", sourceArtifactId: "phl:src:S5@v1", retrievedAt: "2025-01-01T00:00:00Z" }),
+          testSource({ sourceRef: "S5", sourceArtifactId: "phl:src:S5@v2", retrievedAt: "2026-06-01T00:00:00Z" }),
+        ],
+      ),
+    );
     expect(dispositions.get(older.candidateId)?.status).toBe("SUPERSEDED");
     expect(dispositions.get(newer.candidateId)?.status).toBe("EXECUTABLE");
   });
@@ -301,7 +334,7 @@ describe("canonical compilation + executable gate", () => {
         semanticRuleKey: "parking:multi-family:minimum",
         predicate: "parking-requirement",
         authority: "ADOPTED_CODE",
-        verbatimSupportingText: "Multi-Family — 0 (RM-1 group)",
+        verbatimSupportingText: "Multi-Family — 1 | 0 | 3/10 units",
       }),
       applicability: { district: "RM-1", use: "multi-family" },
       proposedValue: { kind: "quantity", value: 0, unit: "spaces" },
@@ -320,7 +353,7 @@ describe("canonical compilation + executable gate", () => {
 
     const farClaim = project.nodes["phl:claim:far:max:phl:src:S5@v1"];
     expect(farClaim?.kind === "claim" && farClaim.evidenceState === "UNKNOWN").toBe(true);
-    expect(project.nodes["phl:reg:far:max"]).toBeDefined();
+    expect(project.nodes["phl:reg:far:max"]).toBeUndefined(); // UNKNOWN stays Claim-only
     expect(project.nodes["phl:constraint:far:max"]).toBeUndefined();
 
     expect(project.nodes["phl:claim:lot:width:min:phl:src:S5@v1"]).toBeDefined();
@@ -510,7 +543,7 @@ describe("canonical compilation + executable gate", () => {
         semanticRuleKey: "parking:multi-family:minimum",
         predicate: "parking-requirement",
         authority: "ADOPTED_CODE",
-        verbatimSupportingText: "Multi-Family — 0 (RM-1 group)",
+        verbatimSupportingText: "Multi-Family — 1 | 0 | 3/10 units",
       }),
       applicability: { district: "RM-1", use: "multi-family" },
       proposedValue: { kind: "quantity", value: 0, unit: "spaces" },

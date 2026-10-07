@@ -224,9 +224,7 @@ describe("same-source captured versions are distinct observations", () => {
       candidateId: "cand:height:max:principal:phl:src:S5@v2:new",
       sourceArtifactId: "phl:src:S5@v2",
     });
-    const { dispositions } = decideConflicts([v1, v2]);
-    expect(dispositions.get(v1.candidateId)?.status).toBe("SUPERSEDED");
-    expect(dispositions.get(v2.candidateId)?.status).toBe("EXECUTABLE");
+    expect(v1.candidateId).not.toBe(v2.candidateId);
 
     // Graph: two distinct claims; the regulation cites the winner's version.
     const v1Source = testSource({
@@ -239,6 +237,17 @@ describe("same-source captured versions are distinct observations", () => {
       sourceArtifactId: "phl:src:S5@v2",
       retrievedAt: "2026-06-01T00:00:00Z",
     });
+
+    const verified = verifyCandidates({
+      candidates: [v1, v2],
+      sources: [v1Source, v2Source],
+      subject: { district: "RM-1" },
+      documents: testDocuments(["S5"], { S5: "maximum building height ... 55 ft\nmaximum building height ... 45 ft" }),
+    }).filter((d) => d.status === "ACCEPT" && d.verified && d.verified.verifiedValue.kind !== "abstain").map((d) => d.verified!);
+    const { dispositions } = decideConflicts(verified);
+    expect(dispositions.get(v1.candidateId)?.status).toBe("SUPERSEDED");
+    expect(dispositions.get(v2.candidateId)?.status).toBe("EXECUTABLE");
+
     const project = bareProject();
     compileRegulations(contextFor(project), {
       candidates: [v1, v2],

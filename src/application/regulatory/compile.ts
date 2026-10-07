@@ -8,49 +8,54 @@ import {
   upsertRegulation,
 } from "../../commands";
 import { canonicalJson } from "../../domain/graph/serialization";
-import { ConstraintSemantic } from "../../domain/constraints/constraint";
-import type { z } from "zod";
 import { stripVolatile } from "../../domain/graph/node";
 import type { ClaimValue, ClaimPredicate } from "../../domain";
 import type { CandidateRule } from "./candidate-rule";
 import type { RawEvidenceDocument, SourceMetadata } from "./extraction";
 import { decideConflicts, type ConflictRecord } from "./conflicts";
+import type { VerificationDecision } from "./verify";
 import { verifyCandidates } from "./verify";
+import type { CanonicalVerifiedValue, VerifiedRule } from "./verified-rule";
 
 /**
- * Canonical graph compilation (issue #5): verified, conflict-resolved
- * candidates become Claim -> Regulation -> Constraint through the TYPED
- * COMMAND BOUNDARY. Nothing here writes project.nodes directly.
+ * Canonical graph compilation (issue #5): verified, conflict-resolved rules
+ * become Claim -> Regulation -> Constraint through the TYPED COMMAND
+ * BOUNDARY. Nothing here writes project.nodes directly.
  *
- * IDENTITY: candidateId/claimId are unique EVIDENCE OBSERVATIONS
- * (`<semanticRuleKey>:<sourceRef>`); regulationId/constraintId are the
- * SEMANTIC LEGAL RULE (`<semanticRuleKey>`). Different propositions never
- * collapse; duplicate candidate ids are rejected loudly.
+ * ALL executable semantics are VERIFIER-OWNED: every value consumed below —
+ * Claim.value, conflict comparison (in decideConflicts), Regulation
+ * meaning, and the constraint payload — derives from
+ * VerifiedRule.verifiedValue, which the second pass independently derived
+ * from captured evidence. Raw candidate.proposedValue /
+ * verbatimSupportingText never influence anything downstream.
+ *
+ * IDENTITY: candidateId/claimId are unique EVIDENCE OBSERVATIONS keyed by
+ * the CAPTURED VERSION (`<semanticRuleKey>:<sourceArtifactId>`);
+ * regulationId/constraintId are the SEMANTIC LEGAL RULE
+ * (`<semanticRuleKey>`). Duplicate candidate ids are rejected loudly.
+ *
+ * ABSTENTION: rules whose semantics the verifier could not derive (FAR and
+ * other unknowns) stay Claim-only — no Regulation, no Constraint, no
+ * grouping as a legal value.
  *
  * IDEMPOTENCY (true): source artifacts always replay through
- * addSourceArtifact so its immutability guard verifies exact replay; claims/
- * constraints/reviews are create-only with deterministic ids; regulations
- * are grouped ONE per semanticRuleKey and an exact semantic replay is
- * SKIPPED — re-compiling identical evidence runs zero commands (revision,
- * events, edges, semantic hashes, and encoded state all unchanged).
+ * addSourceArtifact so its immutability guard verifies exact replay;
+ * claims/constraints/reviews are create-only with deterministic ids;
+ * regulations are grouped ONE per semanticRuleKey and an exact semantic
+ * replay is SKIPPED — re-compiling identical evidence runs zero commands.
  *
  * CONFLICT LIFECYCLE: a previously-executable rule whose later evidence
- * conflicts irreducibly keeps its constraint for audit, but the regulation
- * is upserted to currentness STALE with conflictRefs, the solver gate
- * excludes it, and a deterministic expert review is opened whose
- * affectedNodeIds reference REAL graph nodes (claims, regulation, sources,
- * constraint) — never CandidateRule ids.
- *
- * No uncited regulation enters the solver: only ACCEPT + EXECUTABLE
- * candidates reach materializeConstraint, and the executable gate
- * independently re-verifies the full chain.
+ * conflicts irreducibly keeps its constraint for audit, the regulation is
+ * upserted to currentness STALE with conflictRefs, the solver gate excludes
+ * it, and a deterministic expert review is opened whose affectedNodeIds
+ * reference REAL graph nodes.
  */
 
 export type CandidateOutcome = {
   candidateId: string;
   semanticRuleKey: string;
   predicate: ClaimPredicate;
-  outcome: "compiled" | "unknown-recorded" | "conflict-recorded" | "rejected";
+  outcome: "compiled" | "unknown-recorded" | "conflict-recorded" | "rejected" | "abstained";
   reasons: string[];
   claimId?: string;
   regulationId?: string;
@@ -67,54 +72,46 @@ export type CompileResult = {
 
 const REGULATION_ID = (key: string) => `phl:reg:${key}`;
 const CONSTRAINT_ID = (key: string) => `phl:constraint:${key}`;
-/**
- * Observation identity uses the CAPTURED VERSION (sourceArtifactId), not the
- * logical sourceRef: S5@v1 and S5@v2 are distinct observations and distinct
- * claims, both retained for inspection.
- */
 const CLAIM_ID = (key: string, sourceArtifactId: string) => `phl:claim:${key}:${sourceArtifactId}`;
 
-function claimValueFor(candidate: CandidateRule): ClaimValue {
-  const value = candidate.proposedValue;
-  if (value.kind === "quantity") {
-    return { type: "quantity", quantity: { value: value.value, unit: value.unit } };
+/** Canonical Claim.value from the VERIFIER-OWNED semantics. */
+function claimValueFromVerified(verified: VerifiedRule): ClaimValue {
+  const value = verified.verifiedValue;
+  switch (value.kind) {
+    case "quantity":
+      return { type: "quantity", quantity: { value: value.value, unit: value.unit as never } };
+    case "permission":
+      return { type: "qualitative", text: value.permission };
+    case "prohibition":
+      return { type: "qualitative", text: `${value.overlay} prohibits ${value.prohibits}` };
+    case "parking-formula":
+      return { type: "qualitative", text: value.formula };
+    case "density-tiers":
+      return {
+        type: "qualitative",
+        text: `Tiered minimum lot area per dwelling unit: ${value.tiers
+          .map((t) => `${t.perUnit} sq ft per unit at ${t.firstSqFt} sq ft`)
+          .join("; ")}`,
+      };
+    case "occupied-area-by-lot-type":
+      return {
+        type: "qualitative",
+        text: `Max occupied area — intermediate ${value.intermediate ?? "?"}%; corner ${value.corner ?? "?"}%`,
+      };
+    case "side-yard-range":
+      return { type: "quantity", quantity: { value: value.min, unit: "ft" as never } };
+    case "bonus-tiers":
+      return {
+        type: "qualitative",
+        text: `Density bonus tiers: ${Object.entries(value.tiers)
+          .map(([k, v]) => `${k} ${v}%`)
+          .join(", ")}`,
+      };
+    case "contextual-setback":
+      return { type: "null", reason: "formula-only" };
+    case "abstain":
+      return { type: "null", reason: "unknown" };
   }
-  if (value.kind === "qualitative") {
-    return { type: "qualitative", text: value.text };
-  }
-  return { type: "null", reason: "unknown" };
-}
-
-/** Parse the tiered density structure from the captured note text. */
-function densityTiers(text: string): Array<{ firstSqFt: number; perUnit: number }> | null {
-  const match = text.match(
-    /(\d[\d,]*)\s*sq\s*ft(?:\.|\b)[\s\S]*?first\s+(\d[\d,]*)\s*sq\s*ft[\s\S]*?(\d[\d,]*)\s*sq\s*ft[\s\S]*?(?:above|in excess of)/i,
-  );
-  if (!match) return null;
-  const firstTier = Number(match[2].replace(/,/g, ""));
-  const firstPerUnit = Number(match[1].replace(/,/g, ""));
-  const abovePerUnit = Number(match[3].replace(/,/g, ""));
-  if (![firstTier, firstPerUnit, abovePerUnit].every(Number.isFinite)) return null;
-  return [
-    { firstSqFt: firstTier, perUnit: firstPerUnit },
-    { firstSqFt: firstTier, perUnit: abovePerUnit },
-  ];
-}
-
-/** Occupied-area by-lot-type from a captured "Intermediate 75%; Corner 80%". */
-function occupiedAreaByLotType(text: string): { intermediate?: number; corner?: number } {
-  const intermediate = text.match(/intermediate\s+(\d+(?:\.\d+)?)%/i);
-  const corner = text.match(/corner\s+(\d+(?:\.\d+)?)%/i);
-  return {
-    intermediate: intermediate ? Number(intermediate[1]) : undefined,
-    corner: corner ? Number(corner[1]) : undefined,
-  };
-}
-
-function sideYardRange(text: string): { min: number; max: number } | null {
-  const match = text.match(/(\d+(?:\.\d+)?)'\s*to\s*(\d+(?:\.\d+)?)'/);
-  if (!match) return null;
-  return { min: Number(match[1]), max: Number(match[2]) };
 }
 
 /** Semantic-equality helper: compare stripped-volatile canonical JSON. */
@@ -158,36 +155,16 @@ export function compileRegulations(
     subject: input.subject,
     documents: input.documents ?? [],
   });
-  const accepted = verification
-    .filter((decision) => decision.status === "ACCEPT")
-    .map((decision) => decision.candidate);
-  const { dispositions, conflicts } = decideConflicts(accepted);
-  const conflictsByKey = new Map<string, ConflictRecord[]>();
-  for (const conflict of conflicts) {
-    const list = conflictsByKey.get(conflict.semanticRuleKey) ?? [];
-    list.push(conflict);
-    list.sort((a, b) => a.conflictId.localeCompare(b.conflictId));
-    conflictsByKey.set(conflict.semanticRuleKey, list);
-  }
-
-  const sourceById = new Map<string, SourceMetadata>();
-  for (const source of input.sources) {
-    sourceById.set(source.sourceRef, source);
-  }
-
-  const outcomes: CandidateOutcome[] = [];
-  let claimed = 0;
-  let regulated = 0;
-  let constrained = 0;
-
-  // Deterministic order regardless of ingestion order.
-  const ordered = [...input.candidates].sort((a, b) => a.candidateId.localeCompare(b.candidateId));
 
   // Source artifacts ALWAYS replay through the command so its immutability
   // guard verifies exact content — real hashes, never fabricated.
-  const usedSources = new Set(ordered.filter((c) => accepted.includes(c)).map((c) => c.sourceRef));
+  const usedSources = new Set(
+    input.candidates
+      .filter((c) => verification.find((d) => d.candidate.candidateId === c.candidateId)?.status === "ACCEPT")
+      .map((c) => c.sourceArtifactId),
+  );
   for (const source of input.sources) {
-    if (!usedSources.has(source.sourceRef)) continue;
+    if (!usedSources.has(source.sourceArtifactId)) continue;
     addSourceArtifact(ctx, {
       id: source.sourceArtifactId,
       kind: "source-artifact",
@@ -200,27 +177,22 @@ export function compileRegulations(
       authority: source.authority,
       retrievedAt: source.retrievedAt,
       rawContentHash: source.rawContentHash,
-      // Deterministic joined representation of the backing captures.
       versionNote: source.rawEvidenceRefs.join(", "),
+      ...(source.rawEvidenceRefs.length === 1 ? { rawEvidenceRef: source.rawEvidenceRefs[0] } : {}),
       ...(source.effectiveDate ? { effectiveDate: source.effectiveDate } : {}),
     });
   }
 
-  // Group accepted candidates by semantic rule for ONE regulation per rule.
-  const groups = new Map<string, CandidateRule[]>();
-  for (const candidate of accepted) {
-    const list = groups.get(candidate.semanticRuleKey) ?? [];
-    list.push(candidate);
-    groups.set(candidate.semanticRuleKey, list);
-  }
-  const sortedKeys = [...groups.keys()].sort((a, b) => a.localeCompare(b));
 
-  for (const candidate of ordered) {
-    const decision = verification.find((d) => d.candidate.candidateId === candidate.candidateId);
-    const disposition = dispositions.get(candidate.candidateId);
+  // Only ACCEPT + verifier-owned semantics proceed. ABSTAINING rules stay
+  // Claim-only; UNKNOWN rules stay Claim-only — neither groups as a legal
+  // value nor materializes a Regulation.
+  const verifiedRules: VerifiedRule[] = [];
+  const outcomes: CandidateOutcome[] = [];
+  for (const decision of verification) {
+    const candidate = decision.candidate;
     const claimId = CLAIM_ID(candidate.semanticRuleKey, candidate.sourceArtifactId);
-
-    if (decision?.status === "REJECT") {
+    if (decision.status === "REJECT") {
       outcomes.push({
         candidateId: candidate.candidateId,
         semanticRuleKey: candidate.semanticRuleKey,
@@ -230,70 +202,24 @@ export function compileRegulations(
       });
       continue;
     }
-
-    // Claim — create-only; skip when the compiler already recorded it.
-    const conflictReasons = disposition && disposition.status !== "EXECUTABLE" ? disposition.reasons : [];
-    if (!ctx.project.nodes[claimId]) {
-      const evidence =
-        candidate.proposedValue.kind === "unknown"
-          ? "UNKNOWN"
-          : disposition?.status !== "EXECUTABLE" && disposition !== undefined
-            ? "CONFLICT"
-            : candidate.authority === "ADOPTED_CODE"
-              ? "VERIFIED"
-              : "SOURCE_CONFIRMED";
-      recordClaim(ctx, {
-        id: claimId,
-        kind: "claim",
-        subjectNodeId: candidate.subjectNodeId,
-        predicate: candidate.predicate,
-        value: claimValueFor(candidate),
-        origin: { kind: "SOURCE_DERIVED" },
-        sourceIds: [candidate.sourceArtifactId],
-        evidenceState: evidence,
-        // Canonical quote comes ONLY from the verifier-anchored capture
-        // fragment — extractor commentary stays in notes and never
-        // masquerades as verbatim source text.
-        verbatimQuote: candidate.evidenceAnchor.exactText,
-        notes: [
-          candidate.verbatimSupportingText !== candidate.evidenceAnchor.exactText
-            ? `extractor rendering: ${candidate.verbatimSupportingText}`
-            : undefined,
-          candidate.notes,
-          candidate.codeSection ? `locator: ${candidate.codeSection}` : undefined,
-          `retrievedAt: ${candidate.retrievedAt}`,
-          `extraction: ${candidate.extractionMethod}`,
-          conflictReasons.length > 0 ? `conflict: ${conflictReasons.join("; ")}` : undefined,
-        ]
-          .filter(Boolean)
-          .join(" | "),
-      });
-      claimed += 1;
-    }
-
-    if (candidate.proposedValue.kind === "unknown") {
+    const verified = decision.verified;
+    if (!verified || verified.verifiedValue.kind === "abstain") {
+      const isUnknown = candidate.proposedValue.kind === "unknown";
       outcomes.push({
         candidateId: candidate.candidateId,
         semanticRuleKey: candidate.semanticRuleKey,
         predicate: candidate.predicate,
-        outcome: "unknown-recorded",
-        reasons: ["no value established by captured evidence; recorded UNKNOWN, never coerced"],
-        claimId,
+        outcome: isUnknown ? "unknown-recorded" : "abstained",
+        reasons: verified
+          ? [verified.verifiedValue.kind === "abstain" ? verified.verifiedValue.reason : "abstained"]
+          : ["no verifier-owned semantics"],
       });
+      // ABSTAIN path: record the sourced Claim (create-only) and STOP —
+      // no Regulation, no Constraint, no conflict participation.
+      recordAbstainingClaim(ctx, verified ?? null, decision, claimId);
       continue;
     }
-    if (disposition && disposition.status !== "EXECUTABLE") {
-      outcomes.push({
-        candidateId: candidate.candidateId,
-        semanticRuleKey: candidate.semanticRuleKey,
-        predicate: candidate.predicate,
-        outcome: "conflict-recorded",
-        reasons: conflictReasons,
-        claimId,
-      });
-      // continue — regulation handling is per-GROUP below.
-      continue;
-    }
+    verifiedRules.push(verified);
     outcomes.push({
       candidateId: candidate.candidateId,
       semanticRuleKey: candidate.semanticRuleKey,
@@ -306,32 +232,111 @@ export function compileRegulations(
     });
   }
 
-  // ONE regulation per semanticRuleKey, desired-state computed then skipped
-  // when semantically identical to the existing node (TRUE idempotency).
+  const { dispositions, conflicts } = decideConflicts(verifiedRules);
+  const conflictsByKey = new Map<string, ConflictRecord[]>();
+  for (const conflict of conflicts) {
+    const list = conflictsByKey.get(conflict.semanticRuleKey) ?? [];
+    list.push(conflict);
+    list.sort((a, b) => a.conflictId.localeCompare(b.conflictId));
+    conflictsByKey.set(conflict.semanticRuleKey, list);
+  }
+
+  // Demote outcomes whose dispositions lost.
+  for (const verified of verifiedRules) {
+    const disposition = dispositions.get(verified.candidate.candidateId);
+    if (disposition && disposition.status !== "EXECUTABLE") {
+      const outcome = outcomes.find((o) => o.candidateId === verified.candidate.candidateId);
+      if (outcome) {
+        outcome.outcome = "conflict-recorded";
+        outcome.reasons = disposition.reasons;
+        outcome.constraintId = undefined;
+      }
+    }
+  }
+
+  const sourceById = new Map<string, SourceMetadata>();
+  for (const source of input.sources) {
+    sourceById.set(source.sourceArtifactId, source);
+  }
+
+  let claimed = 0;
+  let regulated = 0;
+  let constrained = 0;
+
+  // Verified claims (executable or conflict-visible) — create-only.
+  for (const verified of verifiedRules) {
+    const candidate = verified.candidate;
+    const claimId = CLAIM_ID(candidate.semanticRuleKey, candidate.sourceArtifactId);
+    if (ctx.project.nodes[claimId]) continue;
+    const disposition = dispositions.get(candidate.candidateId);
+    const evidence =
+      disposition?.status !== "EXECUTABLE" && disposition !== undefined
+        ? "CONFLICT"
+        : candidate.authority === "ADOPTED_CODE"
+          ? "VERIFIED"
+          : "SOURCE_CONFIRMED";
+    recordClaim(ctx, {
+      id: claimId,
+      kind: "claim",
+      subjectNodeId: candidate.subjectNodeId,
+      predicate: candidate.predicate,
+      value: claimValueFromVerified(verified),
+      origin: { kind: "SOURCE_DERIVED" },
+      sourceIds: [candidate.sourceArtifactId],
+      evidenceState: evidence,
+      // Canonical quote: the verifier-anchored capture fragment ONLY.
+      verbatimQuote: verified.verifiedExcerpt,
+      notes: [
+        candidate.verbatimSupportingText !== verified.verifiedExcerpt
+          ? `extractor rendering: ${candidate.verbatimSupportingText}`
+          : undefined,
+        candidate.notes,
+        verified.verifiedLocator ? `locator: ${verified.verifiedLocator}` : undefined,
+        `retrievedAt: ${candidate.retrievedAt}`,
+        `extraction: ${candidate.extractionMethod}`,
+        ...(verified.verificationNotes ?? []),
+        ...(disposition && disposition.status !== "EXECUTABLE"
+          ? [`conflict: ${disposition.reasons.join("; ")}`]
+          : []),
+      ]
+        .filter(Boolean)
+        .join(" | "),
+    });
+    claimed += 1;
+  }
+
+  // ONE regulation per semanticRuleKey over VERIFIED semantics; exact
+  // semantic replay skipped (TRUE idempotency).
+  const groups = new Map<string, VerifiedRule[]>();
+  for (const verified of verifiedRules) {
+    const list = groups.get(verified.candidate.semanticRuleKey) ?? [];
+    list.push(verified);
+    groups.set(verified.candidate.semanticRuleKey, list);
+  }
+  const sortedKeys = [...groups.keys()].sort((a, b) => a.localeCompare(b));
+
   for (const key of sortedKeys) {
     const group = groups.get(key)!;
-    const sortedGroup = [...group].sort((a, b) => a.candidateId.localeCompare(b.candidateId));
+    const sortedGroup = [...group].sort((a, b) => a.candidate.candidateId.localeCompare(b.candidate.candidateId));
     const keyConflicts = conflictsByKey.get(key) ?? [];
     const hasBlocked = keyConflicts.some((c) => c.resolution === "blocked");
     const executableMembers = sortedGroup.filter(
-      (c) => dispositions.get(c.candidateId)?.status === "EXECUTABLE",
+      (v) => dispositions.get(v.candidate.candidateId)?.status === "EXECUTABLE",
     );
     const winner = executableMembers[0];
+    const anchor = winner ?? sortedGroup[0];
 
     // Applicability proof: WHAT THE LAW SAYS + WHY IT APPLIES TO THIS
-    // PARCEL. District-scoped law depends on the site's own zoning-base
-    // claim; overlay-scoped law on the site's overlay claim. Fail closed
-    // when the proof is missing.
-    const anchor = winner ?? sortedGroup[0];
+    // PARCEL — semantically validated, fail closed.
     const applicabilityClaimIds: string[] = [];
     const applicabilityProblems: string[] = [];
-    const needsDistrict = Boolean(anchor.applicability.district);
-    const needsOverlay = Boolean(anchor.applicability.overlay);
+    const needsDistrict = Boolean(anchor.candidate.applicability.district);
+    const needsOverlay = Boolean(anchor.candidate.applicability.overlay);
     if (needsDistrict) {
       const claimId = input.applicabilityClaims?.zoningBaseClaimId;
       const claim = claimId ? ctx.project.nodes[claimId] : undefined;
-      const problems = claimId ? validateZoningBaseApplicability(claim, anchor, claimId) : ["missing"];
-      if (problems[0] === "missing" || problems.length > 0) {
+      const problems = claimId ? validateZoningBaseApplicability(claim, anchor.candidate, claimId, ctx) : ["missing"];
+      if (problems.length > 0) {
         applicabilityProblems.push(
           problems[0] === "missing"
             ? `district-scoped rule ${key} has no site zoning-base applicability claim; refusing to compile without proof the law applies to this parcel`
@@ -347,7 +352,7 @@ export function compileRegulations(
       const overlayProblems: string[] = [];
       for (const claimId of overlayClaims) {
         const claim = ctx.project.nodes[claimId];
-        const problems = validateOverlayApplicability(claim, anchor, claimId);
+        const problems = validateOverlayApplicability(claim, anchor.candidate, claimId, ctx);
         if (problems.length === 0) {
           applicabilityClaimIds.push(claimId);
           proven = true;
@@ -370,41 +375,37 @@ export function compileRegulations(
     const desired = {
       id: REGULATION_ID(key),
       kind: "regulation" as const,
-      jurisdictionKey: anchor.jurisdictionKey,
-      codeSection: anchor.codeSection ?? anchor.verbatimSupportingText.slice(0, 80),
-      applicability: anchor.applicability,
+      jurisdictionKey: anchor.candidate.jurisdictionKey,
+      codeSection: anchor.verifiedLocator,
+      applicability: anchor.candidate.applicability,
       claimIds: [
         ...new Set([
           ...(executableMembers.length > 0 ? executableMembers : sortedGroup)
-            .map((c) => CLAIM_ID(key, c.sourceArtifactId)),
+            .map((v) => CLAIM_ID(key, v.candidate.sourceArtifactId)),
           ...applicabilityClaimIds,
         ]),
       ].sort(),
       currentness: (hasBlocked || executableMembers.length === 0 ? ("STALE" as const) : ("CURRENT" as const)),
       conflictRefs: keyConflicts.map((c) => c.conflictId),
-      notes: anchor.notes,
+      notes: anchor.candidate.notes,
     };
 
     const existing = ctx.project.nodes[desired.id];
     if (existing && existing.kind === "regulation" && semanticEquals(existing, desired)) {
-      // Exact semantic replay — skip; no revision/event/edge movement.
-      continue;
+      continue; // exact semantic replay — no command runs
     }
     upsertRegulation(ctx, desired);
     regulated += 1;
 
-    // Constraint — only where an executable winner exists AND the domain has
-    // a variant with deterministic semantics for this candidate's value.
+    // Constraint from VERIFIER-OWNED semantics only.
     if (winner && !hasBlocked) {
-      const materialized = materializeConstraintFor(ctx, winner, {
+      const materialized = materializeVerifiedConstraint(ctx, winner, {
         regulationId: REGULATION_ID(key),
         constraintId: CONSTRAINT_ID(key),
       });
       if (materialized) constrained += 1;
     }
 
-    // Deterministic expert review per BLOCKED conflict, referencing REAL
-    // graph nodes only (claims, regulation, sources, constraint if present).
     if (hasBlocked) {
       const conflict = keyConflicts.find((c) => c.resolution === "blocked")!;
       const reviewId = `phl:review:${conflict.conflictId}`;
@@ -412,7 +413,7 @@ export function compileRegulations(
         const affected = [
           ...desired.claimIds,
           desired.id,
-          ...sortedGroup.map((c) => c.sourceArtifactId),
+          ...sortedGroup.map((v) => v.candidate.sourceArtifactId),
           ...(ctx.project.nodes[CONSTRAINT_ID(key)] ? [CONSTRAINT_ID(key)] : []),
         ].sort();
         openExpertReviewItem(ctx, {
@@ -423,7 +424,7 @@ export function compileRegulations(
             "Executable law cannot include this rule until a qualified professional resolves the conflict.",
           category: "regulatory-conflict",
           affectedNodeIds: affected,
-          evidenceRefs: sortedGroup.map((c) => c.sourceRef).sort(),
+          evidenceRefs: sortedGroup.map((v) => v.candidate.sourceRef).sort(),
           severity: "blocking",
           reviewStatus: "OPEN",
         });
@@ -434,183 +435,165 @@ export function compileRegulations(
   return { outcomes, conflicts, claimed, regulated, constrained };
 }
 
-/**
- * Build the desired typed constraint payload for the currently executable
- * law (or null where the domain has no variant with deterministic
- * semantics). Separated from application so the SAME payload builder serves
- * first materialization and later typed replacement.
- */
-function desiredConstraintPayload(
-  candidate: CandidateRule,
+/** Record the sourced Claim for abstaining/unknown rules — nothing more. */
+function recordAbstainingClaim(
+  ctx: CommandContext,
+  verified: VerifiedRule | null,
+  decision: VerificationDecision,
+  claimId: string,
+): void {
+  if (ctx.project.nodes[claimId]) return;
+  const candidate = decision.candidate;
+  const isUnknown = candidate.proposedValue.kind === "unknown";
+  recordClaim(ctx, {
+    id: claimId,
+    kind: "claim",
+    subjectNodeId: candidate.subjectNodeId,
+    predicate: candidate.predicate,
+    value: verified ? claimValueFromVerified(verified) : { type: "null", reason: "unknown" },
+    origin: { kind: "SOURCE_DERIVED" },
+    sourceIds: [candidate.sourceArtifactId],
+    evidenceState: isUnknown ? "UNKNOWN" : "UNKNOWN",
+    verbatimQuote: verified ? verified.verifiedExcerpt : candidate.evidenceAnchor.exactText,
+    notes: [
+      candidate.notes,
+      candidate.codeSection ? `locator: ${candidate.codeSection}` : undefined,
+      `retrievedAt: ${candidate.retrievedAt}`,
+      `extraction: ${candidate.extractionMethod}`,
+      "no executable semantics derivable from captured evidence; claim-only by design",
+    ]
+      .filter(Boolean)
+      .join(" | "),
+  });
+}
+
+/** Constraint payload built ONLY from verifier-owned semantics. */
+function materializeVerifiedConstraint(
+  ctx: CommandContext,
+  verified: VerifiedRule,
   ids: { regulationId: string; constraintId: string },
-): z.infer<typeof ConstraintSemantic> | null {
+): boolean {
+  const payload = verifiedConstraintPayload(verified, ids);
+  if (!payload) return false;
+  const existing = ctx.project.nodes[ids.constraintId];
+  if (!existing) {
+    materializeConstraint(ctx, payload);
+    return true;
+  }
+  replaceExecutableConstraint(ctx, payload);
+  return true;
+}
+
+function verifiedConstraintPayload(
+  verified: VerifiedRule,
+  ids: { regulationId: string; constraintId: string },
+): Parameters<typeof materializeConstraint>[1] | null {
   const base = {
     id: ids.constraintId,
     kind: "constraint" as const,
     regulationId: ids.regulationId,
   };
-  const value = candidate.proposedValue;
+  const value: CanonicalVerifiedValue = verified.verifiedValue;
+  const candidate = verified.candidate;
 
-  switch (candidate.predicate) {
-    case "max-height":
-      if (value.kind !== "quantity") return null;
-      return {
-        ...base,
-        constraintKind: "height" as const,
-        limit: { value: value.value, unit: "ft" as const },
-        appliesTo: "principal-structure" as const,
-      };
-    case "setback-front":
-      return {
-        ...base,
-        constraintKind: "setback" as const,
-        face: "front" as const,
-        spec: {
-          type: "contextual" as const,
-          ruleId: "adjacent-facades",
-          description: "Front facade placement follows immediately adjacent / blockface buildings",
-        },
-      };
-    case "setback-side": {
-      if (value.kind !== "quantity") return null;
-      const range = sideYardRange(candidate.verbatimSupportingText);
-      return {
-        ...base,
-        constraintKind: "setback" as const,
-        face: "side" as const,
-        spec: range
-          ? { type: "range" as const, range: { min: range.min, max: range.max, unit: "ft" as const } }
-          : { type: "numeric" as const, min: { value: value.value, unit: "ft" as const } },
-      };
-    }
-    case "setback-rear":
-      if (value.kind !== "quantity") return null;
-      return {
-        ...base,
-        constraintKind: "setback" as const,
-        face: "rear" as const,
-        spec: { type: "numeric" as const, min: { value: value.value, unit: "ft" as const } },
-      };
-    case "occupied-area": {
-      if (value.kind !== "quantity") return null;
-      const byLotType = occupiedAreaByLotType(candidate.verbatimSupportingText);
-      return {
-        ...base,
-        constraintKind: "occupied-area" as const,
-        byLotType: {
-          intermediate: byLotType.intermediate ?? value.value,
-          corner: byLotType.corner,
-        },
-        unit: "percent" as const,
-      };
-    }
-    case "density-formula": {
-      const text = value.kind === "qualitative" ? value.text : candidate.verbatimSupportingText;
-      const tiers = densityTiers(text);
-      if (!tiers) return null; // cannot parse tiers -> no fake constraint
-      return {
-        ...base,
-        constraintKind: "density" as const,
-        spec: { type: "tiered-min-lot-area-per-unit" as const, tiers, rounding: "down" as const },
-        notes: "Second tier applies to lot area above the first 1,440 sq ft.",
-      };
-    }
-    case "parking-requirement": {
-      const use = candidate.applicability.use ?? "unscoped";
-      if (value.kind === "quantity") {
-        return {
-          ...base,
-          constraintKind: "parking-requirement" as const,
-          use,
-          requirement: { type: "fixed" as const, spaces: { value: value.value, unit: "spaces" as const } },
-        };
+  switch (value.kind) {
+    case "quantity":
+      switch (candidate.predicate) {
+        case "max-height":
+          return {
+            ...base,
+            constraintKind: "height",
+            limit: { value: value.value, unit: "ft" },
+            appliesTo: "principal-structure",
+          };
+        case "setback-rear":
+          return {
+            ...base,
+            constraintKind: "setback",
+            face: "rear",
+            spec: { type: "numeric", min: { value: value.value, unit: "ft" } },
+          };
+        case "parking-requirement":
+          return {
+            ...base,
+            constraintKind: "parking-requirement",
+            use: candidate.applicability.use ?? "unscoped",
+            requirement: { type: "fixed", spaces: { value: value.value, unit: "spaces" } },
+          };
+        default:
+          return null;
       }
-      if (value.kind === "qualitative") {
-        return {
-          ...base,
-          constraintKind: "parking-requirement" as const,
-          use,
-          requirement: { type: "formula" as const, formulaId: use, text: value.text },
-        };
-      }
-      return null;
-    }
-    case "use-permission": {
-      if (value.kind !== "qualitative") return null;
-      const permission = /^Y/i.test(value.text)
-        ? ("BY_RIGHT" as const)
-        : /^S/i.test(value.text)
-          ? ("SPECIAL_EXCEPTION" as const)
-          : /^N/i.test(value.text)
-            ? ("PROHIBITED" as const)
-            : null;
-      if (!permission) return null;
+    case "permission":
       return {
         ...base,
-        constraintKind: "use-permission" as const,
+        constraintKind: "use-permission",
         use: candidate.applicability.use ?? "unscoped",
-        permission,
+        permission: value.permission,
       };
-    }
-    case "overlay-restriction": {
-      if (value.kind !== "qualitative") return null;
-      const overlay = candidate.applicability.overlay;
-      const adu =
-        /accessory dwelling unit/i.test(value.text) ||
-        /accessory dwelling unit/i.test(candidate.verbatimSupportingText);
-      if (!overlay || !adu) return null; // no deterministic prohibits reading
+    case "prohibition":
       return {
         ...base,
-        constraintKind: "overlay-prohibition" as const,
-        overlay,
-        prohibits: "accessory-dwelling-units",
+        constraintKind: "overlay-prohibition",
+        overlay: value.overlay,
+        prohibits: value.prohibits,
       };
-    }
-    case "density-bonus": {
-      if (value.kind !== "quantity") return null;
-      const low = candidate.verbatimSupportingText.match(/low income:\s*(\d+)%/i);
+    case "parking-formula":
       return {
         ...base,
-        constraintKind: "density-bonus" as const,
-        percentIncreaseByTier: {
-          moderate: value.value,
-          ...(low ? { low: Number(low[1]) } : {}),
+        constraintKind: "parking-requirement",
+        use: value.use,
+        requirement: { type: "formula", formulaId: value.use, text: value.formula },
+      };
+    case "density-tiers":
+      return {
+        ...base,
+        constraintKind: "density",
+        spec: { type: "tiered-min-lot-area-per-unit", tiers: value.tiers, rounding: "down" },
+        notes: "Second tier applies to lot area above the first breakpoint.",
+      };
+    case "occupied-area-by-lot-type":
+      if (value.intermediate === undefined) return null;
+      return {
+        ...base,
+        constraintKind: "occupied-area",
+        byLotType: { intermediate: value.intermediate, corner: value.corner },
+        unit: "percent",
+      };
+    case "side-yard-range":
+      return {
+        ...base,
+        constraintKind: "setback",
+        face: "side",
+        spec: { type: "range", range: { min: value.min, max: value.max, unit: "ft" } },
+      };
+    case "bonus-tiers":
+      return {
+        ...base,
+        constraintKind: "density-bonus",
+        percentIncreaseByTier: value.tiers,
+        geographicRestriction: "unknown",
+      };
+    case "contextual-setback":
+      return {
+        ...base,
+        constraintKind: "setback",
+        face: "front",
+        spec: {
+          type: "contextual",
+          ruleId: value.ruleId,
+          description: "Front facade placement follows blockface geometry (guide notes [5],[6])",
         },
-        geographicRestriction: "unknown" as const,
       };
-    }
+    case "abstain":
     default:
-      // lot-width / lot-area and GIS-layer facts stay claim+regulation only
-      // until #7 defines their executable participation.
       return null;
   }
 }
 
-/**
- * Materialize OR replace the executable constraint for the currently
- * resolved law. First materialization uses the create-only command; a later
- * resolved change to the SAME semantic rule goes through the typed
- * replaceExecutableConstraint command — the executable law itself changes,
- * never silently serving the old value.
- */
-function materializeConstraintFor(
-  ctx: CommandContext,
-  candidate: CandidateRule,
-  ids: { regulationId: string; constraintId: string },
-): boolean {
-  const desired = desiredConstraintPayload(candidate, ids);
-  if (!desired) return false;
-  const existing = ctx.project.nodes[ids.constraintId];
-  if (!existing) {
-    materializeConstraint(ctx, desired);
-    return true;
-  }
-  replaceExecutableConstraint(ctx, desired);
-  return true;
-}
+// ---------------------------------------------------------------------------
+// Applicability-claim validation (fail closed, semantically)
+// ---------------------------------------------------------------------------
 
-
-/** Require a claim's value to canonically contain a district token. */
 function claimTextOf(claim: unknown): string {
   if (!claim || typeof claim !== "object") return "";
   const value = (claim as { value?: { text?: string } }).value;
@@ -625,13 +608,14 @@ function sourceIdsOf(claim: unknown): string[] {
 /**
  * Validate the site's zoning-base applicability claim for a district-scoped
  * rule: kind/subject/origin/evidence/predicate, value canonically matching
- * the candidate's district, and a resolving source artifact. Returns
- * problems (empty = proven).
+ * the candidate's district, and EVERY cited source resolving to a
+ * non-superseded source artifact in the current project.
  */
 function validateZoningBaseApplicability(
   claim: unknown,
   anchor: CandidateRule,
   claimId: string,
+  ctx: CommandContext,
 ): string[] {
   const problems: string[] = [];
   if (!claim || typeof claim !== "object") return [`claim ${claimId} does not exist`];
@@ -649,7 +633,7 @@ function validateZoningBaseApplicability(
   if (c.evidenceState !== "VERIFIED" && c.evidenceState !== "SOURCE_CONFIRMED")
     problems.push(`evidence is ${c.evidenceState ?? "unset"}`);
   if (c.predicate !== "zoning-district") problems.push(`predicate is ${c.predicate}, not zoning-district`);
-  const canonical = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/gi, "");
+  const canonical = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/gi, "");
   const text = canonical(claimTextOf(claim));
   const district = canonical(anchor.applicability.district ?? "");
   if (!district || !text.includes(district)) {
@@ -657,20 +641,24 @@ function validateZoningBaseApplicability(
   }
   const sources = sourceIdsOf(claim);
   if (sources.length === 0) problems.push("claim cites no source artifact");
+  for (const sourceId of sources) {
+    const source = ctx.project.nodes[sourceId];
+    if (!source || source.kind !== "source-artifact") {
+      problems.push(`cited source ${sourceId} does not resolve to a source artifact`);
+    } else if (source.supersededBy) {
+      problems.push(`cited source ${sourceId} is already superseded`);
+    }
+  }
   return problems;
 }
 
-/**
- * Validate the site's overlay applicability claim for an overlay-scoped
- * rule: same structural checks plus the claim value actually proving THIS
- * overlay (by canonical token containment, e.g. "/SIX" or "Sixth District").
- */
 function validateOverlayApplicability(
   claim: unknown,
   anchor: CandidateRule,
   claimId: string,
+  ctx: CommandContext,
 ): string[] {
-  const structural = validateZoningBaseApplicability(claim, anchor, claimId)
+  const structural = validateZoningBaseApplicability(claim, anchor, claimId, ctx)
     .filter((p) => !p.includes("zoning-district") && !p.includes("does not prove district"));
   const problems = [...structural];
   if (problems.some((p) => p.includes("not a claim") || p.includes("does not exist"))) return problems;

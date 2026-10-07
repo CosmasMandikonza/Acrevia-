@@ -14,6 +14,20 @@ import { readStoredAcceptedPair } from "../../lib/accepted-property";
 type LawRow = {
   constraintId: string;
   value: string;
+  law?: {
+    codeSection?: string;
+    evidence?: string;
+    sourceRef?: string;
+    sourceTitle?: string;
+    verbatim?: string;
+  };
+  appliesHere?: {
+    claimId?: string;
+    district?: string;
+    overlay?: string;
+    sourceTitle?: string;
+  };
+  // Back-compat single-strand fields.
   codeSection?: string;
   evidence?: string;
   sourceRef?: string;
@@ -130,21 +144,35 @@ export function CompiledLaw() {
             <div className="flex items-baseline justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-stone-900">{row.value}</p>
-                <p className="mt-0.5 truncate text-xs text-stone-500" title={row.codeSection}>
-                  {row.codeSection}
+                <p
+                  className="mt-0.5 truncate text-xs text-stone-500"
+                  title={row.law?.codeSection ?? row.codeSection}
+                  data-testid="law-provenance"
+                >
+                  <span className="font-semibold tracking-wide text-stone-600">LAW</span> ·{" "}
+                  {row.law?.sourceTitle ?? row.sourceTitle ?? row.sourceRef}
+                  {row.law?.codeSection ?? row.codeSection
+                    ? ` · ${row.law?.codeSection ?? row.codeSection}`
+                    : ""}
                 </p>
-                <p className="truncate text-xs text-stone-400" title={row.sourceTitle}>
-                  Source: {row.sourceTitle ?? row.sourceRef}
+                <p
+                  className="truncate text-xs text-stone-400"
+                  title={row.appliesHere?.sourceTitle}
+                  data-testid="applies-here"
+                >
+                  <span className="font-semibold tracking-wide text-stone-500">APPLIES HERE</span> ·{" "}
+                  {row.appliesHere?.district ?? ""}
+                  {row.appliesHere?.sourceTitle ? ` · ${row.appliesHere.sourceTitle}` : " · official GIS"}
                 </p>
               </div>
               <span
                 className={`shrink-0 rounded-sm border px-1.5 py-0.5 font-mono text-[10px] tracking-wide ${
-                  row.evidence === "VERIFIED"
+                  (row.law?.evidence ?? row.evidence) === "VERIFIED"
                     ? "border-olive-600 bg-olive-50 text-olive-800"
                     : "border-stone-400 bg-stone-50 text-stone-700"
                 }`}
               >
-                {EVIDENCE_LABEL[row.evidence ?? ""] ?? row.evidence}
+                {EVIDENCE_LABEL[row.law?.evidence ?? row.evidence ?? ""] ?? row.law?.evidence ?? row.evidence}
               </span>
             </div>
           </li>
