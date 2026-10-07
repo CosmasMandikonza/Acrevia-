@@ -686,7 +686,7 @@ function labelFor(type: MissionNormalized["type"]): string {
   }
 }
 
-const BOARD_BOUNDARY_NOTICE =
+export const BOARD_BOUNDARY_NOTICE =
   "Acrevia produces preliminary, model-derived feasibility material. It is not legal certification, architectural approval, financing approval, or a permit. Final conclusions require qualified professionals.";
 
 function prepareBoardContext(

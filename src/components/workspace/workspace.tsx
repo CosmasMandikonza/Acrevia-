@@ -67,6 +67,15 @@ const CapitalExplorer = nextDynamic(
     ),
   },
 );
+const CouncilRoom = nextDynamic(
+  () => import("@/components/council/council-room").then((m) => m.CouncilRoom),
+  {
+    ssr: false,
+    loading: () => (
+      <p className="text-sm text-stone-500">Preparing the council room…</p>
+    ),
+  },
+);
 
 export function Workspace() {
   const params = useSearchParams();
@@ -221,6 +230,13 @@ export function Workspace() {
               aria-label="Preliminary capital"
             >
               <CapitalExplorer key={projectStateEpoch} />
+            </section>
+          ) : surface.id === "council" && accepted ? (
+            <section
+              className="spatial-canvas spatial-canvas-live overflow-y-auto"
+              aria-label="Stakeholder decision room"
+            >
+              <CouncilRoom key={projectStateEpoch} />
             </section>
           ) : (
             <section
