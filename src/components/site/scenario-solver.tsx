@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import type { MissionCommand } from "../../application/mission/rebuild";
 import { readMissionLogFor, readStoredAcceptedPair } from "../../lib/accepted-property";
 
@@ -397,6 +398,13 @@ function SolvedPanels({ response }: { response: SolvedResponse }) {
                     >
                       {scenario.certificate.freshness}
                     </span>
+                    {" · "}
+                    <Link
+                      href={`/forge?scenario=${encodeURIComponent(scenario.certificate.scenarioId)}`}
+                      className="font-medium text-olive-800 underline decoration-olive-400 underline-offset-2"
+                    >
+                      Open in Forge ↗
+                    </Link>
                   </p>
                 ) : null}
                 <div className="mt-2 flex flex-wrap gap-1">

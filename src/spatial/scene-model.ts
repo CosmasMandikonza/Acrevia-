@@ -140,11 +140,48 @@ export interface ParkingFieldScene {
   provenance: ProvenanceRef[];
 }
 
+/**
+ * A complete deterministic parking plan (issue #9): zero or more validated
+ * fields plus the honest obligation when the planner cannot prove a layout.
+ * `status` is PLACED only when placedStalls === requiredStalls and every
+ * field passed mechanical validation; otherwise UNRESOLVED and NO field is
+ * emitted — Forge renders the obligation, never invented stalls.
+ */
+export interface ParkingPlanScene {
+  status: "PLACED" | "UNRESOLVED";
+  requiredStalls: number;
+  placedStalls: number;
+  /** Assumption-derived planning layout — never legal parking approval. */
+  verification: EnvelopeVerification;
+  fields: ParkingFieldScene[];
+  obligation: {
+    areaSqFt: number;
+    label: string;
+    note: string;
+  };
+  reasons: string[];
+  provenance: ProvenanceRef[];
+}
+
 export interface ScenarioVolumeScene extends SceneVolume {
   status: SceneStatus;
   statusDetail: string;
   constraintResultIds: string[];
   provenance: ProvenanceRef[];
+}
+
+/**
+ * Honest placement summary for a scenario's spatial layout (issue #9).
+ * PLACED: building footprint AND every required parking stall got
+ * mechanically validated geometry. PARTIAL: some components placed, at
+ * least one UNRESOLVED (the canonical 110-stall case). UNRESOLVED: no
+ * validated layout exists — the modeled numbers stand, the site plan
+ * does not.
+ */
+export interface ScenarioPlacement {
+  status: "PLACED" | "PARTIAL" | "UNRESOLVED";
+  summary: string;
+  reasons: string[];
 }
 
 export interface ScenarioScene {
@@ -155,6 +192,22 @@ export interface ScenarioScene {
   certificateId: string | null;
   volumes: ScenarioVolumeScene[];
   metrics: { metricId: string; label: string; value: string | null }[];
+  /** #9 additions (all optional so the v1 spike model stays untouched). */
+  /** Certificate freshness last graded by the server (CURRENT/STALE/...). */
+  freshness?: string;
+  /** Solver confidence vocabulary, passed through as data. */
+  confidence?: string;
+  placement?: ScenarioPlacement;
+  /** Deterministic parking plan for this scenario (or honest UNRESOLVED). */
+  parking?: ParkingPlanScene;
+  /** Program point the geometry was derived from (homes/floors/parking). */
+  point?: {
+    homes: number;
+    parkingStalls: number;
+    parkingMargin: number;
+    footprintSqFt: number;
+    floors: number;
+  };
 }
 
 export interface SavedCamera {
@@ -165,6 +218,8 @@ export interface SavedCamera {
   target: { x: number; y: number; z: number };
   fovDeg: number;
   note: string;
+  /** Deterministic tween duration; renderers snap instantly under reduced motion. */
+  transitionMs?: number;
 }
 
 export interface SceneAnnotation {
@@ -204,6 +259,26 @@ export interface SpatialSceneModel {
   cameras: SavedCamera[];
   /** Human-readable derivation trail — the spike's audit surface. */
   derivationNotes: string[];
+  /** #9 modeled-capacity context, passed through as display data. */
+  modeled?: {
+    solverVersion: string;
+    ceilings: {
+      legalDensity: number | null;
+      massing: number;
+      physicalSiteAreaBudget: number;
+      overall: number;
+    };
+    upperBoundHomes: number;
+    note: string;
+  };
+  /** #9 refused-target treatment (NO VERIFIED SOLUTION scene state). */
+  refusal?: {
+    requestedTarget: number;
+    upperBoundHomes: number;
+    explanation: string;
+    binding: { label: string; detail: string }[];
+    nearestHomes: number[];
+  };
 }
 
 export function polygonAreaSqFt(polygon: ScenePolygon): number {
