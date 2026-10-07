@@ -57,7 +57,18 @@ function addressFailureText(session: ResolutionSession): string {
 const PARCEL_NONE_TEXT =
   "The city parcel registry returned no parcels for this address. Check the street number, or try the parcel's full mailing address.";
 
-export function SiteResolution({ initialQuery = "" }: { initialQuery?: string }) {
+export function SiteResolution({
+  initialQuery = "",
+  autoResolve = false,
+}: {
+  initialQuery?: string;
+  /** Journey integration (#15): start the REAL pipeline once when arriving
+   * from the landing with an address — after the restore check settles and
+   * only if no accepted session restores. One shot per browser session per
+   * address, so returning to the Site surface never re-resolves over
+   * in-progress or accepted state. */
+  autoResolve?: boolean;
+}) {
   const router = useRouter();
   const [query, setQuery] = useState(initialQuery);
   const [envelope, setEnvelope] = useState<ApiResult["envelope"] | null>(null);
@@ -68,6 +79,10 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
   const [protectedStructureIds, setSelectedStructureIds] = useState<Set<string>>(new Set());
 
   const [sessionId] = useState(() => `session-${Date.now()}`);
+  // Set once the mount-time verifyStoredSession attempt settles (valid or
+  // not) — the auto-resolve handoff waits for it so a restored accepted
+  // session is never re-resolved over.
+  const [restoreChecked, setRestoreChecked] = useState(false);
   // Derived: current session from the server-signed envelope.
   const session = envelope?.session ?? null;
 
@@ -84,18 +99,24 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
 
   useEffect(() => {
     let cancelled = false;
-    void verifyStoredSession().then((result) => {
-      if (cancelled || result.status !== "valid") return;
-      // Address binding: compare the current workspace address against the
-      // VERIFIED session query (server-derived), never stored metadata. A
-      // valid accepted session for one address must not restore under another.
-      if (normalizeAddressQuery(result.query) !== normalizeAddressQuery(initialQuery)) return;
-      if (phaseRef.current !== "idle") return; // user already began a new resolution
-      setEnvelope(result.envelope);
-      setCommitSummary(commitSummaryFromReceipt(result.receipt));
-      setSelectedParcels(new Set(result.envelope.session.confirmedParcelIds));
-      setPhase("committed");
-    });
+    void (async () => {
+      const result = await verifyStoredSession();
+      if (cancelled) return;
+      if (result.status === "valid") {
+        // Address binding: compare the current workspace address against the
+        // VERIFIED session query (server-derived), never stored metadata. A
+        // valid accepted session for one address must not restore under another.
+        if (normalizeAddressQuery(result.query) === normalizeAddressQuery(initialQuery)) {
+          if (phaseRef.current === "idle") { // user already began a new resolution
+            setEnvelope(result.envelope);
+            setCommitSummary(commitSummaryFromReceipt(result.receipt));
+            setSelectedParcels(new Set(result.envelope.session.confirmedParcelIds));
+            setPhase("committed");
+          }
+        }
+      }
+      setRestoreChecked(true);
+    })();
     return () => {
       cancelled = true;
     };
@@ -186,6 +207,30 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
       setPhase("failed");
     } else setPhase("candidates");
   }, [call, confirmAndShow, initialQuery, query, router, sessionId]);
+
+  // Journey handoff (#15): landing → workspace with an address starts the
+  // real pipeline exactly once per browser session per address — and only
+  // after the restore check settles without an accepted session. Every later
+  // visit to the Site surface respects existing in-progress or committed
+  // state instead of re-resolving over it.
+  const autoResolvedRef = useRef(false);
+  useEffect(() => {
+    if (!autoResolve || !restoreChecked || autoResolvedRef.current) return;
+    if (phaseRef.current !== "idle" || !query.trim()) return;
+    const key = `acrevia:auto-resolved:${normalizeAddressQuery(query)}`;
+    try {
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, "1");
+    } catch {
+      // Storage unavailable (privacy mode) — fall through to resolving once
+      // per mount rather than blocking the journey handoff.
+    }
+    autoResolvedRef.current = true;
+    // Deferred a tick so the handoff never sets state synchronously inside
+    // the effect body (react-hooks/set-state-in-effect).
+    const timer = setTimeout(() => void resolve(), 0);
+    return () => clearTimeout(timer);
+  }, [autoResolve, restoreChecked, query, resolve]);
 
   const selectCandidate = useCallback(
     async (index: number) => {
@@ -363,7 +408,10 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
           <SiteMap layers={mapLayers} />
           {phase === "searching" ? (
             <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-stone-900/85 px-4 py-1.5 text-xs font-medium text-ivory">
-              Searching public records…
+              <p>Searching public records…</p>
+              <p className="mt-0.5 text-[10px] font-normal text-ivory/75">
+                Address registry · city parcels · zoning · building footprints
+              </p>
             </div>
           ) : null}
           {envelope?.session?.selectedAddress && phase !== "idle" ? (
@@ -567,6 +615,7 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
                   name: structure.buildingName,
                 })),
               )}
+              propertyQuery={session.query}
               onProtectedStructures={handleProtectedStructures}
             />
           ) : null}

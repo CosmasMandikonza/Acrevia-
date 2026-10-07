@@ -189,7 +189,7 @@ export function Workspace() {
               className="spatial-canvas spatial-canvas-live"
               aria-label="Site resolution canvas"
             >
-              <SiteResolution initialQuery={address} />
+              <SiteResolution initialQuery={address} autoResolve={!!address} />
             </section>
           ) : surface.id === "evidence" && accepted ? (
             <EvidenceLedger
