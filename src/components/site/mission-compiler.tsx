@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
   interpretMission,
   type InterpretationResult,
@@ -93,9 +94,13 @@ function preserveStructureName(
 
 export function MissionCompiler({
   structures,
+  propertyQuery = "",
   onProtectedStructures,
 }: {
   structures: MissionStructure[];
+  /** Verified session query for this property — used only to build the
+   * journey continuation link (#15), never as truth. */
+  propertyQuery?: string;
   onProtectedStructures?: (structureIds: string[]) => void;
 }) {
   const [sentence, setSentence] = useState("");
@@ -614,6 +619,26 @@ export function MissionCompiler({
               </li>
             ))}
           </ul>
+          {/* Journey continuation (#15): once the mission is real, the same
+              property is ready for computation. Same address, same accepted
+              project — one link, no new state. */}
+          {confirmed.length > 0 && propertyQuery ? (
+            <div className="mt-3 rounded border border-olive-500 bg-olive-50 px-3 py-2.5">
+              <p className="text-sm font-medium text-stone-900">
+                Mission set for this property.
+              </p>
+              <p className="mt-0.5 text-xs text-stone-600">
+                Law, land, and mission now meet in one computation.
+              </p>
+              <Link
+                href={`/workspace?address=${encodeURIComponent(propertyQuery)}&view=scenarios`}
+                className="mt-2 inline-flex items-center gap-1.5 rounded bg-stone-900 px-2.5 py-1.5 text-xs font-medium text-ivory hover:bg-olive-800"
+              >
+                Compute what fits
+                <span aria-hidden="true">→</span>
+              </Link>
+            </div>
+          ) : null}
         </div>
       </div>
     </section>
