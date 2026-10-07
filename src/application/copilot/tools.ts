@@ -197,7 +197,14 @@ const GetProjectContextInput = z.object({}).strict();
 
 const QueryScenariosInput = z
   .object({
-    keepsOwnership: z.boolean().optional(),
+    /**
+     * The ONLY ownership condition Acrevia can verify: a confirmed
+     * retain-ownership mission rule. Deliberately `literal(true)` — there is
+     * no way to ask for "does not keep ownership", because ownership
+     * disposition is not modeled as a scenario dimension and absence of the
+     * mission rule must never be read as sale/transfer.
+     */
+    requiresOwnershipRetention: z.literal(true).optional(),
     minHomes: z.number().int().min(0).optional(),
     maxHomes: z.number().int().min(0).optional(),
     minParking: z.number().int().min(0).optional(),
@@ -309,7 +316,7 @@ function queryScenarios(
       return false;
     return true;
   });
-  if (input.keepsOwnership) {
+  if (input.requiresOwnershipRetention) {
     if (ownership) {
       notes.push(
         `The confirmed mission rule "${ownership.summary}" applies to every current scenario — all are computed with the congregation retaining land ownership.`,
@@ -317,7 +324,7 @@ function queryScenarios(
     } else {
       matches = [];
       notes.push(
-        "No retain-ownership mission rule is currently confirmed, so no current scenario guarantees ownership. Confirming the ownership mission requires a user-confirmed mission change.",
+        "No retain-ownership mission rule is currently confirmed, so no current scenario guarantees ownership retention. Confirming the ownership mission requires a user-confirmed mission change. Acrevia cannot prove the opposite either — ownership disposition (sale, transfer, lease structures) is not modeled as a scenario dimension, so no scenario can be presented as a non-retention/sale option.",
       );
     }
   }
@@ -797,7 +804,7 @@ export const COPILOT_TOOLS: CopilotToolDefinition[] = [
   {
     name: "query_scenarios",
     description:
-      "Filter the CURRENT deterministic scenarios by typed criteria (homes/parking bounds, ownership). Returns real solver rows — never computes metrics itself. Use for 'which options/scenarios…' questions.",
+      "Filter the CURRENT deterministic scenarios by typed criteria (homes/parking bounds; requiresOwnershipRetention=true restricts to scenarios computed under a confirmed retain-ownership mission rule — the only ownership condition Acrevia can verify). Returns real solver rows — never computes metrics itself. Use for 'which options/scenarios…' questions.",
     inputSchema: QueryScenariosInput,
     execute: (ctx, input) =>
       queryScenarios(ctx, input as z.infer<typeof QueryScenariosInput>),

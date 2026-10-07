@@ -21,10 +21,18 @@ import type { CopilotToolContext } from "../../src/application/copilot/tools";
 
 let base: Awaited<ReturnType<typeof copilotContextFor>>;
 let changed: Awaited<ReturnType<typeof copilotContextFor>>;
+let noOwnership: Awaited<ReturnType<typeof copilotContextFor>>;
 
 beforeAll(async () => {
   const pair = await acceptedPair();
   base = await copilotContextFor(pair, CANONICAL_MISSION_COMMANDS);
+  // Same property, but the retain-ownership mission rule was never confirmed.
+  noOwnership = await copilotContextFor(
+    pair,
+    CANONICAL_MISSION_COMMANDS.filter(
+      (command) => command.input.id !== "mission:retain-ownership",
+    ),
+  );
   // Mission changed after acceptance: 110 → 90 Sunday parking (the hero edit).
   changed = await copilotContextFor(pair, [
     ...CANONICAL_MISSION_COMMANDS,
@@ -63,9 +71,9 @@ describe("query family — scenario filtering uses real solver rows", () => {
     }
   });
 
-  it("answers ownership questions from the actual mission rule, not narrative", () => {
+  it("answers ownership-retention questions from the actual mission rule, not narrative", () => {
     const result = run(base.context, "query_scenarios", {
-      keepsOwnership: true,
+      requiresOwnershipRetention: true,
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -79,11 +87,34 @@ describe("query family — scenario filtering uses real solver rows", () => {
     expect(payload.notes[0]).toContain("retaining land ownership");
   });
 
-  it("is honest when no ownership rule exists", () => {
-    const result = run(changed.context, "query_scenarios", {
-      keepsOwnership: false,
+  it("fails honestly when retention is required but no rule exists — never infers non-retention (review correction 4)", () => {
+    const result = run(noOwnership.context, "query_scenarios", {
+      requiresOwnershipRetention: true,
     });
     expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const payload = result.result as {
+      matches: unknown[];
+      matchCount: number;
+      ownershipMission: { present: boolean };
+      notes: string[];
+    };
+    expect(payload.ownershipMission.present).toBe(false);
+    // Zero CLAIMED matches — absence of the rule proves nothing either way.
+    expect(payload.matchCount).toBe(0);
+    expect(payload.matches).toEqual([]);
+    expect(payload.notes[0]).toContain(
+      "ownership disposition (sale, transfer, lease structures) is not modeled as a scenario dimension",
+    );
+  });
+
+  it("rejects the legacy keepsOwnership field at the typed schema boundary", () => {
+    const result = run(base.context, "query_scenarios", {
+      keepsOwnership: true,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toContain("keepsOwnership");
   });
 });
 
@@ -145,7 +176,7 @@ describe("feasibility family — deterministic refusal the Copilot cannot overri
     const before = ProjectCodec.encode(base.trusted.project);
     const sampleArgs: Record<string, unknown> = {
       get_project_context: {},
-      query_scenarios: { keepsOwnership: true },
+      query_scenarios: { requiresOwnershipRetention: true },
       inspect_scenario: { label: "MISSION BALANCE" },
       explain_feasibility: { targetHomes: 124 },
       inspect_assumptions: {},

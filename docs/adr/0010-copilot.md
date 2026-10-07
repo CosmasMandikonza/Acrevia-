@@ -1,6 +1,6 @@
 # ADR 0010 — Model-aware Feasibility & Visioning Copilot
 
-Status: Proposed (issue #10) · Date: 2026-10-07 · Depends on: ADR 0003, 0004, 0005, 0007, 0011
+Status: Accepted (issue #10) · Date: 2026-10-07 · Depends on: ADR 0003, 0004, 0005, 0007, 0011
 
 ## Context
 
@@ -86,3 +86,7 @@ subsystem.
   `/api/proof/snapshot` is unchanged.
 - Adding a provider is a config change, not a code change; swapping the model
   cannot weaken the mutation or grounding boundaries.
+- `query_scenarios` can require ownership retention (a verifiable confirmed
+  mission rule) but can never query for non-retention: ownership disposition
+  is not a modeled scenario dimension, and a missing mission rule is never
+  inverted into a sale/transfer claim.
