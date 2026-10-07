@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { contextFor } from "../domain/helpers";
 import type { Project } from "../../src/domain/graph/project";
 import { seedSolverAssumptions } from "../../src/application/solver/assumptions";
-import { solve, type EvaluatedConstraint } from "../../src/application/solver/solve";
+import { solve } from "../../src/application/solver/solve";
+import { recordSolverScenarios } from "../../src/application/solver/record";
 import { canonicalProject } from "./canonical.test";
 import {
   confirmMissionConstraint,
@@ -11,11 +12,10 @@ import {
   upsertRegulation,
   materializeConstraint,
   setAssumption,
-  recordScenario,
   supersedeSourceArtifact,
   replaceExecutableConstraint,
 } from "../../src/commands";
-import { gradeCertificate, Unit } from "../../src/domain";
+import { gradeCertificate } from "../../src/domain";
 
 /**
  * Solver property/fuzz + adversarial suite (issue #7; incorporates the
@@ -37,6 +37,7 @@ function tinyProject(
     stallArea?: number;
     storyFt?: number;
     densityTiers?: Array<{ firstSqFt: number; perUnit: number }>;
+    usePermission?: "BY_RIGHT" | "SPECIAL_EXCEPTION" | "PROHIBITED";
     skipMissions?: boolean;
   } = {},
 ): Project {
@@ -193,6 +194,26 @@ function tinyProject(
       ],
       rounding: "down",
     },
+  });
+  // Multi-family use permission — required solver precondition.
+  lawClaim("phl:claim:up", "use-permission", { type: "qualitative", text: "Y" }, "Y");
+  upsertRegulation(ctx, {
+    id: "phl:reg:up",
+    kind: "regulation",
+    jurisdictionKey: "philadelphia-pa",
+    codeSection: "use table",
+    applicability: { district: "RM-1" },
+    claimIds: ["phl:claim:up", baseClaim],
+    currentness: "CURRENT",
+    conflictRefs: [],
+  });
+  materializeConstraint(ctx, {
+    id: "phl:constraint:up",
+    kind: "constraint",
+    constraintKind: "use-permission",
+    regulationId: "phl:reg:up",
+    use: "multi-family",
+    permission: overrides.usePermission ?? "BY_RIGHT",
   });
   const parkingMission = overrides.parkingMission ?? 0;
   if (!overrides.skipMissions && parkingMission >= 1) {
@@ -399,7 +420,7 @@ describe("sensitivity — assumptions change capacity predictably", () => {
     });
     const tighter = solve(project);
     if (tighter.status !== "SOLVED") throw new Error("sensitivity SOLVED");
-    expect(tighter.overallCeiling).toBeGreaterThan(base.overallCeiling);
+    expect(tighter.ceilings.overall).toBeGreaterThan(base.ceilings.overall);
   });
 
   it("stall area 350 → 325 raises physical room", () => {
@@ -437,61 +458,15 @@ describe("sensitivity — assumptions change capacity predictably", () => {
   });
 });
 
-// Map solver-evaluated results into recordScenario result rows (every
-// executable constraint must have a row — the record is the proof history).
-function scenarioResults(prefix: string, results: { constraintId?: string; constraintKey: string; status: EvaluatedConstraint["status"]; actual?: number; actualUnit?: string; limit?: number; limitUnit?: string; explanation: string }[]) {
-  return results
-    .filter((r) => r.constraintId !== undefined)
-    .map((r) => ({
-      resultId: `result:${prefix}:${r.constraintId}`,
-      constraintId: r.constraintId as string,
-      status: r.status,
-      actual: r.actual !== undefined && r.actualUnit !== undefined
-        ? { value: r.actual, unit: Unit.parse(r.actualUnit) }
-        : null,
-      limit: r.limit !== undefined && r.limitUnit !== undefined
-        ? { value: r.limit, unit: Unit.parse(r.limitUnit) }
-        : null,
-      explanation: r.explanation,
-    }));
-}
-
-describe("certificate staleness after consequential change", () => {
-  it("mission parking change stales a dependent certificate; unrelated stays CURRENT", () => {
+describe("certificate staleness after consequential change (production recording path)", () => {
+  it("mission parking change stales a recorded scenario certificate; the re-solve follows", () => {
     const project = canonicalProject();
     const ctx = contextFor(project);
     const solveFirst = solve(project);
     if (solveFirst.status !== "SOLVED") throw new Error("SOLVED");
-
-    // Record a scenario depending on the mission + law constraints + assumptions.
-    recordScenario(ctx, {
-      scenarioId: "scenario:hero",
-      label: "Hero",
-      solverVersion: "test@1",
-      status: "COMPUTED",
-      metrics: [{ metricId: "homes", label: "Homes", value: { value: solveFirst.overallCeiling, unit: "dwelling_units" } }],
-      constraintIds: solveFirst.inputs.law.map((c) => c.id),
-      missionIds: solveFirst.inputs.missions.map((m) => m.id),
-      assumptionIds: solveFirst.inputs.assumptionIds,
-      parcelId: solveFirst.inputs.parcelId,
-      results: scenarioResults("hero", solveFirst.scenarios[0].results),
-      certificateId: "scenario:hero:certificate",
-    });
-    // Record an unrelated scenario depending only on law.
-    recordScenario(ctx, {
-      scenarioId: "scenario:unrelated",
-      label: "Unrelated",
-      solverVersion: "test@1",
-      status: "COMPUTED",
-      metrics: [{ metricId: "homes", label: "Homes", value: { value: 1, unit: "dwelling_units" } }],
-      constraintIds: solveFirst.inputs.law.map((c) => c.id),
-      missionIds: [],
-      assumptionIds: solveFirst.inputs.assumptionIds,
-      parcelId: solveFirst.inputs.parcelId,
-      results: scenarioResults("unrelated", solveFirst.scenarios[0].results),
-      certificateId: "scenario:unrelated:certificate",
-    });
-    expect(gradeCertificate(project, "scenario:hero:certificate").freshness).toBe("CURRENT");
+    const recorded = recordSolverScenarios(ctx, solveFirst);
+    expect(recorded.length).toBeGreaterThan(0);
+    for (const entry of recorded) expect(entry.freshness).toBe("CURRENT");
 
     // Change mission parking 110 → 130 through the typed command.
     confirmMissionConstraint(ctx, {
@@ -503,17 +478,18 @@ describe("certificate staleness after consequential change", () => {
       confirmationState: "CONFIRMED",
       hardOrSoft: "hard",
     });
-    expect(["STALE", "INVALIDATED"]).toContain(gradeCertificate(project, "scenario:hero:certificate").freshness);
-    expect(gradeCertificate(project, "scenario:unrelated:certificate").freshness).toBe("CURRENT");
+    for (const entry of recorded) {
+      expect(gradeCertificate(project, entry.certificateId).freshness).not.toBe("CURRENT");
+    }
 
     // Deterministic: the new solve reflects the new parking floor.
     const after = solve(project);
     if (after.status !== "SOLVED") throw new Error("still SOLVED");
     expect(after.geometry.parkingStallsRequired).toBe(130);
-    expect(after.overallCeiling).toBeLessThan(solveFirst.overallCeiling);
+    expect(after.ceilings.overall).toBeLessThan(solveFirst.ceilings.overall);
   });
 
-  it("changing law height 38 → 45 changes the solution deterministically", () => {
+it("changing law height 38 → 45 changes the solution deterministically", () => {
     const project = canonicalProject();
     const ctx = contextFor(project);
     const before = solve(project);

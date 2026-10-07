@@ -16,6 +16,7 @@ import { loadBenchmarkEvidence } from "../../../../adapters/regulatory/benchmark
 import { benchmarkExtractionAdapter } from "../../../../adapters/regulatory/benchmark-extractor";
 import { seedSolverAssumptions } from "../../../../application/solver/assumptions";
 import { solve } from "../../../../application/solver/solve";
+import { recordSolverScenarios } from "../../../../application/solver/record";
 import { SolveRefusal } from "../../../../application/solver/inputs";
 import { buildGeometryHandoff } from "../../../../application/solver/geometry-handoff";
 import type { CommandContext } from "../../../../commands";
@@ -26,17 +27,25 @@ import type { CommandContext } from "../../../../commands";
  * LAW says what may happen. MISSION says what the church refuses to
  * sacrifice. The SOLVER computes the intersection — and only the
  * intersection. It consumes executable law EXCLUSIVELY through
- * selectExecutableConstraints() inside solve(), never the raw compiled view;
- * missions arrive only through the typed CONFIRMED command log; every number
- * it returns is either computed from the accepted geometry, quoted from a
- * verified law decision, or labeled as an assumption. There is no third
- * channel. When no verified solution exists it says so and proves WHICH
- * binding constraints close the door.
+ * selectExecutableConstraints() inside solve() (including the multi-family
+ * use-permission precondition), missions only through the CONFIRMED typed
+ * command log, geometry only from the accepted GIS commit. The decision
+ * variable is integer home count with exact required footprints — no
+ * footprint lattice; the parking range is derived from site area, never a
+ * hidden cap; beyond the explicit search bound the solver REFUSES.
  *
- * Statelessness and trust are identical to /api/mission/state: the accepted
+ * Language discipline: results are "supported within modeled scope" and the
+ * top of the model is a "modeled upper bound" — area arithmetic does not
+ * prove physical placement until #9 places real polygons. A target above the
+ * modeled upper bound is still safely NO VERIFIED SOLUTION.
+ *
+ * Every returned scenario is RECORDED through recordScenario and carries a
+ * ScenarioCertificate (id + freshness returned per scenario). Statelessness
+ * and the trust boundary match /api/mission/state: the accepted
  * { envelope, receipt } pair is verified, the committed base project is
  * rebuilt and hash-gated, and the mission command log replays through the
- * command boundary before any solving. Nothing is persisted.
+ * command boundary before any solving. Nothing is persisted server-side
+ * beyond this request's in-memory project.
  */
 
 export const dynamic = "force-dynamic";
@@ -172,15 +181,21 @@ export async function POST(request: Request) {
     const result = solve(project, targetHomes === undefined ? {} : { targetHomes });
 
     if (result.status === "SOLVED") {
+      // Production recording: every displayed scenario gets a certificate.
+      const recorded = recordSolverScenarios(ctx, result);
       return NextResponse.json({
         status: "SOLVED",
         targetHomes: targetHomes ?? null,
         ceilings: {
-          legalDensity: result.legalDensityCeiling,
-          massing: result.massingCeiling,
-          physicalSite: result.physicalSiteCeiling,
-          overall: result.overallCeiling,
+          legalDensity: result.ceilings.legalDensity,
+          massing: result.ceilings.massing,
+          physicalSiteAreaBudget: result.ceilings.physicalSiteAreaBudget,
+          overall: result.ceilings.overall,
+          note:
+            "Three modeled ceilings computed independently; overall is their minimum. Area arithmetic does not prove physical placement — spatial packing and unresolved setbacks can only lower the realizable result.",
         },
+        modeledUpperBoundHomes: result.modeledUpperBoundHomes,
+        enumeration: result.enumeration,
         geometry: {
           parcelAreaSqFt: Math.round(result.geometry.parcelAreaSqFt),
           preservedStructureAreaSqFt: Math.round(result.geometry.preservedStructureAreaSqFt),
@@ -190,10 +205,9 @@ export async function POST(request: Request) {
           floorsCap: result.geometry.floorsCap,
           parkingStallsRequired: result.geometry.parkingStallsRequired,
           parkingLandAreaSqFt: Math.round(result.geometry.parkingLandAreaSqFt),
-          developableFootprintMaxSqFt: Math.round(result.geometry.developableFootprintMaxSqFt),
           warnings: result.geometry.warnings,
         },
-        scenarios: result.scenarios.map((scenario) => ({
+        scenarios: result.scenarios.map((scenario, index) => ({
           label: scenario.label,
           homes: scenario.point.homes,
           parkingStalls: scenario.point.parkingStalls,
@@ -202,6 +216,13 @@ export async function POST(request: Request) {
           floors: scenario.point.floors,
           confidence: scenario.confidence,
           professionalQuestions: scenario.professionalQuestions,
+          certificate: recorded[index]
+            ? {
+                scenarioId: recorded[index].scenarioId,
+                certificateId: recorded[index].certificateId,
+                freshness: recorded[index].freshness,
+              }
+            : null,
           results: scenario.results.map((r) => ({
             key: r.constraintKey,
             label: r.humanLabel,
@@ -248,8 +269,13 @@ export async function POST(request: Request) {
     return NextResponse.json({
       status: "NO_VERIFIED_SOLUTION",
       targetHomes: result.requestedTarget,
-      maxFeasibleHomes: result.maxFeasibleHomes,
-      ceilings: result.ceilings,
+      modeledUpperBoundHomes: result.modeledUpperBoundHomes,
+      ceilings: {
+        ...result.ceilings,
+        note:
+          "Three modeled ceilings computed independently. A target above this modeled upper bound cannot fit under the same hard inputs — that is why the refusal is safe.",
+      },
+      enumeration: result.enumeration,
       explanation: result.explanationInputs.join(" "),
       counterfactuals: result.counterfactuals,
       binding: result.binding.map((proof) => ({
@@ -275,7 +301,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const name = error instanceof Error ? error.name : "Error";
-    if (name === "SolveRefusal" || error instanceof SolveRefusal) {
+    if (error instanceof SolveRefusal || name === "SolveRefusal") {
       const refusal = error as SolveRefusal;
       return NextResponse.json({
         status: "REFUSED",

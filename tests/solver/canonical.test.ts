@@ -6,9 +6,11 @@ import type { Project } from "../../src/domain/graph/project";
 import {
   seedSolverAssumptions,
 } from "../../src/application/solver/assumptions";
-import { solve } from "../../src/application/solver/solve";
+import { solve, attainableHomes, type CandidatePoint } from "../../src/application/solver/solve";
+import { SolveRefusal } from "../../src/application/solver/inputs";
+import { recordSolverScenarios } from "../../src/application/solver/record";
 import { buildGeometryHandoff } from "../../src/application/solver/geometry-handoff";
-import { Unit } from "../../src/domain";
+import { Unit, gradeCertificate } from "../../src/domain";
 import {
   confirmMissionConstraint,
   addSourceArtifact,
@@ -16,6 +18,8 @@ import {
   upsertRegulation,
   materializeConstraint,
   recordScenario,
+  setAssumption,
+  replaceExecutableConstraint,
 } from "../../src/commands";
 
 /**
@@ -41,7 +45,9 @@ const SANCTUARY_GEOJSON = JSON.parse(
 const NOW = "2026-10-09T12:00:00.000Z";
 
 /** Build the canonical solvable Calvary project from real geometry + law. */
-function canonicalProject(): Project {
+function canonicalProject(
+  options: { usePermission?: "BY_RIGHT" | "SPECIAL_EXCEPTION" | "PROHIBITED" | "missing" } = {},
+): Project {
   const parcelId = "gis:parcel:778273000";
   const sanctuaryId = "gis:structure:1282177";
   const project = {
@@ -323,6 +329,13 @@ function canonicalProject(): Project {
   }
 
   for (const entry of law) {
+    // Use-permission fixture variant for the solver precondition regressions.
+    if (entry.constraint.constraintKind === "use-permission") {
+      if (options.usePermission === "missing") continue;
+      if (options.usePermission && options.usePermission !== "BY_RIGHT") {
+        (entry.constraint as { permission: string }).permission = options.usePermission;
+      }
+    }
     recordClaim(ctx, {
       id: entry.claimId,
       kind: "claim",
@@ -387,112 +400,280 @@ function canonicalProject(): Project {
 }
 
 describe("canonical Calvary solver benchmark", () => {
-  it("computes the three ceilings separately with real geometry", () => {
+  it("computes the three ceilings INDEPENDENTLY with real geometry (no copying)", () => {
     const project = canonicalProject();
     const result = solve(project);
     expect(result.status).toBe("SOLVED");
     if (result.status !== "SOLVED") return;
+    const { geometry: g, ceilings } = result;
 
-    // Legal density: 4 + floor((119,173 - 1,440)/480) = 249
-    expect(result.legalDensityCeiling).toBe(249);
-    // Massing: floors(38/11=3) × footprint(min(physical, occupied room))/1200
-    expect(result.geometry.floorsCap).toBe(3);
-    // Physical room: 119,173 - 31,239 sanctuary - 38,500 parking = 49,434
-    expect(Math.round(result.geometry.physicalLandRoomSqFt)).toBe(49434);
-    // Occupied room: 89,380 - 31,239 = 58,140 -> physical binds
-    expect(Math.round(result.geometry.occupiedRoomSqFt)).toBe(58140);
-    expect(Math.round(result.geometry.developableFootprintMaxSqFt)).toBe(49434);
-    expect(result.massingCeiling).toBe(122); // 98 × 500 sq ft steps × 3 floors ÷ 1,200
-    expect(result.overallCeiling).toBe(122);
+    expect(g.floorsCap).toBe(3); // floor(38 ft / 11 ft floor-to-floor)
+    // Legal density: 4 + floor((parcel − 1,440)/480) — fixture-computed 249.
+    expect(ceilings.legalDensity).toBe(4 + Math.floor((g.parcelAreaSqFt - 1440) / 480));
+    // Massing (occupied-area envelope, parking land NOT subtracted):
+    // floor(floor(75% × parcel − sanctuary) × 3 ÷ 1,200)
+    const massingFormula = Math.floor(
+      Math.floor((g.occupiedAreaCeilingPct / 100) * g.parcelAreaSqFt - g.preservedStructureAreaSqFt) *
+        g.floorsCap /
+        1200,
+    );
+    expect(ceilings.massing).toBe(massingFormula);
+    // Physical site area budget (parcel − sanctuary − 110 × 350):
+    const physicalFormula = Math.floor(
+      Math.floor(
+        g.parcelAreaSqFt - g.preservedStructureAreaSqFt - 110 * 350,
+      ) *
+        g.floorsCap /
+        1200,
+    );
+    expect(ceilings.physicalSiteAreaBudget).toBe(physicalFormula);
+    // Independent by construction on the canonical parcel: massing > physical.
+    expect(ceilings.massing).toBeGreaterThan(ceilings.physicalSiteAreaBudget);
+    expect(ceilings.legalDensity).toBeGreaterThan(ceilings.massing);
+    // Overall = min of the independently computed ceilings; shared primitive agrees.
+    expect(ceilings.overall).toBe(
+      Math.min(ceilings.legalDensity ?? Infinity, ceilings.massing, ceilings.physicalSiteAreaBudget),
+    );
+    expect(ceilings.overall).toBe(attainableHomes(result.inputs, g));
   });
 
-  it("70 homes is FEASIBLE under the canonical assumptions — never hard-coded", () => {
+  it("no footprint-lattice artifact: the modeled bound follows the exact area, not a 500-sq-ft grid", () => {
     const project = canonicalProject();
-    const result = solve(project, { targetHomes: 70 });
+    const result = solve(project);
     expect(result.status).toBe("SOLVED");
+    if (result.status !== "SOLVED") return;
+    const { geometry: g, ceilings } = result;
+    const M = ceilings.overall;
+    // Exact-footprint feasibility of M: ceil(M × 1,200 / 3) fits the room…
+    expect(Math.ceil((M * 1200) / g.floorsCap)).toBeLessThanOrEqual(
+      g.parcelAreaSqFt - g.preservedStructureAreaSqFt - 110 * 350,
+    );
+    // …and M+1 does NOT — with ~49,434 sq ft of room the exact answer is 123,
+    // whereas the old 500-sq-ft lattice would have said 122.
+    expect(Math.ceil(((M + 1) * 1200) / g.floorsCap)).toBeGreaterThan(
+      g.parcelAreaSqFt - g.preservedStructureAreaSqFt - 110 * 350,
+    );
+    expect(M).toBe(123); // computed truth of the corrected solver (fixture bytes)
+    // The selected HOUSING MAX point carries the exact minimum footprint.
+    const housingMax = result.scenarios.find((s) => s.label === "HOUSING MAX");
+    expect(housingMax).toBeDefined();
+    if (!housingMax) return;
+    expect(housingMax.point.footprintSqFt).toBe(Math.ceil((M * 1200) / housingMax.point.floors));
+    expect(housingMax.point.footprintSqFt % 500).not.toBe(0); // not a lattice value
   });
 
-  it("target = exact maximum (122) is feasible; 123 is the first NO VERIFIED SOLUTION", () => {
+  it("parking range is DERIVED from site area — no hidden +60 cap", () => {
     const project = canonicalProject();
-    expect(solve(project, { targetHomes: 122 }).status).toBe("SOLVED");
-    const impossible = solve(project, { targetHomes: 123 });
-    expect(impossible.status).toBe("NO_VERIFIED_SOLUTION");
-    if (impossible.status !== "NO_VERIFIED_SOLUTION") return;
-    expect(impossible.maxFeasibleHomes).toBe(122);
-    expect(impossible.requestedTarget).toBe(123);
+    const result = solve(project);
+    expect(result.status).toBe("SOLVED");
+    if (result.status !== "SOLVED") return;
+    const { geometry: g, enumeration, frontier } = result;
+    const derivedMax = Math.floor(
+      (g.parcelAreaSqFt - g.preservedStructureAreaSqFt) / 350,
+    );
+    expect(enumeration.parkingStallsMax).toBe(derivedMax); // ~251, not required+60
+    expect(derivedMax - enumeration.parkingStallsMin).toBeGreaterThan(60);
+    // The frontier actually reaches beyond required+60 (full modeled space).
+    const maxStalls = frontier.reduce((m, p) => Math.max(m, p.parkingStalls), 0);
+    expect(maxStalls).toBeGreaterThan(enumeration.parkingStallsMin + 60);
+    // And the pre-search bound covered exactly that derived space.
+    expect(enumeration.pointsConsidered).toBe(
+      (enumeration.homesUpperBound + 1) * enumeration.floorsCap *
+        (enumeration.parkingStallsMax - enumeration.parkingStallsMin + 1),
+    );
   });
 
-  it("binding constraints are mechanically proven with capacity deltas", () => {
+  it("M is supported and M+1 is the first NO VERIFIED SOLUTION — from the corrected solver", () => {
     const project = canonicalProject();
-    const impossible = solve(project, { targetHomes: 150 });
+    const base = solve(project);
+    expect(base.status).toBe("SOLVED");
+    if (base.status !== "SOLVED") return;
+    const M = base.ceilings.overall;
+
+    const atMax = solve(project, { targetHomes: M });
+    expect(atMax.status).toBe("SOLVED");
+    const beyond = solve(project, { targetHomes: M + 1 });
+    expect(beyond.status).toBe("NO_VERIFIED_SOLUTION");
+    if (beyond.status !== "NO_VERIFIED_SOLUTION") return;
+    expect(beyond.modeledUpperBoundHomes).toBe(M);
+    expect(beyond.requestedTarget).toBe(M + 1);
+    // The refusal explains the three modeled ceilings and the bound's meaning.
+    expect(beyond.explanationInputs.join(" ")).toContain("modeled upper bound");
+  });
+
+  it("70 homes is SUPPORTED WITHIN MODELED SCOPE — computed, never hard-coded", () => {
+    const result = solve(canonicalProject(), { targetHomes: 70 });
+    expect(result.status).toBe("SOLVED");
+    if (result.status !== "SOLVED") return;
+    expect(result.scenarios.every((s) => s.point.homes >= 70)).toBe(true);
+    // Language discipline: the confidence vocabulary never claims placement-
+    // proven feasibility — canonical unknowns (contextual setback, special
+    // exception) honestly force EXPERT_REVIEW_REQUIRED here.
+    for (const scenario of result.scenarios) {
+      expect(["SUPPORTED_WITHIN_MODED_SCOPE", "ASSUMPTION_SENSITIVE", "EXPERT_REVIEW_REQUIRED"]).toContain(
+        scenario.confidence,
+      );
+    }
+    expect(
+      result.scenarios.some((r) => r.results.some((row) => /AREA ARITHMETIC/i.test(row.explanation))),
+    ).toBe(true);
+  });
+
+  it("binding constraints are proven by the SAME shared primitive, one bound at a time", () => {
+    const project = canonicalProject();
+    const base = solve(project);
+    expect(base.status).toBe("SOLVED");
+    const impossible = solve(project, { targetHomes: (base.status === "SOLVED" ? base.ceilings.overall : 0) + 1 });
     expect(impossible.status).toBe("NO_VERIFIED_SOLUTION");
-    if (impossible.status !== "NO_VERIFIED_SOLUTION") return;
+    if (impossible.status !== "NO_VERIFIED_SOLUTION" || base.status !== "SOLVED") return;
+
     expect(impossible.binding.length).toBeGreaterThan(0);
     for (const proof of impossible.binding) {
       expect(proof.capacityDelta).toBeGreaterThan(0);
       expect(proof.capacityAfter).toBeGreaterThan(proof.capacityBefore);
+      expect(proof.capacityBefore).toBe(base.ceilings.overall); // same primitive as the primary solve
     }
     // Mission-locked counterfactuals are explained but never offered.
-    const missionProofs = impossible.binding.filter((p) => p.missionLocked);
-    expect(missionProofs.length).toBeGreaterThan(0);
+    expect(impossible.binding.some((p) => p.missionLocked)).toBe(true);
     expect(impossible.counterfactuals.join(" ")).toContain("did not use that alternative");
+    // Density is NOT binding on the canonical parcel (249 > 145 > 123), so it
+    // must not appear as a binding proof.
+    expect(impossible.binding.some((p) => p.constraintKey === "law:density")).toBe(false);
   });
 
   it("every returned scenario satisfies every hard constraint (no plausible-but-invalid)", () => {
-    const project = canonicalProject();
-    const result = solve(project);
-    if (result.status !== "SOLVED") throw new Error("expected SOLVED");
-    expect(result.scenarios.length).toBeGreaterThan(0);
+    const result = solve(canonicalProject());
+    expect(result.status).toBe("SOLVED");
+    if (result.status !== "SOLVED") return;
     for (const scenario of result.scenarios) {
-      const hard = scenario.results.filter((r) => r.source === "law" || r.source === "mission");
-      for (const r of hard) {
-        if (r.status === "VIOLATED") {
-          throw new Error(`scenario violates ${r.humanLabel}: ${r.explanation}`);
+      for (const r of scenario.results) {
+        if (r.source === "law" || r.source === "mission") {
+          expect(r.status === "VIOLATED").toBe(false);
         }
       }
+      // Exact-footprint invariants for the selected point.
+      expect(scenario.point.footprintSqFt).toBe(
+        Math.ceil((scenario.point.homes * 1200) / scenario.point.floors),
+      );
     }
   });
 
-  it("no selected scenario is dominated by any feasible enumerated point (Pareto proof)", () => {
-    const project = canonicalProject();
-    const result = solve(project);
-    if (result.status !== "SOLVED") throw new Error("expected SOLVED");
-    for (const a of result.frontier) {
-      const dominated = result.frontier.some(
-        (b) =>
-          b !== a &&
+  it("Pareto frontier is non-dominated over the full modeled space", () => {
+    const result = solve(canonicalProject());
+    expect(result.status).toBe("SOLVED");
+    if (result.status !== "SOLVED") return;
+    const { frontier } = result;
+    for (const a of frontier) {
+      for (const b of frontier) {
+        if (a === b) continue;
+        const dominates =
           b.homes >= a.homes &&
           b.parkingMargin >= a.parkingMargin &&
           b.footprintSqFt <= a.footprintSqFt &&
-          (b.homes > a.homes || b.parkingMargin > a.parkingMargin || b.footprintSqFt < a.footprintSqFt),
-      );
-      expect(dominated).toBe(false);
+          (b.homes > a.homes || b.parkingMargin > a.parkingMargin || b.footprintSqFt < a.footprintSqFt);
+        expect(dominates).toBe(false); // no frontier point dominates another
+      }
     }
+    // The frontier reaches the modeled bound — the full space was searched.
+    expect(frontier.reduce((m, p) => Math.max(m, p.homes), 0)).toBe(result.ceilings.overall);
   });
 
-  it("labels are presentation applied AFTER the frontier; deterministic + order-invariant", () => {
-    const project = canonicalProject();
-    const a = JSON.stringify(solve(project));
-    const b = JSON.stringify(solve(project));
-    expect(a).toBe(b);
-    const c = solve(project, { targetHomes: 70 });
-    expect(JSON.stringify(solve(project, { targetHomes: 70 })).length).toBe(JSON.stringify(c).length);
+  it("labels satisfy their documented definitions (HOUSING MAX / LOW CHANGE / MISSION BALANCE)", () => {
+    const result = solve(canonicalProject());
+    expect(result.status).toBe("SOLVED");
+    if (result.status !== "SOLVED") return;
+    const byLabel = new Map(result.scenarios.map((s) => [s.label, s.point]));
+    const maxHomes = result.ceilings.overall;
+
+    const housingMax = byLabel.get("HOUSING MAX");
+    expect(housingMax).toBeDefined();
+    expect(housingMax!.homes).toBe(maxHomes);
+
+    const lowChange = byLabel.get("LOW CHANGE");
+    expect(lowChange).toBeDefined();
+    // LOW CHANGE actually minimizes footprint among displayed scenarios…
+    const displayed = [...byLabel.values()];
+    expect(lowChange!.footprintSqFt).toBe(Math.min(...displayed.map((p) => p.footprintSqFt)));
+    // …subject to the usefulness criterion: ≥ half the modeled maximum homes.
+    expect(lowChange!.homes).toBeGreaterThanOrEqual(Math.ceil(maxHomes / 2));
+
+    // MISSION BALANCE is the Pareto knee WITHIN the useful set (homes ≥
+    // ceil(max/2)): closest min-max-normalized point to the ideal corner.
+    const missionBalance = byLabel.get("MISSION BALANCE");
+    expect(missionBalance).toBeDefined();
+    const f = result.frontier.filter((p) => p.homes >= Math.ceil(maxHomes / 2));
+    const minH = Math.min(...f.map((p) => p.homes));
+    const maxH = Math.max(...f.map((p) => p.homes));
+    const minM = Math.min(...f.map((p) => p.parkingMargin));
+    const maxM = Math.max(...f.map((p) => p.parkingMargin));
+    const minF = Math.min(...f.map((p) => p.footprintSqFt));
+    const maxF = Math.max(...f.map((p) => p.footprintSqFt));
+    const norm = (v: number, min: number, max: number) => (max > min ? (v - min) / (max - min) : 0.5);
+    const dist = (p: CandidatePoint) =>
+      Math.hypot(
+        1 - norm(p.homes, minH, maxH),
+        1 - norm(p.parkingMargin, minM, maxM),
+        norm(p.footprintSqFt, minF, maxF),
+      );
+    const knee = f.reduce((best, p) => (dist(p) < dist(best) - 1e-12 ? p : best), f[0]);
+    expect(missionBalance!.homes).toBe(knee.homes);
+    expect(missionBalance!.parkingStalls).toBe(knee.parkingStalls);
+
+    // Deterministic + order-invariant labels.
+    const again = solve(canonicalProject());
+    expect(JSON.stringify(again.status === "SOLVED" ? again.scenarios.map((s) => [s.label, s.point]) : null)).toBe(
+      JSON.stringify(result.scenarios.map((s) => [s.label, s.point])),
+    );
+  });
+
+  it("multi-family use permission gates the solver: BY_RIGHT / SPECIAL_EXCEPTION / PROHIBITED / missing", () => {
+    // BY_RIGHT: normal solve.
+    const byRight = solve(canonicalProject({ usePermission: "BY_RIGHT" }));
+    expect(byRight.status).toBe("SOLVED");
+
+    // SPECIAL_EXCEPTION: conditional pathway — every scenario EXPERT_REVIEW_REQUIRED.
+    const special = solve(canonicalProject({ usePermission: "SPECIAL_EXCEPTION" }));
+    expect(special.status).toBe("SOLVED");
+    if (special.status !== "SOLVED") return;
+    expect(special.scenarios.length).toBeGreaterThan(0);
+    for (const scenario of special.scenarios) {
+      expect(scenario.confidence).toBe("EXPERT_REVIEW_REQUIRED");
+      expect(
+        scenario.professionalQuestions.some((q) => /SPECIAL_EXCEPTION/i.test(q)),
+      ).toBe(true);
+    }
+
+    // PROHIBITED: NO VERIFIED SOLUTION with the prohibition as a binding proof.
+    const prohibited = solve(canonicalProject({ usePermission: "PROHIBITED" }));
+    expect(prohibited.status).toBe("NO_VERIFIED_SOLUTION");
+    if (prohibited.status !== "NO_VERIFIED_SOLUTION") return;
+    expect(prohibited.modeledUpperBoundHomes).toBe(0);
+    const useProof = prohibited.binding.find((p) => /use permission/i.test(p.humanLabel));
+    expect(useProof).toBeDefined();
+    expect(useProof!.capacityDelta).toBeGreaterThan(0); // relaxing ONLY the prohibition unlocks homes
+    expect(useProof!.missionLocked).toBe(false);
+
+    // Missing: fail closed — the solver never assumes permission.
+    expect(() => solve(canonicalProject({ usePermission: "missing" }))).toThrow(SolveRefusal);
+    expect(() => solve(canonicalProject({ usePermission: "missing" }))).toThrow(/use-permission|permission/i);
   });
 
   it("unknown law and setbacks never default — they surface honestly", () => {
-    const project = canonicalProject();
-    const result = solve(project);
-    if (result.status !== "SOLVED") throw new Error("expected SOLVED");
+    const result = solve(canonicalProject());
+    expect(result.status).toBe("SOLVED");
+    if (result.status !== "SOLVED") return;
     const all = result.scenarios.flatMap((s) => s.results);
     expect(all.some((r) => r.status === "NOT_EVALUATED" && /setback/i.test(r.humanLabel))).toBe(true);
     expect(all.some((r) => r.status === "EXPERT_REQUIRED" && /front setback/i.test(r.humanLabel))).toBe(true);
     expect(all.some((r) => /formula/i.test(r.explanation) && r.status === "NOT_EVALUATED")).toBe(true);
-    expect(result.scenarios[0].confidence).not.toBe("VERIFIED_WITHIN_MODED_SCOPE");
+    // Area-arithmetic discipline: no scenario claims placement-proven scope.
+    expect(all.some((r) => /AREA ARITHMETIC/i.test(r.explanation))).toBe(true);
+    expect(result.scenarios[0].confidence).not.toBe("SUPPORTED_WITHIN_MODED_SCOPE");
   });
 
   it("neutral #9 geometry handoff carries regions, statuses, and no renderer concepts", () => {
-    const project = canonicalProject();
-    const handoff = buildGeometryHandoff(solve(project));
+    const result = solve(canonicalProject());
+    const handoff = buildGeometryHandoff(result);
     expect(handoff.legalEnvelopeVerified).toBe(false);
     const roles = handoff.regions.map((r) => r.role);
     expect(roles).toContain("parcel-boundary");
@@ -503,53 +684,38 @@ describe("canonical Calvary solver benchmark", () => {
     expect(JSON.stringify(handoff)).not.toMatch(/three|@react-three|maplibre/i);
   });
 
-  it("certificate closure is complete end-to-end: law chain, applicability, GIS, missions, structure, parcel, assumptions", () => {
+  it("production recording: every displayed scenario gets a CURRENT ScenarioCertificate (closure complete)", () => {
     const project = canonicalProject();
     const ctx = contextFor(project);
     const solved = solve(project);
-    if (solved.status !== "SOLVED") throw new Error("expected SOLVED");
+    expect(solved.status).toBe("SOLVED");
+    if (solved.status !== "SOLVED") return;
     const hero = solved.scenarios[0];
 
-    recordScenario(ctx, {
-      scenarioId: "scenario:hero",
-      label: "Hero",
-      solverVersion: "solver/enumerator v1",
-      status: "COMPUTED",
-      metrics: [{ metricId: "homes", label: "Homes", value: { value: hero.point.homes, unit: "dwelling_units" } }],
-      constraintIds: solved.inputs.law.map((c) => c.id),
-      missionIds: solved.inputs.missions.map((m) => m.id),
-      assumptionIds: solved.inputs.assumptionIds,
-      parcelId: solved.inputs.parcelId,
-      results: hero.results
-        .filter((r) => r.constraintId !== undefined)
-        .map((r) => ({
-          resultId: `result:hero:${r.constraintId}`,
-          constraintId: r.constraintId as string,
-          status: r.status,
-          actual: r.actual !== undefined && r.actualUnit !== undefined
-            ? { value: r.actual, unit: Unit.parse(r.actualUnit) }
-            : null,
-          limit: r.limit !== undefined && r.limitUnit !== undefined
-            ? { value: r.limit, unit: Unit.parse(r.limitUnit) }
-            : null,
-          explanation: r.explanation,
-        })),
-      certificateId: "scenario:hero:certificate",
-    });
+    // THE production path (same helper the API route calls).
+    const recorded = recordSolverScenarios(ctx, solved);
+    expect(recorded.length).toBe(solved.scenarios.length);
+    for (const entry of recorded) {
+      expect(entry.freshness).toBe("CURRENT");
+      expect(project.nodes[entry.scenarioId]).toBeDefined();
+    }
 
-    const certNode = project.nodes["scenario:hero:certificate"] as unknown as {
+    // Idempotent: replaying identical solve state reuses the same ids.
+    const replay = recordSolverScenarios(ctx, solved);
+    expect(replay.map((r) => r.scenarioId)).toEqual(recorded.map((r) => r.scenarioId));
+
+    // Closure reaches the whole truth chain at pinned revisions.
+    const certNode = project.nodes[recorded[0].certificateId] as unknown as {
       dependencies: Array<{ nodeId: string; nodeKind: string; revision: number; semanticHash: string }>;
     };
     const depIds = new Set(certNode.dependencies.map((d) => d.nodeId));
-
-    // Law chain: constraint → regulation → claim → source artifact.
     for (const id of [
       "phl:constraint:height:max:principal",
       "phl:constraint:bulk:occupied-area:max",
       "phl:constraint:parking:multi-family:minimum",
       "phl:constraint:density:min-lot-area-per-unit",
       "phl:constraint:overlay:/six:adu-prohibition",
-      "phl:constraint:parking:religious-assembly:minimum",
+      "phl:constraint:use:multi-family:permission",
     ]) {
       expect(depIds.has(id), `law constraint ${id}`).toBe(true);
     }
@@ -571,11 +737,9 @@ describe("canonical Calvary solver benchmark", () => {
     ]) {
       expect(depIds.has(id), `claim ${id}`).toBe(true);
     }
-    // Sources: adopted/official law artifacts + GIS layers.
     for (const id of ["phl:src:S5@v1", "phl:src:S6@v1", "phl:src:S7@v1", "gis:src:zoning-base", "gis:src:zoning-overlays"]) {
       expect(depIds.has(id), `source artifact ${id}`).toBe(true);
     }
-    // Missions, preserved structure, parcel, assumptions.
     for (const id of ["mission:min-sunday-parking", "mission:preserve-sanctuary", "mission:retain-ownership"]) {
       expect(depIds.has(id), `mission ${id}`).toBe(true);
     }
@@ -584,13 +748,120 @@ describe("canonical Calvary solver benchmark", () => {
     for (const id of solved.inputs.assumptionIds) {
       expect(depIds.has(id), `assumption ${id}`).toBe(true);
     }
-    // Every dependency resolves to a live node at the pinned revision.
     for (const dep of certNode.dependencies) {
       const node = project.nodes[dep.nodeId] as unknown as { kind: string; meta?: { revision?: number } } | undefined;
       expect(node, `dependency node exists: ${dep.nodeId}`).toBeDefined();
       expect(node?.kind).toBe(dep.nodeKind);
       expect(node?.meta?.revision).toBe(dep.revision);
     }
+    void hero;
+  });
+
+  it("certificate staleness: law / mission / assumption changes stale the hero; unrelated stays CURRENT", () => {
+    const project = canonicalProject();
+    const ctx = contextFor(project);
+    const solved = solve(project);
+    if (solved.status !== "SOLVED") throw new Error("SOLVED");
+    const recorded = recordSolverScenarios(ctx, solved);
+    const heroCert = recorded[0].certificateId;
+    expect(gradeCertificate(project, heroCert).freshness).toBe("CURRENT");
+
+    // Law change (typed replace path) stales the hero.
+    replaceExecutableConstraint(ctx, {
+      id: "phl:constraint:height:max:principal",
+      kind: "constraint",
+      constraintKind: "height",
+      regulationId: "phl:reg:height:max:principal",
+      limit: { value: 45, unit: "ft" },
+      appliesTo: "principal-structure",
+    });
+    expect(gradeCertificate(project, heroCert).freshness).not.toBe("CURRENT");
+
+    // Fresh project; mission change (110 → 130) stales the hero.
+    const project2 = canonicalProject();
+    const ctx2 = contextFor(project2);
+    const solved2 = solve(project2);
+    if (solved2.status !== "SOLVED") throw new Error("SOLVED 2");
+    const recorded2 = recordSolverScenarios(ctx2, solved2);
+    confirmMissionConstraint(ctx2, {
+      id: "mission:min-sunday-parking",
+      kind: "mission-constraint",
+      intentText: "Keep at least 130 Sunday parking spaces.",
+      normalized: { type: "min-parking", spaces: { value: 130, unit: "spaces" } },
+      origin: { kind: "USER_DECLARED", actorId: "board-chair", declaredAt: NOW },
+      confirmationState: "CONFIRMED",
+      hardOrSoft: "hard",
+    });
+    expect(gradeCertificate(project2, recorded2[0].certificateId).freshness).not.toBe("CURRENT");
+    // The re-solve reflects the new parking floor deterministically.
+    const after = solve(project2);
+    if (after.status !== "SOLVED") throw new Error("still SOLVED");
+    expect(after.geometry.parkingStallsRequired).toBe(130);
+    expect(after.ceilings.overall).toBeLessThan(solved2.ceilings.overall);
+
+    // Fresh project; assumption change stales the hero.
+    const project3 = canonicalProject();
+    const ctx3 = contextFor(project3);
+    const solved3 = solve(project3);
+    if (solved3.status !== "SOLVED") throw new Error("SOLVED 3");
+    const recorded3 = recordSolverScenarios(ctx3, solved3);
+    setAssumption(ctx3, {
+      id: "assumption:residential-gross-per-unit",
+      kind: "assumption",
+      statement: "gross/unit",
+      value: { type: "quantity", quantity: { value: 1000, unit: "sq_ft_per_unit" } },
+      rationale: "sensitivity",
+      origin: { kind: "MODELER_DECLARED", actorId: "t" },
+      active: true,
+    });
+    expect(gradeCertificate(project3, recorded3[0].certificateId).freshness).not.toBe("CURRENT");
+
+    // Unrelated law-only certificate stays CURRENT across a mission change.
+    const project4 = canonicalProject();
+    const ctx4 = contextFor(project4);
+    const solved4 = solve(project4);
+    if (solved4.status !== "SOLVED") throw new Error("SOLVED 4");
+    const unrelated = recordSolverScenarios(ctx4, solved4);
+    // A law-only scenario recorded through the same command with missionIds [].
+    recordScenario(ctx4, {
+      scenarioId: "scenario:unrelated-law-only",
+      label: "Unrelated",
+      solverVersion: "solver/exact-integer-homes v2",
+      status: "COMPUTED",
+      metrics: [{ metricId: "homes", label: "Homes", value: { value: 1, unit: "dwelling_units" } }],
+      constraintIds: solved4.inputs.law.map((c) => c.id),
+      missionIds: [],
+      assumptionIds: solved4.inputs.assumptionIds,
+      parcelId: solved4.inputs.parcelId,
+      results: solved4.scenarios[0].results
+        .filter((r) => r.constraintId !== undefined)
+        .map((r) => ({
+          resultId: `result:unrelated:${r.constraintId}`,
+          constraintId: r.constraintId as string,
+          status: r.status,
+          actual:
+            r.actual !== undefined && r.actualUnit !== undefined
+              ? { value: r.actual, unit: Unit.parse(r.actualUnit) }
+              : null,
+          limit:
+            r.limit !== undefined && r.limitUnit !== undefined
+              ? { value: r.limit, unit: Unit.parse(r.limitUnit) }
+              : null,
+          explanation: r.explanation,
+        })),
+      certificateId: "scenario:unrelated-law-only:certificate",
+    });
+    confirmMissionConstraint(ctx4, {
+      id: "mission:min-sunday-parking",
+      kind: "mission-constraint",
+      intentText: "Keep at least 130 Sunday parking spaces.",
+      normalized: { type: "min-parking", spaces: { value: 130, unit: "spaces" } },
+      origin: { kind: "USER_DECLARED", actorId: "board-chair", declaredAt: NOW },
+      confirmationState: "CONFIRMED",
+      hardOrSoft: "hard",
+    });
+    expect(gradeCertificate(project4, "scenario:unrelated-law-only:certificate").freshness).toBe("CURRENT");
+    expect(gradeCertificate(project4, unrelated[0].certificateId).freshness).not.toBe("CURRENT");
   });
 });
 

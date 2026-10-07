@@ -58,6 +58,12 @@ export type SolverInputs = {
   lawDecisions: LawDecision[];
   missions: MissionInput[];
   structures: StructureInput[];
+  /** Required solver precondition: current executable multi-family use permission. */
+  usePermission: {
+    state: "BY_RIGHT" | "SPECIAL_EXCEPTION" | "PROHIBITED";
+    constraintId: string;
+    use: string;
+  };
   assumptions: {
     residentialGrossPerUnit: number;
     parkingStallGrossLandArea: number;
@@ -86,7 +92,15 @@ export function buildSolverInputs(project: Project): SolverInputs {
   const executableIds = new Set(gate.executable.map((c) => c.id));
 
   // Refuse when a law constraint the solver would consume is not executable.
-  const consequentialKinds = new Set(["height", "occupied-area", "parking-requirement", "density"]);
+  // use-permission is consequential: without a current executable multi-family
+  // permission the solver must fail closed — it never assumes permission.
+  const consequentialKinds = new Set([
+    "height",
+    "occupied-area",
+    "parking-requirement",
+    "density",
+    "use-permission",
+  ]);
   for (const decision of gate.decisions) {
     if (!executableIds.has(decision.constraintId)) {
       const constraint = project.nodes[decision.constraintId];
@@ -102,6 +116,36 @@ export function buildSolverInputs(project: Project): SolverInputs {
   if (gate.executable.length === 0) {
     throw new SolveRefusal("NO_EXECUTABLE_CONSTRAINTS", "no executable regulatory constraints in project");
   }
+
+  // Multi-family use permission is a REQUIRED solver precondition:
+  // BY_RIGHT -> normal solve; SPECIAL_EXCEPTION -> conditional /
+  // EXPERT_REVIEW_REQUIRED pathway; PROHIBITED -> no solution; missing ->
+  // fail closed (the solver will not assume permission it cannot read).
+  type UsePermissionConstraint = ExecutableLaw & {
+    constraintKind: "use-permission";
+    use: string;
+    permission: "BY_RIGHT" | "SPECIAL_EXCEPTION" | "PROHIBITED";
+  };
+  const isMultiFamilyUse = (constraint: ExecutableLaw): constraint is UsePermissionConstraint =>
+    constraint.constraintKind === "use-permission" &&
+    /multi[\s-]?family/i.test(String((constraint as { use?: string }).use ?? ""));
+  const useConstraints = gate.executable.filter(isMultiFamilyUse);
+  if (useConstraints.length === 0) {
+    throw new SolveRefusal(
+      "UNKNOWN_LAW",
+      "no current executable use-permission for multi-family residential in this project; the solver will not assume permission",
+    );
+  }
+  const useState = useConstraints.some((c) => c.permission === "PROHIBITED")
+    ? ("PROHIBITED" as const)
+    : useConstraints.some((c) => c.permission === "SPECIAL_EXCEPTION")
+      ? ("SPECIAL_EXCEPTION" as const)
+      : ("BY_RIGHT" as const);
+  const usePermission = {
+    state: useState,
+    constraintId: useConstraints[0].id,
+    use: String(useConstraints[0].use ?? "multi-family"),
+  };
 
   const missions: MissionInput[] = [];
   for (const node of Object.values(project.nodes)) {
@@ -183,6 +227,7 @@ export function buildSolverInputs(project: Project): SolverInputs {
     lawDecisions: gate.decisions,
     missions,
     structures,
+    usePermission,
     assumptions,
     assumptionIds,
   };

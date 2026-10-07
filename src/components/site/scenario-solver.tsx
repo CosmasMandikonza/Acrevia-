@@ -10,10 +10,15 @@ import { readMissionLogFor, readStoredAcceptedPair } from "../../lib/accepted-pr
  * by the deterministic solver over the accepted property + confirmed mission
  * rules. It NEVER authors truth: every number arrives from
  * POST /api/solver/solve, which verifies the accepted pair, replays the
- * mission command log, and solves server-side. When no verified solution
- * exists this surface says exactly that — visually unmistakable — with the
- * mechanically proven binding constraints and the nearest alternatives
- * beneath it. No "best effort" scenario is ever invented here.
+ * mission command log, records each scenario with a ScenarioCertificate, and
+ * solves server-side.
+ *
+ * Language discipline: scenarios are "supported within modeled scope" — area
+ * arithmetic does not prove physical placement until real polygons are
+ * placed (#9). The top of the model is a MODELED UPPER BOUND, not a promise.
+ * When a target exceeds that bound this surface says NO VERIFIED SOLUTION —
+ * visually unmistakable — with the mechanically proven binding constraints
+ * and the nearest supported alternatives beneath it.
  */
 
 type SolverResultRow = {
@@ -28,14 +33,30 @@ type SolverResultRow = {
   explanation: string;
 };
 
+type Ceilings = {
+  legalDensity: number | null;
+  massing: number;
+  physicalSiteAreaBudget: number;
+  overall: number;
+};
+
+type ScenarioCertificate = {
+  scenarioId: string;
+  certificateId: string;
+  freshness: string;
+};
+
 type SolvedResponse = {
   status: "SOLVED";
   targetHomes: number | null;
-  ceilings: {
-    legalDensity: number | null;
-    massing: number;
-    physicalSite: number;
-    overall: number;
+  ceilings: Ceilings & { note?: string };
+  modeledUpperBoundHomes: number;
+  enumeration?: {
+    homesUpperBound: number;
+    parkingStallsMin: number;
+    parkingStallsMax: number;
+    floorsCap: number;
+    pointsConsidered: number;
   };
   geometry: {
     parcelAreaSqFt: number;
@@ -45,7 +66,6 @@ type SolvedResponse = {
     floorsCap: number;
     parkingStallsRequired: number;
     parkingLandAreaSqFt: number;
-    developableFootprintMaxSqFt: number;
     warnings: string[];
   };
   scenarios: Array<{
@@ -57,6 +77,7 @@ type SolvedResponse = {
     floors: number;
     confidence: string;
     professionalQuestions: string[];
+    certificate: ScenarioCertificate | null;
     results: SolverResultRow[];
   }>;
   assumptions: Array<{
@@ -75,8 +96,8 @@ type SolvedResponse = {
 type NoSolutionResponse = {
   status: "NO_VERIFIED_SOLUTION";
   targetHomes: number;
-  maxFeasibleHomes: number;
-  ceilings: SolvedResponse["ceilings"];
+  modeledUpperBoundHomes: number;
+  ceilings: Ceilings & { note?: string };
   explanation: string;
   counterfactuals: string[];
   binding: Array<{
@@ -118,7 +139,7 @@ const STATUS_CHIP: Record<string, { label: string; className: string }> = {
 };
 
 const CONFIDENCE_NOTE: Record<string, string> = {
-  VERIFIED_WITHIN_MODED_SCOPE: "Verified within the modeled scope",
+  SUPPORTED_WITHIN_MODED_SCOPE: "Supported within modeled scope — area arithmetic, not yet a placement proof",
   ASSUMPTION_SENSITIVE: "Assumption-sensitive — changes with the stated assumptions",
   EXPERT_REVIEW_REQUIRED: "Expert review required before relying on this",
   NO_VERIFIED_SOLUTION: "No verified solution",
@@ -196,7 +217,7 @@ export function ScenarioSolver() {
     return (
       <div className="mx-auto max-w-3xl p-6">
         <p className="text-sm text-stone-500">
-          {busy ? "Computing verified scenarios…" : "Preparing the solver…"}
+          {busy ? "Computing supported scenarios…" : "Preparing the solver…"}
         </p>
       </div>
     );
@@ -232,8 +253,9 @@ export function ScenarioSolver() {
       <section aria-label="Test a housing goal" className="rounded-md border border-stone-300 bg-white p-4">
         <h3 className="text-xs font-semibold tracking-[0.14em] text-stone-500">TEST A HOUSING GOAL</h3>
         <p className="mt-1 text-xs text-stone-600">
-          Enter a number of homes. The solver proves it feasible — or returns NO VERIFIED SOLUTION
-          with the binding constraints that close the door. It never rounds in the church&apos;s favor.
+          Enter a number of homes. The solver proves it supported within the modeled scope — or
+          returns NO VERIFIED SOLUTION with the binding constraints that close the door. It never
+          rounds in the church&apos;s favor.
         </p>
         <div className="mt-3 flex items-center gap-2">
           <input
@@ -274,20 +296,30 @@ export function ScenarioSolver() {
   );
 }
 
-function CeilingsBand({ ceilings }: { ceilings: SolvedResponse["ceilings"] }) {
+function CeilingsBand({ ceilings }: { ceilings: Ceilings }) {
   const rows: Array<{ label: string; value: number | null; note: string }> = [
     {
       label: "Legal density capacity",
       value: ceilings.legalDensity,
       note: "RM-1 tiered minimum lot area per unit (law)",
     },
-    { label: "Building massing capacity", value: ceilings.massing, note: "footprint × floors ÷ gross per unit (assumption)" },
-    { label: "Physical site capacity", value: ceilings.physicalSite, note: "non-overlapping land: building + parking + preserved (geodesic)" },
+    {
+      label: "Building massing capacity",
+      value: ceilings.massing,
+      note: "occupied-area envelope × floors ÷ gross per unit — parking land not subtracted",
+    },
+    {
+      label: "Physical site area-budget ceiling",
+      value: ceilings.physicalSiteAreaBudget,
+      note: "parcel − preserved sanctuary − required parking land, then × floors ÷ gross per unit",
+    },
   ];
   const binding = ceilings.overall;
   return (
-    <section aria-label="Capacity ceilings" className="rounded-md border border-stone-300 bg-white p-4">
-      <h3 className="text-xs font-semibold tracking-[0.14em] text-stone-500">THREE CEILINGS, PROVEN SEPARATELY</h3>
+    <section aria-label="Modeled capacity ceilings" className="rounded-md border border-stone-300 bg-white p-4">
+      <h3 className="text-xs font-semibold tracking-[0.14em] text-stone-500">
+        THREE MODELED CEILINGS, COMPUTED INDEPENDENTLY
+      </h3>
       <div className="mt-3 grid gap-3 sm:grid-cols-3">
         {rows.map((row) => (
           <div
@@ -301,14 +333,15 @@ function CeilingsBand({ ceilings }: { ceilings: SolvedResponse["ceilings"] }) {
             <p className="text-[11px] text-stone-500">homes max</p>
             <p className="mt-1 text-[11px] text-stone-500">{row.note}</p>
             {row.value === binding ? (
-              <p className="mt-1 text-[11px] font-semibold text-olive-800">BINDING — the tightest truth</p>
+              <p className="mt-1 text-[11px] font-semibold text-olive-800">BINDING — the tightest modeled truth</p>
             ) : null}
           </div>
         ))}
       </div>
       <p className="mt-3 text-xs text-stone-600">
-        Overall verified capacity: <strong>{n(ceilings.overall)} homes</strong> — the minimum of the
-        proven ceilings, never more.
+        Modeled capacity upper bound: <strong>{n(ceilings.overall)} homes</strong> — the minimum of
+        the independently computed ceilings, never more. Area arithmetic does not prove physical
+        placement: spatial packing and unresolved setbacks can only lower the realizable result.
       </p>
     </section>
   );
@@ -319,9 +352,9 @@ function SolvedPanels({ response }: { response: SolvedResponse }) {
   return (
     <>
       <CeilingsBand ceilings={response.ceilings} />
-      <section aria-label="Verified scenarios" className="rounded-md border border-stone-300 bg-white">
+      <section aria-label="Supported scenarios" className="rounded-md border border-stone-300 bg-white">
         <h3 className="border-b border-stone-100 p-4 text-xs font-semibold tracking-[0.14em] text-stone-500">
-          VERIFIED SCENARIOS — THE PARETO FRONTIER
+          SUPPORTED SCENARIOS WITHIN MODELED SCOPE — THE PARETO FRONTIER
         </h3>
         <ul>
           {response.scenarios.map((scenario, index) => {
@@ -341,15 +374,31 @@ function SolvedPanels({ response }: { response: SolvedResponse }) {
                     </p>
                   </div>
                   <p className="text-xs text-stone-600">
-                    {scenario.floors} floors · {n(scenario.footprintSqFt)} sq ft footprint ·{" "}
-                    {scenario.parkingStalls} parking stalls (mission minimum{" "}
-                    {g.parkingStallsRequired}, margin +{scenario.parkingMargin})
+                    {scenario.floors} floors · {n(scenario.footprintSqFt)} sq ft footprint (exact
+                    minimum for this program) · {scenario.parkingStalls} parking stalls (mission
+                    minimum {g.parkingStallsRequired}, margin +{scenario.parkingMargin})
                   </p>
                 </div>
                 <p className="mt-2 text-xs text-stone-600">
                   {CONFIDENCE_NOTE[scenario.confidence] ?? scenario.confidence} · {satisfied}/
                   {scenario.results.length} checks satisfied
                 </p>
+                {scenario.certificate ? (
+                  <p className="mt-1 text-xs text-stone-600" data-testid="scenario-certificate">
+                    ScenarioCertificate{" "}
+                    <span className="font-mono text-[11px]">{scenario.certificate.certificateId}</span>{" "}
+                    ·{" "}
+                    <span
+                      className={
+                        scenario.certificate.freshness === "CURRENT"
+                          ? "font-semibold text-olive-800"
+                          : "font-semibold text-red-800"
+                      }
+                    >
+                      {scenario.certificate.freshness}
+                    </span>
+                  </p>
+                ) : null}
                 <div className="mt-2 flex flex-wrap gap-1">
                   {open.map((row) => {
                     const chip = STATUS_CHIP[row.status] ?? STATUS_CHIP.UNKNOWN;
@@ -415,8 +464,9 @@ function NoSolutionPanel({ response }: { response: NoSolutionResponse }) {
         <p className="mt-3 text-sm text-red-900">
           {n(response.targetHomes)} homes cannot be built on this parcel within the law and the
           church&apos;s confirmed mission rules. Acrevia will not soften the math or invent a
-          &ldquo;best effort&rdquo; scenario. The maximum proven feasible is{" "}
-          <strong>{n(response.maxFeasibleHomes)} homes</strong>.
+          &ldquo;best effort&rdquo; scenario. The modeled upper bound is{" "}
+          <strong>{n(response.modeledUpperBoundHomes)} homes</strong> — a target above an
+          optimistic bound cannot fit under the same hard inputs, which is why this refusal is safe.
         </p>
         <h3 className="mt-4 text-xs font-semibold tracking-[0.14em] text-red-900">
           WHAT CLOSES THE DOOR — MECHANICALLY PROVEN
@@ -434,7 +484,8 @@ function NoSolutionPanel({ response }: { response: NoSolutionResponse }) {
               </p>
               <p className="mt-1 text-xs text-stone-700">
                 Limit {n(proof.currentLimit)} → relaxed to {n(proof.relaxedLimit)} in a re-solve
-                unlocks <strong>+{n(proof.capacityDeltaHomes)} homes</strong> ({n(proof.capacityBefore)} →{" "}
+                with the same shared model unlocks{" "}
+                <strong>+{n(proof.capacityDeltaHomes)} homes</strong> ({n(proof.capacityBefore)} →{" "}
                 {n(proof.capacityAfter)}).
               </p>
               <p className="mt-1 text-xs text-stone-600">{proof.explanation}</p>
@@ -453,7 +504,7 @@ function NoSolutionPanel({ response }: { response: NoSolutionResponse }) {
       </section>
       <section aria-label="Nearest alternatives" className="rounded-md border border-stone-300 bg-white p-4">
         <h3 className="text-xs font-semibold tracking-[0.14em] text-stone-500">
-          NEAREST VERIFIED ALTERNATIVES BENEATH THE GOAL
+          NEAREST SUPPORTED ALTERNATIVES BENEATH THE GOAL
         </h3>
         <ul className="mt-3 space-y-2">
           {response.nearestAlternatives.map((alt, index) => (
@@ -494,7 +545,8 @@ function AssumptionsPanel({ assumptions }: { assumptions: SolvedResponse["assump
         ))}
       </ul>
       <p className="mt-2 text-xs text-stone-500">
-        Change an assumption and the capacity changes — that sensitivity is a feature, not an error.
+        Change an assumption and the modeled bound changes — that sensitivity is a feature, not an
+        error.
       </p>
     </section>
   );
