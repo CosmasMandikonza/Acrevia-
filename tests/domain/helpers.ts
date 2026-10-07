@@ -77,6 +77,8 @@ export function recordBalanceScenario(
     /** Result ids are globally unique; a second scenario must not reuse the
      *  first scenario's base result ids (generated ids must be unused). */
     resultIdPrefix?: string;
+    /** Mission dependencies of the scenario (issue #6 regression support). */
+    missionIds?: string[];
   } = {},
 ): void {
   const scenarioId = overrides.scenarioId ?? SCENARIO_ID;
@@ -93,7 +95,7 @@ export function recordBalanceScenario(
       },
     ],
     constraintIds: [PARKING_CONSTRAINT_ID, HEIGHT_CONSTRAINT_ID],
-    missionIds: [MISSION_PARKING_ID],
+    missionIds: overrides.missionIds ?? [MISSION_PARKING_ID],
     assumptionIds: ["assumption:average-unit-size"],
     parcelId: PARCEL_ID,
     results: [

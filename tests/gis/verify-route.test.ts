@@ -7,6 +7,8 @@ import {
   createCommitReceipt,
   type CommitReceipt,
 } from "../../src/adapters/gis/commit-receipt";
+import { rebuildAcceptedProject, sha256Project } from "../../src/application/mission/rebuild";
+import { ProjectCodec } from "../../src/adapters/persistence/project-codec";
 import type { ResolutionSession } from "../../src/application/resolution/state";
 import type { ResolvedParcelContext } from "../../src/adapters/gis";
 import {
@@ -59,12 +61,14 @@ function acceptedSession(sessionId = "verify-route"): ResolutionSession {
   };
 }
 
-/** A server-issued receipt bound to this exact envelope (commit convention). */
+/** A server-issued receipt bound to this exact envelope, with the projectHash
+ *  computed from the deterministic base-project rebuild (as /api/gis/commit
+ *  signs it at commit time). */
 function receiptFor(
   envelope: { session: ResolutionSession; signature: string },
   overrides: Partial<CommitReceipt["payload"]> = {},
 ): CommitReceipt {
-  return createCommitReceipt({
+  const base: Omit<CommitReceipt["payload"], "projectHash"> = {
     projectId: `gis:${envelope.session.confirmedParcelIds[0]}`,
     propertyId: `gis:property:${envelope.session.confirmedParcelIds[0]}`,
     sessionId: envelope.session.sessionId,
@@ -73,7 +77,14 @@ function receiptFor(
     nodeCount: 22,
     eventCount: 23,
     committedAt: NOW,
+    commitVersion: "1",
+  };
+  const baseProject = rebuildAcceptedProject(envelope.session, base);
+  const computedHash = sha256Project(ProjectCodec.encode(baseProject));
+  return createCommitReceipt({
+    ...base,
     ...overrides,
+    projectHash: overrides.projectHash ?? computedHash,
   });
 }
 

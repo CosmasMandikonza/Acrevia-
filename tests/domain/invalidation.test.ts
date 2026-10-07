@@ -78,6 +78,29 @@ describe("dependency-aware invalidation", () => {
     expect(requireNode(project, "phl:claim:parking-multifamily", "claim").meta.revision).toBe(1);
   });
 
+  it("MISSION REGRESSION (issue #6): a changed constraint stales its dependent certificate while an unrelated one stays CURRENT", () => {
+    const project = seedWithBalanceScenario();
+    // A second scenario whose certificate does NOT depend on any mission rule.
+    recordBalanceScenario(project, {
+      scenarioId: "scenario:preservation-only",
+      label: "Preservation only",
+      certificateId: "scenario:preservation-only:certificate",
+      resultIdPrefix: "pres-",
+      missionIds: [],
+    });
+    expect(requireNode(project, "scenario:preservation-only:certificate", "scenario-certificate").freshness).toBe("CURRENT");
+
+    confirmMissionParking(project, 130); // 80 -> 130 via the typed command
+
+    expect(gradeCertificate(project, CERTIFICATE_ID).freshness).toBe("STALE");
+    expect(requireNode(project, CERTIFICATE_ID, "scenario-certificate").freshness).toBe("STALE");
+    // The certificate that never depended on the mission rule is untouched.
+    expect(
+      gradeCertificate(project, "scenario:preservation-only:certificate").freshness,
+    ).toBe("CURRENT");
+    expect(requireNode(project, "scenario:preservation-only:certificate", "scenario-certificate").freshness).toBe("CURRENT");
+  });
+
   it("irrelevant Council-view title change leaves the certificate CURRENT", () => {
     const project = seedWithBalanceScenario();
     const revisionBefore = project.revision;

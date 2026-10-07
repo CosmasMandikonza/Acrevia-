@@ -121,13 +121,16 @@ export function normalizeAddressQuery(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
-/** Store the signed pair after a successful commit (trusted in-page response). */
+/** Store the signed pair after a successful commit (trusted in-page response).
+ *  A newly accepted property REPLACES the previous acceptance, so any mission
+ *  state belonging to the old property is cleared, not carried over. */
 export function writeAcceptedSession(
   envelope: { session: ResolutionSession; signature: string },
   receipt: CommitReceipt,
 ): void {
   safeSet(SESSION_KEY, JSON.stringify({ envelope, receipt } satisfies StoredAcceptedSession));
   for (const key of LEGACY_KEYS) safeRemove(key);
+  clearMissionLog();
   invalidateVerificationCache();
 }
 
@@ -135,7 +138,92 @@ export function writeAcceptedSession(
 export function clearAcceptedState(): void {
   safeRemove(SESSION_KEY);
   for (const key of LEGACY_KEYS) safeRemove(key);
+  clearMissionLog();
   invalidateVerificationCache();
+}
+
+/**
+ * UNTRUSTED read of the stored signed pair — for sending to server endpoints
+ * that verify it (e.g. POST /api/mission/state). Nothing may be rendered from
+ * this directly; the response of the verifying endpoint is the truth source.
+ */
+export function readStoredAcceptedPair():
+  | { envelope: { session: ResolutionSession; signature: string }; receipt: CommitReceipt }
+  | null {
+  const stored = readStoredSession();
+  if (!stored || "malformed" in stored) return null;
+  return stored.value;
+}
+
+// ---------------------------------------------------------------------------
+// Mission command log (issue #6 review). User intent, NOT verified truth: the
+// log is replayed through the typed command boundary and fully re-validated
+// by the server on every use. The log is BOUND to the accepted base project —
+// { projectId, envelopeSignature, commands } — so mission state can never
+// leak from one property onto another. If the currently accepted pair does
+// not match the log's binding, the log is discarded.
+// ---------------------------------------------------------------------------
+
+const MISSION_LOG_KEY = "acrevia.mission-log";
+
+type BoundMissionLog<T> = {
+  projectId: string;
+  envelopeSignature: string;
+  commands: T[];
+};
+
+/**
+ * Read the mission command log bound to THIS accepted pair. Returns [] and
+ * clears the stored log when it belongs to a different property or a
+ * different resolution envelope (Property A's mission must never replay
+ * onto Property B).
+ */
+export function readMissionLogFor<T>(
+  pair: { envelope: { signature: string }; receipt: { payload: { projectId: string } } },
+): T[] {
+  const raw = safeGet(MISSION_LOG_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as BoundMissionLog<T>;
+    if (
+      !parsed ||
+      typeof parsed.projectId !== "string" ||
+      typeof parsed.envelopeSignature !== "string" ||
+      !Array.isArray(parsed.commands)
+    ) {
+      clearMissionLog();
+      return [];
+    }
+    if (
+      parsed.projectId !== pair.receipt.payload.projectId ||
+      parsed.envelopeSignature !== pair.envelope.signature
+    ) {
+      // Different property (or different resolution of the same one): the
+      // old mission state must not silently follow the new acceptance.
+      clearMissionLog();
+      return [];
+    }
+    return parsed.commands;
+  } catch {
+    clearMissionLog();
+    return [];
+  }
+}
+
+export function writeMissionLogFor<T>(
+  pair: { envelope: { signature: string }; receipt: { payload: { projectId: string } } },
+  commands: T[],
+): void {
+  const bound: BoundMissionLog<T> = {
+    projectId: pair.receipt.payload.projectId,
+    envelopeSignature: pair.envelope.signature,
+    commands,
+  };
+  safeSet(MISSION_LOG_KEY, JSON.stringify(bound));
+}
+
+export function clearMissionLog(): void {
+  safeRemove(MISSION_LOG_KEY);
 }
 
 export type VerificationResult =

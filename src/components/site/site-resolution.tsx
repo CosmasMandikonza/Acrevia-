@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SiteMap } from "./site-map";
+import { MissionCompiler } from "./mission-compiler";
 import type { ResolutionSession } from "../../application/resolution/state";
 import type { CommitReceipt } from "../../adapters/gis/commit-receipt";
 import {
@@ -64,6 +65,7 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
   const [error, setError] = useState<string | null>(null);
   const [selectedParcels, setSelectedParcels] = useState<Set<string>>(new Set());
   const [commitSummary, setCommitSummary] = useState<string | null>(null);
+  const [protectedStructureIds, setSelectedStructureIds] = useState<Set<string>>(new Set());
 
   const [sessionId] = useState(() => `session-${Date.now()}`);
   // Derived: current session from the server-signed envelope.
@@ -142,6 +144,10 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
     if (!query.trim()) return;
     setPhase("searching");
     setCommitSummary(null);
+    // Each new resolution starts with a clean slate: selections from a
+    // previously accepted property must never leak into this one's confirm.
+    setSelectedParcels(new Set());
+    setSelectedStructureIds(new Set());
     const result = await call({ action: "resolve", sessionId, query: query.trim() });
     if (!result) return;
     setEnvelope(result.envelope);
@@ -185,6 +191,9 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
     async (index: number) => {
       if (!envelope) return;
       setPhase("searching");
+      // Address selection changes the parcel list — stale parcel selections
+      // from an earlier property/candidate must not carry into the new one.
+      setSelectedParcels(new Set());
       const result = await call({ action: "select", envelope, candidateIndex: index });
       if (!result) return;
       setEnvelope(result.envelope);
@@ -297,10 +306,18 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
         ctx.structures.map((structure) => ({
           id: structure.structureId,
           geometry: structure.footprint,
+          missionProtected: protectedStructureIds.has(structure.structureId),
         })),
       ),
     };
-  }, [selectedParcels, session]);
+  }, [protectedStructureIds, selectedParcels, session]);
+
+  // Explicit adapter: canonical graph ids (gis:structure:<id>) → the raw GIS
+  // ids the map renderer draws. The domain contract stays canonical; only the
+  // render layer translates.
+  const handleProtectedStructures = useCallback((graphIds: string[]) => {
+    setSelectedStructureIds(new Set(graphIds.map((id) => id.replace(/^gis:structure:/, ""))));
+  }, []);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
@@ -536,6 +553,22 @@ export function SiteResolution({ initialQuery = "" }: { initialQuery?: string })
               ) : null}
               <p className="mt-1 text-xs text-stone-700">{commitSummary}</p>
             </section>
+          ) : null}
+
+          {/* Mission Compiler — what the church refuses to lose (issue #6).
+              Lives in the accepted Site rail; the property stays the hero.
+              Structure identity is the canonical graph node id. */}
+          {phase === "committed" && session ? (
+            <MissionCompiler
+              structures={session.parcelContexts.flatMap((ctx) =>
+                ctx.structures.map((structure) => ({
+                  graphId: `gis:structure:${structure.structureId}`,
+                  renderId: structure.structureId,
+                  name: structure.buildingName,
+                })),
+              )}
+              onProtectedStructures={handleProtectedStructures}
+            />
           ) : null}
 
           {/* Evidence rail — every capture, its mode, its source */}

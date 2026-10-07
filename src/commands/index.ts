@@ -9,7 +9,7 @@ import { SourceArtifactSemantic } from "../domain/evidence/source-artifact";
 import { ClaimSemantic, validateClaimRules } from "../domain/evidence/claim";
 import { RegulationSemantic } from "../domain/evidence/regulation";
 import { ConstraintSemantic } from "../domain/constraints/constraint";
-import { MissionConstraintSemantic } from "../domain/constraints/mission";
+import { MissionConstraintConfirmation } from "../domain/constraints/mission";
 import { AssumptionSemantic } from "../domain/constraints/assumption";
 import {
   ScenarioMetric,
@@ -222,7 +222,7 @@ export function materializeConstraint(
 // Mission + assumptions (origin rules enforced here)
 // ---------------------------------------------------------------------------
 
-export const ConfirmMissionConstraintInput = MissionConstraintSemantic;
+export const ConfirmMissionConstraintInput = MissionConstraintConfirmation;
 export function confirmMissionConstraint(
   ctx: CommandContext,
   input: z.infer<typeof ConfirmMissionConstraintInput>,
@@ -230,6 +230,12 @@ export function confirmMissionConstraint(
   const parsed = ConfirmMissionConstraintInput.parse(input);
   if (parsed.origin.kind !== "USER_DECLARED") {
     throw new Error("mission constraints must have USER_DECLARED origin");
+  }
+  // Referential integrity: preserve-structure rules must point at the
+  // canonical Development Graph structure node (gis:structure:<id>), never a
+  // raw provider identifier or a nonexistent building.
+  if (parsed.normalized.type === "preserve-structure") {
+    requireNode(ctx.project, parsed.normalized.structureId, "structure");
   }
   rejectKindCollision(ctx.project, parsed.id, "mission-constraint", "confirmMissionConstraint");
   apply(
@@ -245,6 +251,52 @@ export function confirmMissionConstraint(
       } else {
         ctx.project.nodes[parsed.id] = nodeWithMeta(parsed, now);
       }
+      // Explicit graph causality: a preserve-structure mission rule DEPENDS
+      // ON the canonical structure node, so certificate closures and
+      // staleness traversal reach the consequential sanctuary geometry.
+      // Replace semantics — retargeting (A -> B) or changing the rule away
+      // from preserve-structure leaves no stale edge behind.
+      removeEdgesWhere(
+        ctx.project,
+        (edge) => edge.dependentId === parsed.id && edge.role === "mission-applies-to",
+      );
+      if (parsed.normalized.type === "preserve-structure") {
+        addEdge(ctx.project, {
+          dependentId: parsed.id,
+          dependencyId: parsed.normalized.structureId,
+          role: "mission-applies-to",
+        });
+      }
+    },
+  );
+}
+
+export const RetractMissionConstraintInput = z.object({ id: z.string().min(1) }).strict();
+
+/**
+ * Retract a confirmed mission constraint (issue #6). The node and every edge
+ * touching it are removed; certificates whose dependency closure included it
+ * grade INVALIDATED ("no longer exists") via the normal staleness refresh —
+ * a retracted mission input must never silently keep certifying results.
+ */
+export function retractMissionConstraint(
+  ctx: CommandContext,
+  input: z.infer<typeof RetractMissionConstraintInput>,
+): void {
+  const parsed = RetractMissionConstraintInput.parse(input);
+  const existing = requireNode(ctx.project, parsed.id, "mission-constraint");
+  const intent = existing.intentText;
+  apply(
+    ctx,
+    "mission.constraint.retracted",
+    [parsed.id],
+    `retract mission constraint ${parsed.id}: ${intent}`,
+    () => {
+      removeEdgesWhere(
+        ctx.project,
+        (edge) => edge.dependencyId === parsed.id || edge.dependentId === parsed.id,
+      );
+      delete ctx.project.nodes[parsed.id];
     },
   );
 }

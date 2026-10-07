@@ -41,6 +41,12 @@ export type CommitReceiptPayload = {
   nodeCount: number;
   eventCount: number;
   committedAt: string;
+  /** SHA-256 of the canonical encoded committed project. Any later
+   *  reconstruction must reproduce these exact bytes or fail closed. */
+  projectHash: string;
+  /** Stable commit-format version; bump when commitSession's canonical
+   *  output shape changes so old receipts invalidate honestly. */
+  commitVersion: string;
 };
 
 export type CommitReceipt = {
@@ -67,7 +73,11 @@ function isPayloadShape(value: unknown): value is CommitReceiptPayload {
     typeof candidate.eventCount === "number" &&
     Number.isFinite(candidate.eventCount) &&
     typeof candidate.committedAt === "string" &&
-    candidate.committedAt.length > 0
+    candidate.committedAt.length > 0 &&
+    typeof candidate.projectHash === "string" &&
+    /^[0-9a-f]{64}$/.test(candidate.projectHash) &&
+    typeof candidate.commitVersion === "string" &&
+    candidate.commitVersion.length > 0
   );
 }
 

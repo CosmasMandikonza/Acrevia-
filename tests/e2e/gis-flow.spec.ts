@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 test("canonical Philadelphia resolution renders visible geometry", async ({ page }) => {
+  test.slow(); // LIVE provider layers can exceed the default budget under suite load
   await page.goto("http://localhost:3121/workspace?address=7200%20Roosevelt%20Blvd%2C%20Philadelphia%2C%20PA&view=site");
   await expect(page.getByRole("textbox")).toBeVisible();
 
@@ -38,6 +39,7 @@ test("canonical Philadelphia resolution renders visible geometry", async ({ page
 });
 
 test("verified geometry survives basemap unavailability (SVG fallback)", async ({ page }) => {
+  test.slow(); // LIVE provider layers can exceed the default budget under suite load
   // Block OSM tiles to simulate basemap outage.
   await page.route(/tile\.openstreetmap\.org/, (route) =>
     route.fulfill({ status: 404, body: "blocked for test" }),
