@@ -117,7 +117,7 @@ export function Workspace() {
           <strong>{address || "Your next chapter"}</strong>
         </div>
         <span className="preview-label">Foundation preview</span>
-        <Copilot />
+        <Copilot accepted={accepted} />
       </header>
       <div className="workspace-body">
         <nav className="workspace-nav" aria-label="Workspace">
