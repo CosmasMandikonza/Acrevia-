@@ -1,95 +1,71 @@
 import Link from "next/link";
-import { ArrowDown, ArrowUpRight } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { Brand } from "@/components/brand";
-import { AddressForm } from "@/components/address-form";
-import { SiteStudy } from "@/components/site-study";
+import { AddressEntry } from "@/components/landing/address-entry";
+import { HeroSheet } from "@/components/landing/hero-sheet";
+import { TransformationSequence } from "@/components/landing/transformation-sequence";
+import { ProofStatement } from "@/components/landing/proof-statement";
+import styles from "./landing.module.css";
+
 export default function Home() {
   return (
-    <div className="landing">
-      <header className="landing-header">
+    <div className={styles.page}>
+      <header className={styles.masthead}>
         <Brand />
         <nav aria-label="Main navigation">
-          <a href="#approach">Our approach</a>
-          <Link href="/workspace">
+          <a className={styles.howLink} href="#how">
+            How Acrevia reads a property
+          </a>
+          <Link className={styles.workspaceLink} href="/workspace">
             Open workspace <ArrowUpRight size={15} aria-hidden="true" />
           </Link>
         </nav>
       </header>
       <main id="main">
-        <section className="hero">
-          <div className="hero-copy">
-            <p className="eyebrow">
-              <span className="small-rule" />
-              FAITH-OWNED LAND. COMMUNITY POSSIBILITY.
+        <section
+          className={styles.hero}
+          aria-label="Your land could become homes"
+        >
+          <div className={styles.heroCopy}>
+            <p className={styles.kicker}>
+              01 · FAITH-OWNED LAND, COMMUNITY POSSIBILITY
             </p>
-            <h1>
-              Your land could
+            <h1 className={styles.headline}>
+              Your land could{" "}
               <br />
               become <em>homes.</em>
             </h1>
-            <p className="hero-description">
-              A new chapter for the land you steward.
-              <br />
-              Explore what could be possible, preserve what matters, and see the
-              evidence behind the next step.
+            <p className={styles.subheadline}>
+              Know what&rsquo;s possible before the first expensive meeting.
             </p>
-            <AddressForm />
-            <a className="text-link approach-link" href="#approach">
-              <ArrowDown size={15} aria-hidden="true" /> From land to
-              possibility, with proof.
-            </a>
+            <AddressEntry scope="hero" />
           </div>
-          <SiteStudy />
+          <HeroSheet />
         </section>
-        <section id="approach" className="approach">
-          <div className="approach-intro">
-            <p className="eyebrow">A MORE CONSIDERED FIRST STEP</p>
-            <h2>
-              Possibility begins
-              <br />
-              with understanding.
-            </h2>
-            <p>
-              Acrevia is being built to bring land, mission, and evidence into
-              one shared view.
-            </p>
+        <TransformationSequence />
+        <ProofStatement />
+        <section className={styles.section} aria-labelledby="begin-heading">
+          <div className={styles.transition}>
+            <div>
+              <p className={styles.sectionIndex}>04 · BEGIN</p>
+              <h2 id="begin-heading">Begin with the property you know.</h2>
+              <p>
+                Enter any church address. Acrevia opens the workspace, reads
+                the public record, and asks what your mission must protect
+                — before anyone promises what could be built.
+              </p>
+              <Link className={styles.directLink} href="/workspace">
+                Or open the workspace directly
+                <ArrowUpRight size={15} aria-hidden="true" />
+              </Link>
+            </div>
+            <AddressEntry scope="entry" />
           </div>
-          <ol className="approach-steps">
-            <li>
-              <span>01</span>
-              <div>
-                <h3>Understand the land</h3>
-                <p>
-                  Start with the property and the public rules that shape it.
-                </p>
-              </div>
-            </li>
-            <li>
-              <span>02</span>
-              <div>
-                <h3>Protect your mission</h3>
-                <p>
-                  Make space for the sanctuary, ministries, and commitments you
-                  carry forward.
-                </p>
-              </div>
-            </li>
-            <li>
-              <span>03</span>
-              <div>
-                <h3>Consider the possibilities</h3>
-                <p>
-                  Work toward informed alternatives for your board and
-                  professional advisors.
-                </p>
-              </div>
-            </li>
-          </ol>
         </section>
       </main>
-      <footer className="landing-footer">
+      <footer className={styles.footer}>
         <Brand />
-        <p>From land to possibility, with proof.</p>
+        <p className={styles.thesis}>From land to possibility, with proof.</p>
         <span>Foundation preview</span>
       </footer>
     </div>
