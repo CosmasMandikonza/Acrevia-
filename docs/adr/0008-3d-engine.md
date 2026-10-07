@@ -227,6 +227,11 @@ the winning standard forbids for the live demo.
    (`src/adapters/spatial/fixtures/forge-spike-massing.json` + zod schema in
    `massing-fixture.ts`) is the reference shape. Scenario volume geometry in
    graph coordinates keeps projection in exactly one place (the adapter).
+   PR #29 (#7 solver, in parallel review) landed its own neutral handoff
+   (`src/application/solver/geometry-handoff.ts`, JSON geometry primitives);
+   the two shapes must be reconciled at #9 — this ADR's requirement is the
+   RECONCILIATION TARGET stays graph-coordinate GeoJSON + heights, consumed
+   only through the scene adapter, never by the renderer.
 3. **Adapter rulebook** (already implemented; keep or amend via ADR): frame
    = ring-centroid ENU feet; frontage = ≤60 ft from the address hint
    (orientation only); rear = longest non-frontage edge; maximum envelope =
