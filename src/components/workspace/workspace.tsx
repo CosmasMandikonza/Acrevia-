@@ -36,7 +36,8 @@ const icons = {
   evidence: BookOpen,
 };
 const SiteResolution = nextDynamic(
-  () => import("@/components/site/site-resolution").then((m) => m.SiteResolution),
+  () =>
+    import("@/components/site/site-resolution").then((m) => m.SiteResolution),
   {
     ssr: false,
     loading: () => (
@@ -45,7 +46,8 @@ const SiteResolution = nextDynamic(
   },
 );
 const ScenarioSolver = nextDynamic(
-  () => import("@/components/site/scenario-solver").then((m) => m.ScenarioSolver),
+  () =>
+    import("@/components/site/scenario-solver").then((m) => m.ScenarioSolver),
   {
     ssr: false,
     loading: () => (
@@ -61,6 +63,11 @@ export function Workspace() {
   const address = addressError ? "" : rawAddress.trim();
   const surface = getSurface(params.get("view"));
   const [accepted, setAccepted] = useState<AcceptedPropertyRecord | null>(null);
+  // Bumped once per APPLIED Copilot mission confirmation. Feeding it into the
+  // keys of the state-derived surfaces remounts exactly those views so they
+  // re-read the mission command log and rebuild current state immediately —
+  // a React-owned refresh, never a DOM custom event, never a second store.
+  const [projectStateEpoch, setProjectStateEpoch] = useState(0);
 
   // The accepted record renders only after the stored { envelope, receipt }
   // pair passes server verification (POST /api/gis/verify) — sessionStorage is
@@ -90,7 +97,10 @@ export function Workspace() {
     // verified session query on successful resolve, so the normal path keeps
     // input, URL, header, and accepted property bound to the same site.
     const unsubscribe = onAccepted((record) => {
-      if (address && normalizeAddressQuery(record.query) === normalizeAddressQuery(address)) {
+      if (
+        address &&
+        normalizeAddressQuery(record.query) === normalizeAddressQuery(address)
+      ) {
         setAccepted(record);
       } else {
         setAccepted(null);
@@ -117,7 +127,12 @@ export function Workspace() {
           <strong>{address || "Your next chapter"}</strong>
         </div>
         <span className="preview-label">Foundation preview</span>
-        <Copilot />
+        <Copilot
+          accepted={accepted}
+          onProjectStateChanged={() =>
+            setProjectStateEpoch((epoch) => epoch + 1)
+          }
+        />
       </header>
       <div className="workspace-body">
         <nav className="workspace-nav" aria-label="Workspace">
@@ -170,67 +185,73 @@ export function Workspace() {
             </span>
           </div>
           {surface.id === "site" && !addressError ? (
-            <section className="spatial-canvas spatial-canvas-live" aria-label="Site resolution canvas">
+            <section
+              className="spatial-canvas spatial-canvas-live"
+              aria-label="Site resolution canvas"
+            >
               <SiteResolution initialQuery={address} />
             </section>
           ) : surface.id === "evidence" && accepted ? (
             <EvidenceLedger
-              key={`${params.get("focus") ?? ""}|${params.get("scenario") ?? ""}|${params.get("certificate") ?? ""}`}
+              key={`${params.get("focus") ?? ""}|${params.get("scenario") ?? ""}|${params.get("certificate") ?? ""}|${projectStateEpoch}`}
               record={accepted}
             />
           ) : surface.id === "scenarios" && accepted ? (
-            <section className="spatial-canvas spatial-canvas-live overflow-y-auto" aria-label="Scenario solver">
-              <ScenarioSolver />
+            <section
+              className="spatial-canvas spatial-canvas-live overflow-y-auto"
+              aria-label="Scenario solver"
+            >
+              <ScenarioSolver key={projectStateEpoch} />
             </section>
           ) : (
-          <section
-            className="spatial-canvas"
-            aria-label={`${surface.label} canvas placeholder`}
-          >
-            <div className="canvas-corner top-left" />
-            <div className="canvas-corner bottom-right" />
-            <span className="canvas-reference">
-              ACREVIA / {surface.label.toUpperCase()}
-            </span>
-            <span className="north-marker" aria-hidden="true">
-              ↑<small>N</small>
-            </span>
-            <StatePanel
-              key={surface.id}
-              state={addressError ? "error" : "empty"}
-              title={
-                addressError
-                  ? "This address needs another look."
-                  : surface.title
-              }
-              className="canvas-state"
-              action={
-                <Button asChild variant="outline">
-                  <Link href="/">
-                    {address
-                      ? "Choose another address"
-                      : "Enter a church address"}
-                    <ArrowUpRight size={16} aria-hidden="true" />
-                  </Link>
-                </Button>
-              }
+            <section
+              className="spatial-canvas"
+              aria-label={`${surface.label} canvas placeholder`}
             >
-              <p>{addressError || surface.description}</p>
-              {address && (
-                <p className="entered-address">
-                  <MapPin size={16} aria-hidden="true" />
-                  <span>
-                    {address}
-                    <small>Address entered · not resolved or verified</small>
-                  </span>
-                </p>
-              )}
-            </StatePanel>
-            <div className="canvas-footnote">
-              <span>Spatial canvas placeholder</span>
-              <span>No property geometry loaded</span>
-            </div>
-          </section>
+              <div className="canvas-corner top-left" />
+              <div className="canvas-corner bottom-right" />
+              <span className="canvas-reference">
+                ACREVIA / {surface.label.toUpperCase()}
+              </span>
+              <span className="north-marker" aria-hidden="true">
+                ↑<small>N</small>
+              </span>
+              <StatePanel
+                key={surface.id}
+                state={addressError ? "error" : "empty"}
+                title={
+                  addressError
+                    ? "This address needs another look."
+                    : surface.title
+                }
+                className="canvas-state"
+                action={
+                  <Button asChild variant="outline">
+                    <Link href="/">
+                      {address
+                        ? "Choose another address"
+                        : "Enter a church address"}
+                      <ArrowUpRight size={16} aria-hidden="true" />
+                    </Link>
+                  </Button>
+                }
+              >
+                <p>{addressError || surface.description}</p>
+                {address && (
+                  <p className="entered-address">
+                    <MapPin size={16} aria-hidden="true" />
+                    <span>
+                      {address}
+                      <small>Address entered · not resolved or verified</small>
+                    </span>
+                  </p>
+                )}
+              </StatePanel>
+              <div className="canvas-footnote">
+                <span>Spatial canvas placeholder</span>
+                <span>No property geometry loaded</span>
+              </div>
+            </section>
           )}
           <div className="evidence-strip" aria-label="Project evidence status">
             <BookOpen size={16} aria-hidden="true" />
