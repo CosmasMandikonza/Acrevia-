@@ -1,6 +1,6 @@
 # ADR 0008 — Forge 3D engine: deterministic in-app React Three Fiber, with a professional-export boundary for later
 
-Status: proposed with issue #8 (spike; awaiting review — do not merge unreviewed).
+Status: accepted with issue #8 (engine decision approved; truth-label cleanup applied across two review rounds).
 
 Note: issue #8 originally named this document `docs/adr/004-3d-engine.md`; ADR
 numbering moved to four digits before the spike ran (0003–0007 exist), so it
