@@ -55,6 +55,18 @@ const ScenarioSolver = nextDynamic(
     ),
   },
 );
+const CapitalExplorer = nextDynamic(
+  () =>
+    import("@/components/capital/capital-explorer").then(
+      (m) => m.CapitalExplorer,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <p className="text-sm text-stone-500">Preparing the capital engine…</p>
+    ),
+  },
+);
 
 export function Workspace() {
   const params = useSearchParams();
@@ -202,6 +214,13 @@ export function Workspace() {
               aria-label="Scenario solver"
             >
               <ScenarioSolver key={projectStateEpoch} />
+            </section>
+          ) : surface.id === "capital" && accepted ? (
+            <section
+              className="spatial-canvas spatial-canvas-live overflow-y-auto"
+              aria-label="Preliminary capital"
+            >
+              <CapitalExplorer key={projectStateEpoch} />
             </section>
           ) : (
             <section
