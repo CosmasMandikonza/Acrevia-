@@ -22,7 +22,7 @@ between entries. IDs: sessions `S-001` upward; individual observations
 - Role: ____   Org type: ____   Approx. size/context: ____
 - Relationship level after this session: interviewed / tester / pilot / design partner
   (criteria met: ____)
-- Consent: session y/n · recording y/n · quotation y/n · named y/n
+- Consent: session y/n · recording y/n · may-ask-later about specific quotes y/n
 - Product state: branch/SHA ____ · server dev/prod ____ · capture modes ____
 - Properties tested: ____ (address or "canonical fixture" or "withheld")
 - Timestamps: start ____ end ____ (M1: T0 __ T1 __ · M2: T2 __ T3 __)
@@ -35,8 +35,10 @@ between entries. IDs: sessions `S-001` upward; individual observations
 | EV-___-2 | | | |
 
 Rules: OBSERVED = what happened on screen / in the room. STATED = participant's
-words — verbatim in quotes only if quote permission is yes; otherwise marked
-(paraphrase). INTERPRETATION = our inference, never citable in a pitch.
+words — verbatim enters this log only after that quote's approval block (below)
+is complete; before approval, record a marked (paraphrase). INTERPRETATION = our
+inference, never citable in a pitch. This log lives in a public repository:
+treat anything written in it as published.
 
 ### Friction & confusion
 
@@ -95,14 +97,32 @@ definition — not typo fixes.
 - Verification that the change addresses the feedback: ____
 ```
 
-## Verbatim quote rules
+## Quote-level consent and approvals
 
-1. A quote may be recorded **only** when quote permission is yes in that
-   session's header.
-2. Store the exact words plus the timestamp and EV id. Trim with ellipses;
-   never reorder; paraphrase-mark anything you cannot reproduce exactly.
-3. A participant may withdraw a quote later — mark it withdrawn, do not delete.
-4. Quotes are evidence of what one person said — never of product quality.
+Session consent (header) covers notes and recording, and at most permission to
+**ask later** about quoting. It is **not** quote permission. Every notable quote
+gets its own approval block, recorded when the participant grants it:
+
+```markdown
+### Quote approval — EV-___-__
+
+- Quote permission (for this exact quote): yes / no
+- Exact quote approved: "____"
+- Attribution: anonymous / named
+- Permission timestamp: ____ (ISO-8601, with timezone)
+```
+
+Rules:
+
+1. **Public quoting requires all three:** quote-level permission from the
+   block, the exact approved words, and the EV id.
+2. **Named attribution additionally requires named permission**, recorded in
+   the block as `attribution: named`.
+3. Trim with ellipses; never reorder; paraphrase-mark anything not approved
+   verbatim.
+4. A participant may withdraw a quote later — mark it withdrawn, do not
+   delete, never reuse.
+5. Quotes are evidence of what one person said — never of product quality.
 
 ## Anonymization defaults
 

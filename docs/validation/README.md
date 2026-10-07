@@ -43,9 +43,11 @@ the file set above:
 1. **No fabrication.** No invented interviews, users, quotes, metrics, outreach,
    partnerships, or results. An empty evidence log is an acceptable state; a
    fabricated one is not.
-2. **Consent before capture.** Verbal consent for the session, separate explicit
-   consent for recording, separate explicit consent for quotation, separate
-   written consent for being named. Record each as yes/no in the session header.
+2. **Consent before capture.** Session consent covers notes and recording, and
+   at most permission to ask later about a specific quote — never blanket
+   quote permission. Each quote carries its own approval block in the evidence
+   log (exact approved words, anonymous/named attribution, permission
+   timestamp); named attribution additionally requires named permission.
 3. **Anonymized by default.** Participants are recorded as role labels
    (for example `CHURCH-BOARD-01`) unless they gave permission to be named.
 4. **Sensitive information stays private.** A participant's property address,
@@ -92,10 +94,10 @@ the next are met and logged:
 
 | Label | Criteria |
 | --- | --- |
-| **Interviewed** | Answered questions in a logged session. No product exposure required. |
-| **Tester** | Used or reviewed Acrevia itself (any hands-on or walkthrough exposure). |
-| **Pilot** | Agreement (verbal or written, logged) to keep using Acrevia on their real property over a period of time. |
-| **Design partner** | Written agreement to shape the product: recurring sessions, named contact, feedback loop. |
+| **Interviewed** | Completed logged interview. |
+| **Tester** | Used/reviewed Acrevia. |
+| **Pilot** | Logged verbal or written agreement to continue using Acrevia on a real property. |
+| **Design partner** | Written agreement + recurring sessions + named contact + active feedback loop. |
 
 "Partner" alone is banned. "Customer" is banned outright until someone pays.
 

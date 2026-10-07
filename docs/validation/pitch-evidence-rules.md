@@ -12,16 +12,25 @@ the sin Issue #20 forbids: turning hope into evidence.
 ### R1 — Never invent quotations
 
 No fabricated quotes, testimonials, or paraphrases presented as quotes. A
-quotation mark in public material requires: quote permission = yes in the
-session header, the exact stored words, and the EV id.
+quotation mark in public material requires all three: **quote-level
+permission** for that exact quote (its approval block in the evidence log),
+the **exact approved words**, and the **EV id**. Session consent — notes,
+recording, permission to ask later — is never sufficient.
 
 ### R2 — "Partner" requires agreement
 
-"Design partner" and "pilot" require logged agreement with the participant —
-a real yes, in a recorded follow-up, not a friendly nod at the end of a call.
-Below that, only the labels **interviewed** and **tester** exist. "Partner"
-alone, "customer", "user of Acrevia" (for someone who sat through one demo),
-and implied logos/names are banned.
+The four labels and their exact criteria, matching `README.md`:
+
+- **Interviewed** — completed logged interview.
+- **Tester** — used/reviewed Acrevia.
+- **Pilot** — logged verbal or written agreement to continue using Acrevia on
+  a real property.
+- **Design partner** — written agreement + recurring sessions + named contact
+  + active feedback loop.
+
+A friendly nod at the end of a call is none of these. "Partner" alone,
+"customer", "user of Acrevia" (for someone who sat through one demo), and
+implied logos/names are banned.
 
 ### R3 — Use the relationship vocabulary exactly
 
@@ -49,11 +58,12 @@ Acrevia does not replace architects, planners, land-use attorneys, developers,
 lenders, or formal feasibility studies — say so proactively in any pitch that
 shows an output. The honest frame is acceleration of the *first* decision.
 
-### R7 — Quotes are consented and documented
+### R7 — Quotes are quote-level consented and documented
 
-Preserve exact words only when consented (R1) and documented (timestamp + EV
-id). Participants may withdraw; withdrawn quotes are marked, not deleted, and
-never reused.
+A quote is public only with quote-level permission, the exact approved words,
+and the EV id (R1). Named attribution additionally requires named permission;
+anonymous is the default. Participants may withdraw; withdrawn quotes are
+marked, not deleted, and never reused.
 
 ### R8 — Every metric is traceable
 
@@ -96,7 +106,9 @@ ongoing" (rung 9). Never skip a rung in the phrasing.
    objection before a judge finds it?
 3. Check IM-12: are stated vs observed actions still separated everywhere,
    including slides and spoken word?
-4. Check every quotation mark against EV ids and permissions.
+4. Check every quotation mark against EV ids, quote-level permission blocks,
+   and attribution mode (anonymous by default; named only with named
+   permission).
 5. Search the deck/script for the banned words: *partner, customer, replaces,
    ends homelessness, saves lives, users love, seamless, revolutionary*.
 6. Verify the README counters and metrics table match the evidence log.

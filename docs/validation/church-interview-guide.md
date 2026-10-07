@@ -43,10 +43,17 @@ Two goals, in strict order:
 > "Thanks for meeting. I'd like to understand how your congregation thinks
 > about its property — first just how things work today, and then I'll show you
 > a tool we're building and I mostly want your honest reaction, especially the
-> critical parts. Nothing you say will be quoted or attributed without your
-> permission. Is it okay if I take notes? [ ] yes [ ] no
+> critical parts. Is it okay if I take notes? [ ] yes [ ] no
 > May I record audio so my notes are accurate? [ ] yes [ ] no
-> If you say something worth quoting later, I'll ask you then — okay? [ ] yes [ ] no"
+> Nothing you say will be quoted or attributed unless you separately approve
+> the exact words later. If something comes up that seems worth quoting, may I
+> come back to you about that specific quote? [ ] yes [ ] no"
+
+Session consent covers **notes and recording only**, plus at most permission
+to **ask later** about a specific quote. It is never blanket quote permission.
+Quoting requires the quote-level approval recorded in the evidence log —
+exact approved words, anonymous/named attribution, permission timestamp — and
+named attribution additionally requires named permission.
 
 Timestamp at start: `____` (ISO-8601, with timezone).
 

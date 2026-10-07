@@ -45,7 +45,7 @@ number may never be presented next to a LIVE-mode number without labeling.
 
 | ID | Measure | Definition | Instrument |
 | --- | --- | --- | --- |
-| M1 | Address → credible property snapshot | T0 = participant clicks **Resolve property** with the address entered; T1 = **"Property accepted"** state visible. | stopwatch / screen recording |
+| M1 | Address → accepted property snapshot | T0 = participant clicks **Resolve property** with the address entered; T1 = **"Property accepted"** state visible. | stopwatch / screen recording |
 | M2 | Mission constraints → confirmed model | T2 = participant submits the mission sentence (**Interpret**); T3 = all intended rules show as confirmed `MUST KEEP` chips with the revision advanced. | stopwatch / screen recording |
 | M3 | Authoritative sources surfaced | Count of distinct sources/evidence records shown for the accepted property (evidence rail / manifest). Note authority tier per source where shown. | facilitator tally |
 | M4 | Unresolved / expert-review items surfaced | Count of UNKNOWN / EXPERT REQUIRED / open-question items visible at snapshot time (e.g. FAR UNKNOWN, historic-register status). | facilitator tally |
@@ -58,6 +58,11 @@ number may never be presented next to a LIVE-mode number without labeling.
 Timing honesty: record T-values as observed (mm:ss), with capture mode. If the
 facilitator intervened, timing is annotated "assisted" and not used for the
 headline number — but it is still logged.
+
+M1/IM-1 naming: **accepted property snapshot**, deliberately not "feasibility"
+— feasibility wording is reserved for the new, versioned metric that will be
+added when solver-backed feasibility lands (issues #5/#7); see the naming rule
+in `impact-metrics.md`.
 
 ## 4. Live usability script — canonical Calvary journey
 
@@ -140,7 +145,7 @@ Participant role:      ____ (e.g. pastor / board member / trustee /
 Participant label:     CHURCH-____ / PROF-____   named with permission? y/n
 Organization type:     ____ (e.g. single congregation / denomination /
                        nonprofit developer / for-profit developer / firm / agency)
-Permission to quote:   yes / no      recording consent: yes / no
+Session consent:         notes y/n · recording y/n · may-ask-later re specific quotes y/n
 Follow-up allowed:     yes / no
 Property tested:       ____ (address OR "canonical Calvary fixture" OR
                        "participant property, address withheld")

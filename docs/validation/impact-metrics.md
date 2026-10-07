@@ -5,17 +5,19 @@ hackathon, how each number is produced, and which evidence-log fields back it.
 **Every number has a current value of NOT MEASURED until a logged session
 produces it.** Vague "AI saves time" claims are banned.
 
-Honest scope note: today's implemented end-to-end journey is
-**address → verified property snapshot → confirmed mission rules**. "Feasibility
-snapshot" below means that implemented output. When the scenario engine lands
-(issue #7), the definition is extended and re-baselined — the extension is
-recorded here, and old numbers are never silently compared against new ones.
+Naming rule (maintainer review, PR #27): the product today has no solver-backed
+feasibility — compiled law, typed constraints, and scenario reasoning belong to
+issues #5 and #7 — so the timing metric below is named **address → accepted
+property snapshot** and nothing in this kit calls today's output feasibility.
+When #5/#7 land, a **new, versioned** metric for address → preliminary
+feasibility snapshot is added here; IM-1 is never redefined or silently reused,
+and numbers across metric versions are never compared.
 
 ## The metrics
 
 | ID | Metric | Definition | Instrument | Current value | Ladder rung |
 | --- | --- | --- | --- | --- | --- |
-| IM-1 | Minutes, address → preliminary feasibility snapshot | M1 (T0 resolve click → T1 property accepted), pre-warmed server, capture mode labeled. Report median + range over N runs, never best-of. | property-test protocol M1 | NOT MEASURED | 4 (use), 6 (useful) |
+| IM-1 | Minutes, address → accepted property snapshot | M1 (T0 resolve click → T1 property accepted), pre-warmed server, capture mode labeled. Report median + range over N runs, never best-of. Not a feasibility claim — see naming rule above. | property-test protocol M1 | NOT MEASURED | 4 (use), 6 (useful) |
 | IM-2 | Minutes, mission constraints → confirmed model | M2 (interpret submitted → all rules confirmed, revision advanced). | M2 | NOT MEASURED | 4 |
 | IM-3 | Share of consequential rules with authoritative provenance | count of rules whose source tier is adopted-code/official-GIS/official-reference ÷ total consequential rules shown, per property run. Report per property; pool only with capture modes labeled. | M3 + benchmark evidence states | computable from canonical fixture only (benchmark: 27 rules, 13 sources) — participant-observed variant NOT MEASURED | 4 |
 | IM-4 | Expert-review questions surfaced rather than guessed | M4 count of UNKNOWN / EXPERT REQUIRED / open items visible at snapshot (canonical fixture has 14 open questions). | M4 | NOT MEASURED | 4 |
@@ -65,8 +67,12 @@ Issue #20's target payoff has this shape. It is a **format**, not a draft —
 every bracket is filled from a logged entry or the sentence is not used:
 
 > "We tested Acrevia with [real roles, from S-ids]. On a real church property
-> ([property, with consent]), a user went from an address to [measured output,
-> M-ids] in [measured time, IM-1]. A [role] challenged [specific weakness,
+> ([property, with consent]), a user went from an address to [measured output]
+> in [measured time, IM-1]. A [role] challenged [specific weakness,
 > OBJ-id], so we changed [specific product change, PC-id]."
 
-If any bracket is empty at pitch time, the sentence is shorter — not invented.
+The `[measured output]` bracket is filled with what was actually measured —
+today, the **accepted property snapshot** (IM-1). "Feasibility snapshot" may
+appear there only after the versioned post-#5/#7 feasibility metric exists and
+was measured. If any bracket is empty at pitch time, the sentence is shorter —
+not invented.
