@@ -132,7 +132,9 @@ export function anthropicProviderFromEnv(
           body: JSON.stringify({
             model,
             max_tokens: 1024,
-            temperature: 0.2,
+            // No `temperature`: current Anthropic models reject it as
+            // deprecated; determinism pressure comes from the system prompt
+            // and the grounding guard, not sampling knobs.
             ...(system ? { system } : {}),
             messages: translateMessages(call.messages),
             tools: call.tools.map((tool: CopilotToolSpec) => ({
