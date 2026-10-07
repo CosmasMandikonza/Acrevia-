@@ -135,7 +135,21 @@ benchmark cannot be circular.
    Browser-proven A->B: accepting the JFK property after Calvary shows the
    honest unavailable state and zero Calvary rules, facts, or overlays.
 
-10. **UI scope.** A COMPILED LAW section on the existing Evidence surface —
+10. **Resolved-law updates change the executable constraint.** When later,
+   current evidence resolves the SAME semantic rule to a different value
+   (55 ft -> 45 ft; BY_RIGHT -> SPECIAL_EXCEPTION), a dedicated typed
+   command (`replaceExecutableConstraint`, audited `constraint.replaced`
+   event; exact semantic replay is a no-op; kind/regulation mismatches
+   rejected) replaces the constraint payload — the solver gate serves the
+   new value, prior certificates go STALE, and new certificates are CURRENT
+   against the updated law.
+
+11. **Canonical quotes come from verified captures.** `Claim.verbatimQuote`
+   is set from the verifier-anchored `evidenceAnchor.exactText` — extractor
+   renderings survive only in `notes` and never masquerade as verbatim
+   source text.
+
+12. **UI scope.** A COMPILED LAW section on the existing Evidence surface —
    values, locators, sources, evidence states, honest unresolved dimensions,
    visible conflicts with the excluded value and why it lost; honest
    unavailable states for unsupported properties. Inspection list, not a

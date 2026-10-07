@@ -4,9 +4,12 @@ import {
   materializeConstraint,
   openExpertReviewItem,
   recordClaim,
+  replaceExecutableConstraint,
   upsertRegulation,
 } from "../../commands";
 import { canonicalJson } from "../../domain/graph/serialization";
+import { ConstraintSemantic } from "../../domain/constraints/constraint";
+import type { z } from "zod";
 import { stripVolatile } from "../../domain/graph/node";
 import type { ClaimValue, ClaimPredicate } from "../../domain";
 import type { CandidateRule } from "./candidate-rule";
@@ -248,8 +251,14 @@ export function compileRegulations(
         origin: { kind: "SOURCE_DERIVED" },
         sourceIds: [candidate.sourceArtifactId],
         evidenceState: evidence,
-        verbatimQuote: candidate.verbatimSupportingText,
+        // Canonical quote comes ONLY from the verifier-anchored capture
+        // fragment — extractor commentary stays in notes and never
+        // masquerades as verbatim source text.
+        verbatimQuote: candidate.evidenceAnchor.exactText,
         notes: [
+          candidate.verbatimSupportingText !== candidate.evidenceAnchor.exactText
+            ? `extractor rendering: ${candidate.verbatimSupportingText}`
+            : undefined,
           candidate.notes,
           candidate.codeSection ? `locator: ${candidate.codeSection}` : undefined,
           `retrievedAt: ${candidate.retrievedAt}`,
@@ -319,21 +328,38 @@ export function compileRegulations(
     const needsDistrict = Boolean(anchor.applicability.district);
     const needsOverlay = Boolean(anchor.applicability.overlay);
     if (needsDistrict) {
-      if (input.applicabilityClaims?.zoningBaseClaimId) {
-        applicabilityClaimIds.push(input.applicabilityClaims.zoningBaseClaimId);
-      } else {
+      const claimId = input.applicabilityClaims?.zoningBaseClaimId;
+      const claim = claimId ? ctx.project.nodes[claimId] : undefined;
+      const problems = claimId ? validateZoningBaseApplicability(claim, anchor, claimId) : ["missing"];
+      if (problems[0] === "missing" || problems.length > 0) {
         applicabilityProblems.push(
-          `district-scoped rule ${key} has no site zoning-base applicability claim; refusing to compile without proof the law applies to this parcel`,
+          problems[0] === "missing"
+            ? `district-scoped rule ${key} has no site zoning-base applicability claim; refusing to compile without proof the law applies to this parcel`
+            : `zoning-base applicability claim rejected for rule ${key}: ${problems.join("; ")}`,
         );
+      } else {
+        applicabilityClaimIds.push(claimId!);
       }
     }
     if (needsOverlay) {
       const overlayClaims = input.applicabilityClaims?.overlayClaimIds ?? [];
-      if (overlayClaims.length > 0) {
-        applicabilityClaimIds.push(...overlayClaims);
-      } else {
+      let proven = false;
+      const overlayProblems: string[] = [];
+      for (const claimId of overlayClaims) {
+        const claim = ctx.project.nodes[claimId];
+        const problems = validateOverlayApplicability(claim, anchor, claimId);
+        if (problems.length === 0) {
+          applicabilityClaimIds.push(claimId);
+          proven = true;
+          break;
+        }
+        overlayProblems.push(...problems);
+      }
+      if (!proven) {
         applicabilityProblems.push(
-          `overlay-scoped rule ${key} has no site overlay applicability claim; refusing to compile without proof the overlay applies to this parcel`,
+          overlayClaims.length === 0
+            ? `overlay-scoped rule ${key} has no site overlay applicability claim; refusing to compile without proof the overlay applies to this parcel`
+            : `overlay applicability claim rejected for rule ${key}: ${overlayProblems.join("; ")}`,
         );
       }
     }
@@ -408,12 +434,16 @@ export function compileRegulations(
   return { outcomes, conflicts, claimed, regulated, constrained };
 }
 
-function materializeConstraintFor(
-  ctx: CommandContext,
+/**
+ * Build the desired typed constraint payload for the currently executable
+ * law (or null where the domain has no variant with deterministic
+ * semantics). Separated from application so the SAME payload builder serves
+ * first materialization and later typed replacement.
+ */
+function desiredConstraintPayload(
   candidate: CandidateRule,
   ids: { regulationId: string; constraintId: string },
-): boolean {
-  if (ctx.project.nodes[ids.constraintId]) return true; // already materialized
+): z.infer<typeof ConstraintSemantic> | null {
   const base = {
     id: ids.constraintId,
     kind: "constraint" as const,
@@ -423,98 +453,90 @@ function materializeConstraintFor(
 
   switch (candidate.predicate) {
     case "max-height":
-      if (value.kind !== "quantity") return false;
-      materializeConstraint(ctx, {
+      if (value.kind !== "quantity") return null;
+      return {
         ...base,
-        constraintKind: "height",
-        limit: { value: value.value, unit: "ft" },
-        appliesTo: "principal-structure",
-      });
-      return true;
+        constraintKind: "height" as const,
+        limit: { value: value.value, unit: "ft" as const },
+        appliesTo: "principal-structure" as const,
+      };
     case "setback-front":
-      materializeConstraint(ctx, {
+      return {
         ...base,
-        constraintKind: "setback",
-        face: "front",
+        constraintKind: "setback" as const,
+        face: "front" as const,
         spec: {
-          type: "contextual",
+          type: "contextual" as const,
           ruleId: "adjacent-facades",
           description: "Front facade placement follows immediately adjacent / blockface buildings",
         },
-      });
-      return true;
+      };
     case "setback-side": {
-      if (value.kind !== "quantity") return false;
+      if (value.kind !== "quantity") return null;
       const range = sideYardRange(candidate.verbatimSupportingText);
-      materializeConstraint(ctx, {
+      return {
         ...base,
-        constraintKind: "setback",
-        face: "side",
+        constraintKind: "setback" as const,
+        face: "side" as const,
         spec: range
-          ? { type: "range", range: { min: range.min, max: range.max, unit: "ft" } }
-          : { type: "numeric", min: { value: value.value, unit: "ft" } },
-      });
-      return true;
+          ? { type: "range" as const, range: { min: range.min, max: range.max, unit: "ft" as const } }
+          : { type: "numeric" as const, min: { value: value.value, unit: "ft" as const } },
+      };
     }
     case "setback-rear":
-      if (value.kind !== "quantity") return false;
-      materializeConstraint(ctx, {
+      if (value.kind !== "quantity") return null;
+      return {
         ...base,
-        constraintKind: "setback",
-        face: "rear",
-        spec: { type: "numeric", min: { value: value.value, unit: "ft" } },
-      });
-      return true;
+        constraintKind: "setback" as const,
+        face: "rear" as const,
+        spec: { type: "numeric" as const, min: { value: value.value, unit: "ft" as const } },
+      };
     case "occupied-area": {
-      if (value.kind !== "quantity") return false;
+      if (value.kind !== "quantity") return null;
       const byLotType = occupiedAreaByLotType(candidate.verbatimSupportingText);
-      materializeConstraint(ctx, {
+      return {
         ...base,
-        constraintKind: "occupied-area",
+        constraintKind: "occupied-area" as const,
         byLotType: {
           intermediate: byLotType.intermediate ?? value.value,
           corner: byLotType.corner,
         },
-        unit: "percent",
-      });
-      return true;
+        unit: "percent" as const,
+      };
     }
     case "density-formula": {
       const text = value.kind === "qualitative" ? value.text : candidate.verbatimSupportingText;
       const tiers = densityTiers(text);
-      if (!tiers) return false; // cannot parse tiers -> no fake constraint
-      materializeConstraint(ctx, {
+      if (!tiers) return null; // cannot parse tiers -> no fake constraint
+      return {
         ...base,
-        constraintKind: "density",
-        spec: { type: "tiered-min-lot-area-per-unit", tiers, rounding: "down" },
+        constraintKind: "density" as const,
+        spec: { type: "tiered-min-lot-area-per-unit" as const, tiers, rounding: "down" as const },
         notes: "Second tier applies to lot area above the first 1,440 sq ft.",
-      });
-      return true;
+      };
     }
     case "parking-requirement": {
       const use = candidate.applicability.use ?? "unscoped";
       if (value.kind === "quantity") {
-        materializeConstraint(ctx, {
+        return {
           ...base,
-          constraintKind: "parking-requirement",
+          constraintKind: "parking-requirement" as const,
           use,
-          requirement: { type: "fixed", spaces: { value: value.value, unit: "spaces" } },
-        });
-        return true;
+          requirement: { type: "fixed" as const, spaces: { value: value.value, unit: "spaces" as const } },
+        };
       }
       if (value.kind === "qualitative") {
-        materializeConstraint(ctx, {
+        return {
           ...base,
-          constraintKind: "parking-requirement",
+          constraintKind: "parking-requirement" as const,
           use,
-          requirement: { type: "formula", formulaId: use, text: value.text },
-        });
-        return true;
+          requirement: { type: "formula" as const, formulaId: use, text: value.text },
+        };
       }
-      return false;
+      return null;
     }
     case "use-permission": {
-      if (value.kind !== "qualitative") return false;
+      if (value.kind !== "qualitative") return null;
       const permission = /^Y/i.test(value.text)
         ? ("BY_RIGHT" as const)
         : /^S/i.test(value.text)
@@ -522,47 +544,144 @@ function materializeConstraintFor(
           : /^N/i.test(value.text)
             ? ("PROHIBITED" as const)
             : null;
-      if (!permission) return false;
-      materializeConstraint(ctx, {
+      if (!permission) return null;
+      return {
         ...base,
-        constraintKind: "use-permission",
+        constraintKind: "use-permission" as const,
         use: candidate.applicability.use ?? "unscoped",
         permission,
-      });
-      return true;
+      };
     }
     case "overlay-restriction": {
-      if (value.kind !== "qualitative") return false;
+      if (value.kind !== "qualitative") return null;
       const overlay = candidate.applicability.overlay;
       const adu =
         /accessory dwelling unit/i.test(value.text) ||
         /accessory dwelling unit/i.test(candidate.verbatimSupportingText);
-      if (!overlay || !adu) return false; // no deterministic prohibits reading
-      materializeConstraint(ctx, {
+      if (!overlay || !adu) return null; // no deterministic prohibits reading
+      return {
         ...base,
-        constraintKind: "overlay-prohibition",
+        constraintKind: "overlay-prohibition" as const,
         overlay,
         prohibits: "accessory-dwelling-units",
-      });
-      return true;
+      };
     }
     case "density-bonus": {
-      if (value.kind !== "quantity") return false;
+      if (value.kind !== "quantity") return null;
       const low = candidate.verbatimSupportingText.match(/low income:\s*(\d+)%/i);
-      materializeConstraint(ctx, {
+      return {
         ...base,
-        constraintKind: "density-bonus",
+        constraintKind: "density-bonus" as const,
         percentIncreaseByTier: {
           moderate: value.value,
           ...(low ? { low: Number(low[1]) } : {}),
         },
-        geographicRestriction: "unknown",
-      });
-      return true;
+        geographicRestriction: "unknown" as const,
+      };
     }
     default:
       // lot-width / lot-area and GIS-layer facts stay claim+regulation only
       // until #7 defines their executable participation.
-      return false;
+      return null;
   }
+}
+
+/**
+ * Materialize OR replace the executable constraint for the currently
+ * resolved law. First materialization uses the create-only command; a later
+ * resolved change to the SAME semantic rule goes through the typed
+ * replaceExecutableConstraint command — the executable law itself changes,
+ * never silently serving the old value.
+ */
+function materializeConstraintFor(
+  ctx: CommandContext,
+  candidate: CandidateRule,
+  ids: { regulationId: string; constraintId: string },
+): boolean {
+  const desired = desiredConstraintPayload(candidate, ids);
+  if (!desired) return false;
+  const existing = ctx.project.nodes[ids.constraintId];
+  if (!existing) {
+    materializeConstraint(ctx, desired);
+    return true;
+  }
+  replaceExecutableConstraint(ctx, desired);
+  return true;
+}
+
+
+/** Require a claim's value to canonically contain a district token. */
+function claimTextOf(claim: unknown): string {
+  if (!claim || typeof claim !== "object") return "";
+  const value = (claim as { value?: { text?: string } }).value;
+  return value?.text ?? "";
+}
+
+function sourceIdsOf(claim: unknown): string[] {
+  if (!claim || typeof claim !== "object") return [];
+  return (claim as { sourceIds?: string[] }).sourceIds ?? [];
+}
+
+/**
+ * Validate the site's zoning-base applicability claim for a district-scoped
+ * rule: kind/subject/origin/evidence/predicate, value canonically matching
+ * the candidate's district, and a resolving source artifact. Returns
+ * problems (empty = proven).
+ */
+function validateZoningBaseApplicability(
+  claim: unknown,
+  anchor: CandidateRule,
+  claimId: string,
+): string[] {
+  const problems: string[] = [];
+  if (!claim || typeof claim !== "object") return [`claim ${claimId} does not exist`];
+  const c = claim as {
+    kind?: string;
+    subjectNodeId?: string;
+    origin?: { kind?: string };
+    evidenceState?: string;
+    predicate?: string;
+  };
+  if (c.kind !== "claim") problems.push(`node ${claimId} is not a claim`);
+  if (c.subjectNodeId !== anchor.subjectNodeId)
+    problems.push(`claim subject ${c.subjectNodeId} is not this parcel (${anchor.subjectNodeId})`);
+  if (c.origin?.kind !== "SOURCE_DERIVED") problems.push("origin is not SOURCE_DERIVED");
+  if (c.evidenceState !== "VERIFIED" && c.evidenceState !== "SOURCE_CONFIRMED")
+    problems.push(`evidence is ${c.evidenceState ?? "unset"}`);
+  if (c.predicate !== "zoning-district") problems.push(`predicate is ${c.predicate}, not zoning-district`);
+  const canonical = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/gi, "");
+  const text = canonical(claimTextOf(claim));
+  const district = canonical(anchor.applicability.district ?? "");
+  if (!district || !text.includes(district)) {
+    problems.push(`claim value "${claimTextOf(claim)}" does not prove district ${anchor.applicability.district}`);
+  }
+  const sources = sourceIdsOf(claim);
+  if (sources.length === 0) problems.push("claim cites no source artifact");
+  return problems;
+}
+
+/**
+ * Validate the site's overlay applicability claim for an overlay-scoped
+ * rule: same structural checks plus the claim value actually proving THIS
+ * overlay (by canonical token containment, e.g. "/SIX" or "Sixth District").
+ */
+function validateOverlayApplicability(
+  claim: unknown,
+  anchor: CandidateRule,
+  claimId: string,
+): string[] {
+  const structural = validateZoningBaseApplicability(claim, anchor, claimId)
+    .filter((p) => !p.includes("zoning-district") && !p.includes("does not prove district"));
+  const problems = [...structural];
+  if (problems.some((p) => p.includes("not a claim") || p.includes("does not exist"))) return problems;
+  const c = claim as { predicate?: string };
+  if (c.predicate !== "zoning-overlays") problems.push(`predicate is ${c.predicate}, not zoning-overlays`);
+  const overlay = anchor.applicability.overlay ?? "";
+  const canonical = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const overlayToken = canonical(overlay.replace(/^\/+/, "").split(/\s+/)[0] ?? "");
+  const text = canonical(claimTextOf(claim));
+  if (!overlayToken || !text.includes(overlayToken)) {
+    problems.push(`claim value "${claimTextOf(claim)}" does not prove overlay ${overlay}`);
+  }
+  return problems;
 }

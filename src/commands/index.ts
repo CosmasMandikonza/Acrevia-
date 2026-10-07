@@ -218,6 +218,11 @@ export function materializeConstraint(
   );
 }
 
+export {
+  ReplaceExecutableConstraintInput,
+  replaceExecutableConstraint,
+} from "./regulatory";
+
 // ---------------------------------------------------------------------------
 // Mission + assumptions (origin rules enforced here)
 // ---------------------------------------------------------------------------

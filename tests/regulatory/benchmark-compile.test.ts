@@ -133,7 +133,7 @@ describe("benchmark full-compile (raw evidence -> executable law)", () => {
     expect(gate.executable.length).toBeGreaterThan(0);
   });
 
-  it("applicability-evidence supersession stales compiler-certified dependents (mapper-seeded sanity)", async () => {
+  it("generic dependency-freshness sanity (mapper-seeded; not a regulatory-supersession proof)", async () => {
     const project = seedWithBalanceScenario();
     const before = gradeCertificate(project, CERTIFICATE_ID);
     expect(before.freshness).toBe("CURRENT");
