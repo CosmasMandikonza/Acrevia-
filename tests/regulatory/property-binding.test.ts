@@ -40,8 +40,10 @@ function session(input: {
   sessionId: string;
   context: ResolvedParcelContext;
   parcelId?: string;
+  secondParcelId?: string;
 }): ResolutionSession {
   const parcelId = input.parcelId ?? input.context.parcelId;
+  const campus = Boolean(input.secondParcelId);
   return {
     sessionId: input.sessionId,
     createdAt: NOW,
@@ -50,18 +52,30 @@ function session(input: {
     addressCandidates: [makeAddressCandidate()],
     selectedAddress: makeAddressCandidate(),
     parcelStage: "RESOLVED",
-    parcelCandidates: [
-      makeParcelCandidate({
-        brtId: parcelId,
-        parcelId,
-        pwdParcelNum: "494018",
-        ownerName: "CITY OF PHILA",
-        address: "1400 JOHN F KENNEDY BLVD",
-      }),
-    ],
-    confirmedParcelIds: [parcelId],
+    parcelCandidates: campus
+      ? [
+          makeParcelCandidate({ brtId: parcelId, parcelId, pwdParcelNum: "494018" }),
+          makeParcelCandidate({
+            brtId: input.secondParcelId,
+            parcelId: input.secondParcelId,
+            pwdParcelNum: "494019",
+            capture: { ...makeParcelCandidate().capture, rawContentHash: "e".repeat(64) },
+          }),
+        ]
+      : [makeParcelCandidate({ brtId: parcelId, parcelId, pwdParcelNum: "494018" })],
+    confirmedParcelIds: campus ? [parcelId, input.secondParcelId!] : [parcelId],
     userConfirmedProperty: true,
-    parcelContexts: [input.context],
+    parcelContexts: campus
+      ? [
+          input.context,
+          {
+            ...input.context,
+            parcelId: input.secondParcelId!,
+            structures: [],
+            zoningOverlays: undefined,
+          },
+        ]
+      : [input.context],
     captures: [],
   };
 }
@@ -70,16 +84,18 @@ async function acceptedPairFor(input: {
   sessionId: string;
   context: ResolvedParcelContext;
   parcelId?: string;
+  secondParcelId?: string;
 }) {
   const envelope = createEnvelope(session(input));
+  const primary = input.parcelId ?? input.context.parcelId;
   const response = await commitPost(
     new Request("http://localhost/api/gis/commit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         envelope,
-        projectId: `gis:${input.parcelId ?? input.context.parcelId}`,
-        propertyId: `gis:property:${input.parcelId ?? input.context.parcelId}`,
+        projectId: `gis:${primary}`,
+        propertyId: `gis:property:${primary}`,
       }),
     }),
   );
@@ -115,6 +131,7 @@ describe("POST /api/regulatory/compile — property binding", () => {
 
   it("A→B CONTAMINATION: a CMX-2 property (JFK-style) gets NO Calvary law — honest unsupported-district", async () => {
     const cmxContext = parcelContext({
+      parcelId: "782273400",
       zoningBase: makeZoningBase({ district: "CMX2", districtLong: "CMX-2" }),
       zoningOverlays: undefined,
       structures: [],
@@ -142,6 +159,21 @@ describe("POST /api/regulatory/compile — property binding", () => {
     const ids = payload.law.map((row: { constraintId: string }) => row.constraintId);
     expect(ids).toContain("phl:constraint:height:max:principal");
     expect(ids.some((id: string) => id.includes("/six"))).toBe(false);
+  });
+
+  it("MULTI-PARCEL: a campus-style accepted property fails closed, never first-parcel law", async () => {
+    const pair = await acceptedPairFor({
+      sessionId: "bind-multi-parcel",
+      context: parcelContext(),
+      parcelId: "778273000",
+      secondParcelId: "778273100",
+    });
+    const response = await compileFor(pair);
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.status).toBe("multi-parcel-unsupported");
+    expect(payload.reason).toContain("per-parcel regulatory compilation");
+    expect(payload.law).toBeUndefined();
   });
 
   it("a property with NO verified district NEVER defaults to RM-1 — needs-evidence", async () => {

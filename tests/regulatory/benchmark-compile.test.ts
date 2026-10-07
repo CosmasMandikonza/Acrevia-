@@ -6,6 +6,7 @@ import { compileRegulations } from "../../src/application/regulatory/compile";
 import { selectExecutableConstraints } from "../../src/application/regulatory/executable";
 import { recordScenario } from "../../src/commands";
 import { contextFor, CERTIFICATE_ID } from "../domain/helpers";
+import { makeBenchmarkBase, OVERLAY_CLAIM, ZONING_BASE_CLAIM } from "./helpers";
 import type { Project } from "../../src/domain/graph/project";
 import { seedWithBalanceScenario, confirmMissionParking } from "../domain/helpers";
 import { gradeCertificate } from "../../src/domain";
@@ -20,43 +21,7 @@ import { gradeCertificate } from "../../src/domain";
 const FIXTURE_DIR = join(import.meta.dirname, "../../docs/benchmarks/calvary-memorial-philadelphia");
 const PARCEL = "phl:parcel:778273000";
 
-function bareProject(): Project {
-  return {
-    projectId: "test:regulatory-benchmark",
-    revision: 0,
-    createdAt: "2026-10-08T00:00:00.000Z",
-    updatedAt: "2026-10-08T00:00:00.000Z",
-    nodes: {
-      [PARCEL]: {
-        id: PARCEL,
-        kind: "parcel",
-        parcelIdSystem: "test",
-        parcelNumber: "778273000",
-        geometry: {
-          geojson: {
-            type: "Polygon",
-            coordinates: [
-              [
-                [-75.056, 40.043],
-                [-75.055, 40.043],
-                [-75.055, 40.044],
-                [-75.056, 40.044],
-                [-75.056, 40.043],
-              ],
-            ],
-          },
-          crs: "EPSG:4326",
-          validity: "unchecked",
-          derived: false,
-        },
-        claimIds: [],
-        meta: { revision: 1, semanticHash: "x", createdAt: "2026-10-08T00:00:00.000Z", lastModifiedAt: "2026-10-08T00:00:00.000Z" },
-      },
-    },
-    edges: [],
-    events: [],
-  } as unknown as Project;
-}
+const bareProject = makeBenchmarkBase;
 
 async function compileBenchmark(project: Project) {
   const input = loadBenchmarkEvidence({
@@ -68,6 +33,11 @@ async function compileBenchmark(project: Project) {
     candidates: extraction.candidates,
     sources: input.sources,
     subject: { district: "RM-1" },
+    documents: input.documents,
+    applicabilityClaims: {
+      zoningBaseClaimId: ZONING_BASE_CLAIM,
+      overlayClaimIds: [OVERLAY_CLAIM],
+    },
   });
 }
 
@@ -163,14 +133,15 @@ describe("benchmark full-compile (raw evidence -> executable law)", () => {
     expect(gate.executable.length).toBeGreaterThan(0);
   });
 
-  it("STALE CERTIFICATE (compiler path): superseding a compiled source invalidates dependents", async () => {
+  it("applicability-evidence supersession stales compiler-certified dependents (mapper-seeded sanity)", async () => {
     const project = seedWithBalanceScenario();
     const before = gradeCertificate(project, CERTIFICATE_ID);
     expect(before.freshness).toBe("CURRENT");
 
-    // A later mission change stales the dependent certificate (existing
-    // machinery) — proving dependency-aware freshness flows through
-    // compiler-produced constraints exactly as through mapper-produced ones.
+    // Sanity only: dependency-aware freshness flows through the shared graph
+    // machinery. The REAL source-supersession proof for compiler-produced
+    // constraints lives in compile.test.ts ("TRUE SOURCE-SUPERSESSION
+    // CERTIFICATE") and trust-boundaries.test.ts (overlay applicability).
     confirmMissionParking(project, 100);
     expect(gradeCertificate(project, CERTIFICATE_ID).freshness).toBe("STALE");
   });

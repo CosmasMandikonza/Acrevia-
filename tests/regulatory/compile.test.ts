@@ -9,8 +9,37 @@ import { decideConflicts, normalizedLegalValue } from "../../src/application/reg
 import type { CandidateRule } from "../../src/application/regulatory/candidate-rule";
 import { normalizeFeet } from "../../src/application/regulatory/normalize";
 import { ProjectCodec } from "../../src/adapters/persistence/project-codec";
+import type { RawEvidenceDocument } from "../../src/application/regulatory/extraction";
 import { contextFor } from "../domain/helpers";
-import { bareProject, heightCandidate, PARCEL, testSource, useCandidate } from "./helpers";
+import {
+  applicabilityInput,
+  bareProject,
+  heightCandidate,
+  PARCEL,
+  testDocuments,
+  testSource,
+  useCandidate,
+} from "./helpers";
+
+/** Documents containing every anchor the standard candidates emit. */
+function standardDocuments(extra: Record<string, string> = {}): RawEvidenceDocument[] {
+  return testDocuments(["S5", "S7", "A1", "A2", "G1", "G2"], {
+    S5: [
+      "maximum building height ... 38 ft",
+      "no FAR value in the captured RM-1 evidence",
+      "Min. Lot Width ... 16 ft.",
+    ].join("\n"),
+    S7: "Multi-Family — 0 (RM-1 group)\nMulti-Family | Y[1]",
+    A1: "Maximum building height in the RM-1 district: 55 ft.",
+    A2: [
+      "(.1) In the RM-1 zoning district, the maximum building height is 45 ft.",
+      "maximum building height ... 45 ft",
+    ].join("\n"),
+    G1: "maximum building height ... 38 ft\nMulti-Family | Y[1]",
+    G2: "maximum building height ... 45 ft\nMulti-Family | S[2], 14-603(5)",
+    ...extra,
+  });
+}
 
 /**
  * Compiler pipeline tests (issue #5 review): semantic identity, deterministic
@@ -41,9 +70,11 @@ function adversarialHeightCandidates(): CandidateRule[] {
   return [
     heightCandidate("A1", olderFeet.value, {
       verbatimSupportingText: "Maximum building height in the RM-1 district: 55 ft.",
+      retrievedAt: "2025-01-15T00:00:00Z",
     }),
     heightCandidate("A2", newerFeet.value, {
       verbatimSupportingText: "(.1) In the RM-1 zoning district, the maximum building height is 45 ft.",
+      retrievedAt: "2026-06-01T00:00:00Z",
     }),
   ];
 }
@@ -70,17 +101,19 @@ describe("semantic rule identity", () => {
       candidates: [applicability!, prohibition!],
       sources: input.sources,
       subject: { district: "RM-1" },
+      documents: input.documents,
+      ...applicabilityInput(),
     });
     const constraint = project.nodes["phl:constraint:overlay:/six:adu-prohibition"];
     expect(constraint).toBeDefined();
     expect(project.nodes["phl:reg:overlay:/six:applicability"]?.kind).toBe("regulation");
     expect(project.nodes["phl:reg:overlay:/six:adu-prohibition"]?.kind).toBe("regulation");
-    const aduClaim = project.nodes["phl:claim:overlay:/six:adu-prohibition:S6"];
+    const aduClaim = project.nodes["phl:claim:overlay:/six:adu-prohibition:phl:src:S6@v1"];
     expect(
       aduClaim?.kind === "claim" && aduClaim.verbatimQuote?.includes("Accessory dwelling units shall not be permitted"),
     ).toBe(true);
     // The applicability regulation is a separate rule with its own claim.
-    const applicabilityClaim = project.nodes["phl:claim:overlay:/six:applicability:S6"];
+    const applicabilityClaim = project.nodes["phl:claim:overlay:/six:applicability:phl:src:S6@v1"];
     expect(applicabilityClaim?.kind === "claim").toBe(true);
     expect(JSON.stringify(applicabilityClaim)).toContain("Applicability");
   });
@@ -110,6 +143,8 @@ describe("verification (candidate -> accepted/rejected)", () => {
       ],
       sources: TEST_SOURCES,
       subject: { district: "RM-1" },
+      documents: standardDocuments(),
+      ...applicabilityInput(),
     });
     expect(decisions.map((d) => d.status)).toEqual(["REJECT", "REJECT", "REJECT", "REJECT", "REJECT"]);
     expect(decisions[0].reasons.join(" ")).toContain("does not resolve");
@@ -192,13 +227,25 @@ describe("source artifact truth", () => {
 
     const project = bareProject();
     const ctx = contextFor(project);
-    compileRegulations(ctx, { candidates: [heightCandidate("S5", 38)], sources: TEST_SOURCES, subject: { district: "RM-1" } });
+    compileRegulations(ctx, {
+      candidates: [heightCandidate("S5", 38)],
+      sources: TEST_SOURCES,
+      subject: { district: "RM-1" },
+      documents: standardDocuments(),
+      ...applicabilityInput(),
+    });
     const tampered = testSource({
       sourceRef: "S5",
       rawContentHash: createHash("sha256").update("different bytes").digest("hex"),
     });
     expect(() =>
-      compileRegulations(ctx, { candidates: [heightCandidate("S5", 38)], sources: [tampered], subject: { district: "RM-1" } }),
+      compileRegulations(ctx, {
+        candidates: [heightCandidate("S5", 38)],
+        sources: [tampered],
+        subject: { district: "RM-1" },
+        documents: standardDocuments(),
+        ...applicabilityInput(),
+      }),
     ).toThrow(/immutable/i);
   });
 
@@ -209,13 +256,20 @@ describe("source artifact truth", () => {
     const tool = testSource({ sourceRef: "T1", authority: "OFFICIAL_CITY_TOOL" });
     const reference = testSource({ sourceRef: "R1", authority: "OFFICIAL_CITY_REFERENCE" });
     const candidates = [
-      heightCandidate("A2", 45),
-      heightCandidate("G1", 38, { semanticRuleKey: "test:gis", candidateId: "cand:test:gis:G1", applicability: { district: "RM-1" } }),
+      heightCandidate("A2", 45, { verbatimSupportingText: "maximum building height ... 45 ft" }),
+      heightCandidate("G1", 38, {
+        semanticRuleKey: "test:gis",
+        candidateId: "cand:test:gis:phl:src:G1@v1",
+        applicability: { district: "RM-1" },
+        authority: "OFFICIAL_GIS",
+      }),
     ];
     compileRegulations(contextFor(project), {
       candidates,
       sources: [adopted, gis, tool, reference],
       subject: { district: "RM-1" },
+      documents: standardDocuments(),
+      ...applicabilityInput(),
     });
     expect(project.nodes["phl:src:A2@v1"]).toMatchObject({ sourceType: "adopted_code" });
     expect(project.nodes["phl:src:G1@v1"]).toMatchObject({ sourceType: "official_gis" });
@@ -227,41 +281,49 @@ describe("canonical compilation + executable gate", () => {
   it("compiles verified rules to claim/regulation/constraint and traverses to sources", () => {
     const project = bareProject();
     const farCandidate: CandidateRule = {
-      ...heightCandidate("S5", 0, { candidateId: "cand:far:max:S5", semanticRuleKey: "far:max", predicate: "far" }),
+      ...heightCandidate("S5", 0, {
+        candidateId: "cand:far:max:S5",
+        semanticRuleKey: "far:max",
+        predicate: "far",
+        verbatimSupportingText: "no FAR value in the captured RM-1 evidence",
+      }),
       proposedValue: { kind: "unknown" },
-      verbatimSupportingText: "no FAR value in the captured RM-1 evidence",
     };
-    const lotWidth: CandidateRule = {
-      ...heightCandidate("S5", 16, { candidateId: "cand:lot:width:min:S5", semanticRuleKey: "lot:width:min", predicate: "lot-width" }),
+    const lotWidth: CandidateRule = heightCandidate("S5", 16, {
+      candidateId: "cand:lot:width:min:S5",
+      semanticRuleKey: "lot:width:min",
+      predicate: "lot-width",
       verbatimSupportingText: "Min. Lot Width ... 16 ft.",
-    };
+    });
     const parking: CandidateRule = {
       ...heightCandidate("S7", 0, {
         candidateId: "cand:parking:multi-family:minimum:S7",
         semanticRuleKey: "parking:multi-family:minimum",
         predicate: "parking-requirement",
         authority: "ADOPTED_CODE",
+        verbatimSupportingText: "Multi-Family — 0 (RM-1 group)",
       }),
       applicability: { district: "RM-1", use: "multi-family" },
       proposedValue: { kind: "quantity", value: 0, unit: "spaces" },
-      verbatimSupportingText: "Multi-Family — 0 (RM-1 group)",
     };
     compileRegulations(contextFor(project), {
       candidates: [heightCandidate("S5", 38), parking, farCandidate, lotWidth],
       sources: TEST_SOURCES,
       subject: { district: "RM-1" },
+      documents: standardDocuments(),
+      ...applicabilityInput(),
     });
 
-    expect(project.nodes["phl:claim:height:max:principal:S5"]).toBeDefined();
+    expect(project.nodes["phl:claim:height:max:principal:phl:src:S5@v1"]).toBeDefined();
     expect(project.nodes["phl:reg:height:max:principal"]).toBeDefined();
     expect(project.nodes["phl:constraint:height:max:principal"]).toBeDefined();
 
-    const farClaim = project.nodes["phl:claim:far:max:S5"];
+    const farClaim = project.nodes["phl:claim:far:max:phl:src:S5@v1"];
     expect(farClaim?.kind === "claim" && farClaim.evidenceState === "UNKNOWN").toBe(true);
     expect(project.nodes["phl:reg:far:max"]).toBeDefined();
     expect(project.nodes["phl:constraint:far:max"]).toBeUndefined();
 
-    expect(project.nodes["phl:claim:lot:width:min:S5"]).toBeDefined();
+    expect(project.nodes["phl:claim:lot:width:min:phl:src:S5@v1"]).toBeDefined();
     expect(project.nodes["phl:reg:lot:width:min"]).toBeDefined();
     expect(project.nodes["phl:constraint:lot:width:min"]).toBeUndefined();
 
@@ -283,13 +345,15 @@ describe("canonical compilation + executable gate", () => {
       candidates: [a1, a2],
       sources: TEST_SOURCES,
       subject: { district: "RM-1" },
+      documents: standardDocuments(),
+      ...applicabilityInput(),
     });
 
     const constraint = project.nodes["phl:constraint:height:max:principal"];
     expect(constraint).toBeDefined();
     expect(constraint?.kind === "constraint" && constraint.constraintKind === "height" && constraint.limit.value === 45).toBe(true);
 
-    const excludedClaim = project.nodes["phl:claim:height:max:principal:A1"];
+    const excludedClaim = project.nodes["phl:claim:height:max:principal:phl:src:A1@v1"];
     expect(excludedClaim?.kind === "claim" && excludedClaim.evidenceState === "CONFLICT").toBe(true);
     expect(JSON.stringify(excludedClaim)).toContain("never overrides adopted code");
 
@@ -307,7 +371,13 @@ describe("canonical compilation + executable gate", () => {
     const ctx = contextFor(project);
 
     // Compile 1: trusted 38 ft, executable.
-    compileRegulations(ctx, { candidates: [heightCandidate("S5", 38)], sources: TEST_SOURCES, subject: { district: "RM-1" } });
+    compileRegulations(ctx, {
+      candidates: [heightCandidate("S5", 38)],
+      sources: TEST_SOURCES,
+      subject: { district: "RM-1" },
+      documents: standardDocuments(),
+      ...applicabilityInput(),
+    });
     let gate = selectExecutableConstraints(project);
     expect(gate.decisions.find((d) => d.constraintId === "phl:constraint:height:max:principal")?.executable).toBe(true);
 
@@ -336,11 +406,13 @@ describe("canonical compilation + executable gate", () => {
     });
 
     // Compile 2: an equally authoritative source now says 45 ft.
-    const conflicting = heightCandidate("G1", 45, { authority: "OFFICIAL_CITY_REFERENCE" });
+    const conflicting = heightCandidate("G1", 45, { authority: "OFFICIAL_GIS" });
     compileRegulations(ctx, {
       candidates: [heightCandidate("S5", 38), conflicting],
       sources: TEST_SOURCES,
       subject: { district: "RM-1" },
+      documents: standardDocuments({ G1: "maximum building height ... 45 ft" }),
+      ...applicabilityInput(),
     });
 
     // Old constraint REMAINS for audit; regulation is STALE; gate excludes.
@@ -362,7 +434,7 @@ describe("canonical compilation + executable gate", () => {
       expect(project.nodes[nodeId]).toBeDefined();
     }
     expect(affected).toContain("phl:reg:height:max:principal");
-    expect(affected).toContain("phl:claim:height:max:principal:S5");
+    expect(affected).toContain("phl:claim:height:max:principal:phl:src:S5@v1");
 
     // Dependent certificate non-CURRENT; gate blocked via open review too.
     const { gradeCertificate } = await import("../../src/domain");
@@ -374,7 +446,13 @@ describe("canonical compilation + executable gate", () => {
     const project = bareProject();
     const ctx = contextFor(project);
     const candidates = [heightCandidate("S5", 38), adversarialHeightCandidates()[1]];
-    compileRegulations(ctx, { candidates, sources: TEST_SOURCES, subject: { district: "RM-1" } });
+    compileRegulations(ctx, {
+      candidates,
+      sources: TEST_SOURCES,
+      subject: { district: "RM-1" },
+      documents: standardDocuments(),
+      ...applicabilityInput(),
+    });
 
     const revision = project.revision;
     const eventCount = project.events.length;
@@ -388,7 +466,13 @@ describe("canonical compilation + executable gate", () => {
       .map((n) => `${n.id}:${n.meta.semanticHash}`)
       .sort();
 
-    const second = compileRegulations(ctx, { candidates, sources: TEST_SOURCES, subject: { district: "RM-1" } });
+    const second = compileRegulations(ctx, {
+      candidates,
+      sources: TEST_SOURCES,
+      subject: { district: "RM-1" },
+      documents: standardDocuments(),
+      ...applicabilityInput(),
+    });
 
     expect(project.revision).toBe(revision);
     expect(project.events.length).toBe(eventCount);
@@ -401,7 +485,13 @@ describe("canonical compilation + executable gate", () => {
     ).toEqual(regulationRevisions);
     expect(Object.values(project.nodes).map((n) => `${n.id}:${n.meta.semanticHash}`).sort()).toEqual(semanticHashes);
     expect(second.outcomes.map((o) => `${o.candidateId}:${o.outcome}`)).toEqual(
-      compileRegulations(ctx, { candidates, sources: TEST_SOURCES, subject: { district: "RM-1" } }).outcomes
+      compileRegulations(ctx, {
+        candidates,
+        sources: TEST_SOURCES,
+        subject: { district: "RM-1" },
+        documents: standardDocuments(),
+        ...applicabilityInput(),
+      }).outcomes
         .map((o) => `${o.candidateId}:${o.outcome}`),
     );
   });
@@ -420,15 +510,17 @@ describe("canonical compilation + executable gate", () => {
         semanticRuleKey: "parking:multi-family:minimum",
         predicate: "parking-requirement",
         authority: "ADOPTED_CODE",
+        verbatimSupportingText: "Multi-Family — 0 (RM-1 group)",
       }),
       applicability: { district: "RM-1", use: "multi-family" },
       proposedValue: { kind: "quantity", value: 0, unit: "spaces" },
-      verbatimSupportingText: "Multi-Family — 0 (RM-1 group)",
     };
     compileRegulations(ctx, {
       candidates: [heightCandidate("S5", 38), parkingCandidate],
       sources: TEST_SOURCES,
       subject: { district: "RM-1" },
+      documents: standardDocuments(),
+      ...applicabilityInput(),
     });
     expect(selectExecutableConstraints(project).executable.map((c) => c.id)).toContain(heightId);
 

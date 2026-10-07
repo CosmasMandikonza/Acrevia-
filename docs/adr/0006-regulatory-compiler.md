@@ -1,6 +1,6 @@
 # ADR 0006 — Regulatory Compiler: extractor proposes, verifier decides, graph records, solver gate filters
 
-Status: proposed with issue #5 (revised after PR #28 review).
+Status: proposed with issue #5 (revised twice after PR #28 review).
 
 ## Context
 
@@ -38,13 +38,25 @@ benchmark cannot be circular.
    normalized value+unit, applicability, extraction method. A candidate is
    NOT canonical truth and never writes to project.nodes.
 
-3. **Verification decides (second pass).** Compiler-internal ACCEPT/REJECT
-   decisions — deliberately NOT EvidenceState values (the domain vocabulary
-   stays VERIFIED / SOURCE_CONFIRMED / CONFLICT / UNKNOWN / EXPERT_REQUIRED /
-   STALE). Rejections: hallucinated sourceRef, missing verbatim text, missing
-   locator for regulatory rules, non-finite/non-positive quantities where the
-   dimension demands them (0 parking spaces is valid law; 0 ft height is
-   not), and applicability that does not match the subject district.
+3. **Verification decides (second pass), independently bound to the
+   capture.** Compiler-internal ACCEPT/REJECT decisions — deliberately NOT
+   EvidenceState values (the domain vocabulary stays VERIFIED /
+   SOURCE_CONFIRMED / CONFLICT / UNKNOWN / EXPERT_REQUIRED / STALE). The
+   verifier never trusts extractor-supplied authority, dates, or quotes.
+   Every candidate carries an EVIDENCE ANCHOR (`{documentId, exactText}`) —
+   a fragment that literally exists in the captured bytes (raw table line,
+   matched regex span, JSON attribute fragment). The verifier resolves the
+   anchor document, requires its sourceRef to match, requires the anchor
+   text to exist in the capture, and cross-checks sourceArtifactId /
+   authority / retrievedAt against the captured-version metadata. For
+   deterministically-readable predicates the proposed value must agree with
+   a value independently parsed from the anchor. Rejections: spoofed
+   authority, invented retrieval dates, invented quotes/anchors, unknown
+   anchor documents, mismatched artifact ids, anchor-says-38-but-proposes-55
+   values, missing locators, non-finite/non-positive quantities (0 parking
+   spaces is valid law; 0 ft height is not), and district applicability that
+   does not match the subject. An LLM extractor (#10) can propose, but never
+   gains authority over evidence.
 
 4. **Conflict analysis is explicit, not a rank+date comparator.** Grouping
    by SEMANTIC RULE KEY; disagreement is measured in NORMALIZED LEGAL
@@ -65,11 +77,15 @@ benchmark cannot be circular.
    Decisions are computed over sorted groups, so [55, 45] and [45, 55]
    produce identical results (source-order invariance, tested).
 
-5. **Claims are per evidence observation**
-   (`phl:claim:<semanticRuleKey>:<sourceRef>`): the excluded 55 ft memo and
-   the winning 45 ft adopted code each keep their own claim, so discrepancies
-   stay inspectable; ONE regulation per semanticRuleKey cites only executable
-   (corroborating) claims and carries conflictRefs.
+5. **Claims are per captured-version observation**
+   (`phl:claim:<semanticRuleKey>:<sourceArtifactId>`): the excluded 55 ft
+   memo and the winning 45 ft adopted code each keep their own claim, and
+   same-logical-source versions (S5@v1 = 55, S5@v2 = 45) are distinct
+   candidate/claim identities with both retained for inspection; ONE
+   regulation per semanticRuleKey cites only the executable captured
+   version's claims and carries conflictRefs. Source binding prefers the
+   captured version (sourceArtifactId) so versioned evidence resolves to its
+   own metadata.
 
 6. **Canonical compilation is TRULY idempotent and audited.** Source
    artifacts are constructed from REAL captured bytes (SHA-256 over the

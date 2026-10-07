@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AuthorityLevel } from "../../domain/enums";
+import { SourceType } from "../../domain/evidence/source-artifact";
 import { CandidateRule } from "./candidate-rule";
 
 /**
@@ -32,7 +33,7 @@ export const RawEvidenceDocument = z
 export type RawEvidenceDocument = z.infer<typeof RawEvidenceDocument>;
 
 /** Exact AuthorityLevel -> SourceArtifact.sourceType mapping. */
-export const SOURCE_TYPE_FOR_AUTHORITY: Record<AuthorityLevel, string> = {
+export const SOURCE_TYPE_FOR_AUTHORITY: Record<AuthorityLevel, SourceType> = {
   ADOPTED_CODE: "adopted_code",
   OFFICIAL_GIS: "official_gis",
   OFFICIAL_CITY_TOOL: "official_city_tool",
@@ -48,7 +49,7 @@ export const SourceMetadata = z
     sourceArtifactId: z.string().min(1),
     logicalSourceKey: z.string().min(1),
     version: z.number().int().min(1),
-    sourceType: z.string().min(1),
+    sourceType: SourceType,
     title: z.string().min(1),
     publisher: z.string().min(1),
     canonicalUrl: z.string().min(1),

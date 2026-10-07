@@ -12,9 +12,13 @@ import { Unit } from "../../domain/units/quantity";
  * Constraint through the typed command boundary.
  *
  * A candidate carries everything an independent checker needs to re-verify
- * it without trusting the extractor: exact source identity, the verbatim
- * supporting text, the locator, retrieval/effective metadata, the normalized
- * value with its unit, applicability, and how the value was extracted.
+ * it WITHOUT trusting the extractor: exact source identity, an EVIDENCE
+ * ANCHOR into the captured bytes (documentId + exactText), the locator,
+ * retrieval metadata, the normalized value with its unit, applicability, and
+ * how the value was extracted. The verifier independently resolves the
+ * anchor against the raw documents and cross-checks sourceArtifactId,
+ * authority, and retrievedAt against the source manifest — a model extractor
+ * (issue #10) can propose, but never grants it authority over evidence.
  */
 
 export const CandidateValue = z.discriminatedUnion("kind", [
@@ -42,9 +46,19 @@ export const CandidateApplicability = z
   .strict();
 export type CandidateApplicability = z.infer<typeof CandidateApplicability>;
 
+/** Exact anchor into a captured raw document — the verifier resolves this
+ *  against the capture and never trusts extractor prose. */
+export const EvidenceAnchor = z
+  .object({
+    documentId: z.string().min(1),
+    exactText: z.string().min(1),
+  })
+  .strict();
+export type EvidenceAnchor = z.infer<typeof EvidenceAnchor>;
+
 export const CandidateRule = z
   .object({
-    /** UNIQUE EVIDENCE OBSERVATION id (semanticRuleKey + source). */
+    /** UNIQUE EVIDENCE OBSERVATION id (semanticRuleKey + captured version). */
     candidateId: z.string().min(1),
     /**
      * The SEMANTIC LEGAL RULE this candidate observes — e.g.
@@ -53,10 +67,12 @@ export const CandidateRule = z
      * never share a key; the regulation/constraint identity derives from it.
      */
     semanticRuleKey: z.string().min(1),
-    /** Graph id of the source artifact this candidate was extracted from. */
+    /** Graph id of the CAPTURED VERSION this observation comes from. */
     sourceArtifactId: z.string().min(1),
     /** Manifest source reference (e.g. "S5") for human-facing provenance. */
     sourceRef: z.string().min(1),
+    /** Anchor into the raw capture backing this candidate. */
+    evidenceAnchor: EvidenceAnchor,
     subjectNodeId: z.string().min(1),
     jurisdictionKey: z.string().min(1),
     predicate: ClaimPredicate,

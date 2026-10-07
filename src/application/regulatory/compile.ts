@@ -10,7 +10,7 @@ import { canonicalJson } from "../../domain/graph/serialization";
 import { stripVolatile } from "../../domain/graph/node";
 import type { ClaimValue, ClaimPredicate } from "../../domain";
 import type { CandidateRule } from "./candidate-rule";
-import type { SourceMetadata } from "./extraction";
+import type { RawEvidenceDocument, SourceMetadata } from "./extraction";
 import { decideConflicts, type ConflictRecord } from "./conflicts";
 import { verifyCandidates } from "./verify";
 
@@ -64,7 +64,12 @@ export type CompileResult = {
 
 const REGULATION_ID = (key: string) => `phl:reg:${key}`;
 const CONSTRAINT_ID = (key: string) => `phl:constraint:${key}`;
-const CLAIM_ID = (key: string, sourceRef: string) => `phl:claim:${key}:${sourceRef}`;
+/**
+ * Observation identity uses the CAPTURED VERSION (sourceArtifactId), not the
+ * logical sourceRef: S5@v1 and S5@v2 are distinct observations and distinct
+ * claims, both retained for inspection.
+ */
+const CLAIM_ID = (key: string, sourceArtifactId: string) => `phl:claim:${key}:${sourceArtifactId}`;
 
 function claimValueFor(candidate: CandidateRule): ClaimValue {
   const value = candidate.proposedValue;
@@ -120,6 +125,19 @@ export function compileRegulations(
     candidates: CandidateRule[];
     sources: SourceMetadata[];
     subject: { district?: string };
+    /** Raw captures, so the verifier can bind every candidate to evidence. */
+    documents?: RawEvidenceDocument[];
+    /**
+     * Applicability proof from the accepted property's own signed GIS
+     * session: the site's zoning-base and overlay claims (with their source
+     * artifacts) that district- and overlay-scoped law MUST depend on.
+     * Fail closed when a district-scoped rule has no base-zoning claim or an
+     * overlay-scoped rule has no overlay claim.
+     */
+    applicabilityClaims?: {
+      zoningBaseClaimId?: string;
+      overlayClaimIds?: string[];
+    };
   },
 ): CompileResult {
   // HARD duplicate-candidate check — evidence observations are unique.
@@ -131,7 +149,12 @@ export function compileRegulations(
     seenCandidateIds.add(candidate.candidateId);
   }
 
-  const verification = verifyCandidates(input);
+  const verification = verifyCandidates({
+    candidates: input.candidates,
+    sources: input.sources,
+    subject: input.subject,
+    documents: input.documents ?? [],
+  });
   const accepted = verification
     .filter((decision) => decision.status === "ACCEPT")
     .map((decision) => decision.candidate);
@@ -167,13 +190,16 @@ export function compileRegulations(
       kind: "source-artifact",
       logicalSourceKey: source.logicalSourceKey,
       version: source.version,
-      sourceType: source.sourceType as never,
+      sourceType: source.sourceType,
       title: source.title,
       publisher: source.publisher,
       canonicalUrl: source.canonicalUrl,
       authority: source.authority,
       retrievedAt: source.retrievedAt,
       rawContentHash: source.rawContentHash,
+      // Deterministic joined representation of the backing captures.
+      versionNote: source.rawEvidenceRefs.join(", "),
+      ...(source.effectiveDate ? { effectiveDate: source.effectiveDate } : {}),
     });
   }
 
@@ -189,7 +215,7 @@ export function compileRegulations(
   for (const candidate of ordered) {
     const decision = verification.find((d) => d.candidate.candidateId === candidate.candidateId);
     const disposition = dispositions.get(candidate.candidateId);
-    const claimId = CLAIM_ID(candidate.semanticRuleKey, candidate.sourceRef);
+    const claimId = CLAIM_ID(candidate.semanticRuleKey, candidate.sourceArtifactId);
 
     if (decision?.status === "REJECT") {
       outcomes.push({
@@ -283,18 +309,54 @@ export function compileRegulations(
     );
     const winner = executableMembers[0];
 
+    // Applicability proof: WHAT THE LAW SAYS + WHY IT APPLIES TO THIS
+    // PARCEL. District-scoped law depends on the site's own zoning-base
+    // claim; overlay-scoped law on the site's overlay claim. Fail closed
+    // when the proof is missing.
+    const anchor = winner ?? sortedGroup[0];
+    const applicabilityClaimIds: string[] = [];
+    const applicabilityProblems: string[] = [];
+    const needsDistrict = Boolean(anchor.applicability.district);
+    const needsOverlay = Boolean(anchor.applicability.overlay);
+    if (needsDistrict) {
+      if (input.applicabilityClaims?.zoningBaseClaimId) {
+        applicabilityClaimIds.push(input.applicabilityClaims.zoningBaseClaimId);
+      } else {
+        applicabilityProblems.push(
+          `district-scoped rule ${key} has no site zoning-base applicability claim; refusing to compile without proof the law applies to this parcel`,
+        );
+      }
+    }
+    if (needsOverlay) {
+      const overlayClaims = input.applicabilityClaims?.overlayClaimIds ?? [];
+      if (overlayClaims.length > 0) {
+        applicabilityClaimIds.push(...overlayClaims);
+      } else {
+        applicabilityProblems.push(
+          `overlay-scoped rule ${key} has no site overlay applicability claim; refusing to compile without proof the overlay applies to this parcel`,
+        );
+      }
+    }
+    if (applicabilityProblems.length > 0) {
+      throw new Error(applicabilityProblems.join("; "));
+    }
+
     const desired = {
       id: REGULATION_ID(key),
       kind: "regulation" as const,
-      jurisdictionKey: (winner ?? sortedGroup[0]).jurisdictionKey,
-      codeSection: (winner ?? sortedGroup[0]).codeSection ?? (winner ?? sortedGroup[0]).verbatimSupportingText.slice(0, 80),
-      applicability: (winner ?? sortedGroup[0]).applicability,
-      claimIds: (executableMembers.length > 0 ? executableMembers : sortedGroup)
-        .map((c) => CLAIM_ID(key, c.sourceRef))
-        .sort(),
+      jurisdictionKey: anchor.jurisdictionKey,
+      codeSection: anchor.codeSection ?? anchor.verbatimSupportingText.slice(0, 80),
+      applicability: anchor.applicability,
+      claimIds: [
+        ...new Set([
+          ...(executableMembers.length > 0 ? executableMembers : sortedGroup)
+            .map((c) => CLAIM_ID(key, c.sourceArtifactId)),
+          ...applicabilityClaimIds,
+        ]),
+      ].sort(),
       currentness: (hasBlocked || executableMembers.length === 0 ? ("STALE" as const) : ("CURRENT" as const)),
       conflictRefs: keyConflicts.map((c) => c.conflictId),
-      notes: (winner ?? sortedGroup[0]).notes,
+      notes: anchor.notes,
     };
 
     const existing = ctx.project.nodes[desired.id];

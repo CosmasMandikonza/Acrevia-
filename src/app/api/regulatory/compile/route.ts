@@ -73,16 +73,34 @@ export async function POST(request: Request) {
       );
     }
 
+    // Multi-parcel accepted properties fail closed: the first parcel's law
+    // is never presented as property-wide law.
+    if (session.confirmedParcelIds.length > 1 || session.parcelContexts.length > 1) {
+      return NextResponse.json({
+        status: "multi-parcel-unsupported",
+        reason:
+          "This accepted property has multiple confirmed parcels; per-parcel regulatory compilation is required before any law can be presented for it.",
+      });
+    }
+
     const context = session.parcelContexts[0];
     const rawDistrict = context?.zoningBase?.districtLong ?? context?.zoningBase?.district;
     const district = canonicalDistrict(rawDistrict);
     const subjectNodeId = `gis:parcel:${session.confirmedParcelIds[0]}`;
 
-    if (!district) {
+    // Applicability proof nodes from the accepted property's OWN signed GIS
+    // session (already in the rebuilt project as claims + GIS artifacts).
+    const parcelKey = session.confirmedParcelIds[0];
+    const zoningBaseClaimId = `gis:claim:zoning-base:${parcelKey}`;
+    const overlayClaimId = `gis:claim:zoning-overlays:${parcelKey}`;
+    const zoningBaseClaim = project.nodes[zoningBaseClaimId];
+    const overlayClaim = project.nodes[overlayClaimId];
+
+    if (!district || !zoningBaseClaim || zoningBaseClaim.kind !== "claim") {
       return NextResponse.json({
         status: "needs-evidence",
         reason:
-          "The accepted property has no verified base zoning district in its signed session, so no law can be compiled for it yet. Re-resolve the property.",
+          "The accepted property has no verified base zoning district claim in its signed session, so no law can be compiled for it yet. Re-resolve the property.",
       });
     }
     if (!SUPPORTED_DISTRICTS.has(district)) {
@@ -95,9 +113,12 @@ export async function POST(request: Request) {
       });
     }
 
-    // /SIX proof comes ONLY from the signed session's overlay capture.
+    // /SIX proof comes ONLY from the signed session's overlay capture AND
+    // must exist as the site's own overlay claim in the rebuilt project.
     const overlayNames = (context?.zoningOverlays?.overlays ?? []).map((o) => o.name ?? "");
-    const sixProven = overlayNames.some((name) => /sixth district overlay/i.test(name));
+    const sixProven =
+      overlayNames.some((name) => /sixth district overlay/i.test(name)) &&
+      overlayClaim?.kind === "claim";
 
     const evidence = loadBenchmarkEvidence({
       fixtureDir: FIXTURE_DIR,
@@ -117,6 +138,11 @@ export async function POST(request: Request) {
       candidates: lawCandidates,
       sources: evidence.sources,
       subject: { district },
+      documents: evidence.documents,
+      applicabilityClaims: {
+        zoningBaseClaimId,
+        overlayClaimIds: overlayClaim?.kind === "claim" ? [overlayClaimId] : [],
+      },
     });
     const gate = selectExecutableConstraints(project);
     const sourceTitles = new Map(evidence.sources.map((s) => [s.sourceRef, s.title]));
