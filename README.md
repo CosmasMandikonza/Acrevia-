@@ -870,6 +870,14 @@ services are required. Address text is stored only in the URL, so it appears in
 browser history; it is not geocoded, verified, or saved as a project. To reset,
 return to `/` or open `/workspace` without query parameters.
 
+The Copilot rail (workspace header) additionally needs an OpenAI-compatible
+chat-completions provider (Gloo AI Studio works): set `ACREVIA_AI_BASE_URL`,
+`ACREVIA_AI_API_KEY`, and `ACREVIA_AI_MODEL` (see `.env.example`). Without
+them the Copilot reports AI unavailable and every deterministic surface keeps
+working. The Copilot never mutates project state directly — mission changes
+are typed proposals the user confirms through the standard mission command
+boundary.
+
 ### Checks and production preview
 
 ```bash
@@ -908,6 +916,12 @@ accessibility checks. Screenshots and failure traces live in `test-results/`;
   L&I zoning/footprints/context, capture-store tiers).
 - `src/application/resolution/`: the provisional resolution session and stateless
   pipeline (address → parcels → site context) plus the confirmed-session commit planner.
+- `src/application/copilot/`: the model-aware Copilot orchestration (issue #10) —
+  generic typed tools over the trusted rebuild, a bounded tool-calling loop, and a
+  numeric grounding guard. `src/adapters/ai/` holds the dependency-free
+  OpenAI-compatible provider adapter; `src/app/api/copilot/turn/` is its route.
+  `src/application/proof/trusted-context.ts` is the ONE shared trusted rebuild
+  pipeline used by both the Proof snapshot route and the Copilot.
 - `src/app/api/gis/`: stateless server routes for resolution and atomic commit.
 - `src/components/site/`: the map-first site-resolution experience (Site surface).
 - `tests/`: component, production-browser, and benchmark-structure checks.
