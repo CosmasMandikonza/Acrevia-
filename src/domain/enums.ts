@@ -91,6 +91,7 @@ export const DependencyRole = z.enum([
   "concerns", // expert review-> affected node
   "presents", // view         -> scenario
   "grounded-in", // entity       -> claim it grounds its facts on
+  "mission-applies-to", // mission-constraint -> structure it protects (preserve-structure)
 ]);
 export type DependencyRole = z.infer<typeof DependencyRole>;
 

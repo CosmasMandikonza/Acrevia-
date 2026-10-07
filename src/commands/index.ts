@@ -251,6 +251,22 @@ export function confirmMissionConstraint(
       } else {
         ctx.project.nodes[parsed.id] = nodeWithMeta(parsed, now);
       }
+      // Explicit graph causality: a preserve-structure mission rule DEPENDS
+      // ON the canonical structure node, so certificate closures and
+      // staleness traversal reach the consequential sanctuary geometry.
+      // Replace semantics — retargeting (A -> B) or changing the rule away
+      // from preserve-structure leaves no stale edge behind.
+      removeEdgesWhere(
+        ctx.project,
+        (edge) => edge.dependentId === parsed.id && edge.role === "mission-applies-to",
+      );
+      if (parsed.normalized.type === "preserve-structure") {
+        addEdge(ctx.project, {
+          dependentId: parsed.id,
+          dependencyId: parsed.normalized.structureId,
+          role: "mission-applies-to",
+        });
+      }
     },
   );
 }

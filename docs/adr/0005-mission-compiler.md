@@ -44,13 +44,18 @@ client truth model.
    command boundary no matter who sends it. Origin is enforced
    USER_DECLARED, and proposal ids are deterministic per semantic slot
    (e.g. `mission:min-sunday-parking`) so editing a value upserts the same
-   constraint and advances revision. `preserve-structure` rules must
-   reference the canonical Development Graph structure node
-   (`gis:structure:<id>`); the command enforces referential integrity via
-   `requireNode(..., "structure")`, and the map renderer adapts canonical
-   graph ids back to raw GIS ids for drawing — the domain contract stays
-   canonical. Mission inputs carry no evidence state and are never
-   displayed as externally verified facts.
+   constraint and advances revision. `preserve-structure` rules carry a
+   TYPED canonical structureId (`gis:structure:<id>`) AND an explicit
+   `mission-applies-to` dependency edge to that structure node, added with
+   replace semantics by the confirm command (retargeting A → B or changing
+   the rule away from preserve-structure leaves no stale edge; retraction
+   removes all touching edges). Referential integrity is enforced via
+   `requireNode(..., "structure")`, so scenario certificates that depend on
+   sanctuary preservation pin — and stale on — the actual structure
+   geometry through the normal edge-traversing closure machinery. The map
+   renderer adapts canonical graph ids back to raw GIS ids for drawing; the
+   domain contract stays canonical. Mission inputs carry no evidence state
+   and are never displayed as externally verified facts.
 
 4. **Semantic value validation on the schema.** `MissionNormalizedChecked`
    rejects negative/zero/fractional spaces, zero/negative stories, and
