@@ -26,6 +26,7 @@ import {
   verifyStoredSession,
   type AcceptedPropertyRecord,
 } from "@/lib/accepted-property";
+import { CompiledLaw } from "../evidence/compiled-law";
 const icons = {
   portfolio: Building2,
   site: Map,
@@ -297,6 +298,8 @@ function EvidenceLedger({ record }: { record: AcceptedPropertyRecord }) {
             </div>
           </dl>
         </div>
+
+        <CompiledLaw />
 
         <section aria-label="Captures" className="rounded-md border border-stone-300 bg-white p-4">
           <h3 className="text-xs font-semibold tracking-[0.14em] text-stone-500">CAPTURES</h3>

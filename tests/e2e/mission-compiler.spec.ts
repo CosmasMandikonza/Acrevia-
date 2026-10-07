@@ -173,11 +173,13 @@ test("rapid confirmations cannot lose, duplicate, or reorder mission rules", asy
   });
   await expect(mission.getByText("PROPOSED · OWNERSHIP", { exact: false })).toBeVisible();
 
-  // Fire both confirmations with no await between clicks — the second lands
-  // while the first canonical mutation is still in flight.
+  // Fire both confirmations in immediate succession — the second lands while
+  // the first canonical mutation is still in flight. Confirm OWNERSHIP
+  // (position 1) first: a successful confirm removes its own row, so the
+  // parking row stays at position 0 for the second click either way.
   const confirms = mission.getByRole("button", { name: "Confirm — must keep" });
-  await confirms.first().click();
-  await confirms.first().click();
+  await confirms.nth(1).click();
+  await confirms.nth(0).click();
 
   // The serialized command queue must land BOTH rules exactly once, in order.
   await expect(mission.locator("[data-constraint-id]")).toHaveCount(2, { timeout: 20_000 });
