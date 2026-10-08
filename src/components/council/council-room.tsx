@@ -568,11 +568,14 @@ export function CouncilRoom() {
           )}
 
           <section
-            className="mt-6 rounded-md border border-stone-300 bg-white p-4"
+            className="mt-6 rounded-md border border-olive-700 bg-olive-50 p-4"
             data-testid="council-next-decision"
           >
-            <span className="eyebrow">Next decision</span>
-            <p className="mt-1 text-lg font-semibold text-stone-900">
+            <span className="eyebrow text-olive-800">Next decision</span>
+            <p
+              className="mt-1 text-xl font-semibold text-stone-900"
+              style={{ fontFamily: "var(--font-editorial)" }}
+            >
               {pkg.nextDecision.headline}
             </p>
             <p className="mt-1 text-sm text-stone-600">

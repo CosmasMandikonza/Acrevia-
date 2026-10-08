@@ -620,7 +620,9 @@ function buildAudienceViews(
     audience: "council",
     label: AUDIENCE_LABELS.council,
     essence: "The zoning basis, the arithmetic, and what remains unverified.",
-    headline: `${homes} homes under ${pkg.project.district}${overlayClause} — preliminary, evidence-backed.`,
+    // Headline stays short; the overlay's full name lives in the lead + facts,
+    // not in the largest serif line on the page.
+    headline: `${homes} homes under ${pkg.project.district} — preliminary, evidence-backed.`,
     lead: [
       `Parcel ${pkg.project.parcelNodeId.replace("gis:parcel:", "")} is zoned ${pkg.project.district}${overlayClause}. Development figures derive from adopted code compiled with provenance and from deterministic computation over the recorded parcel geometry — not from generated prose.`,
       `The ${label} scenario models ${homes} dwelling units, ${floors} within a ${height} modeled height ceiling, a ${f("footprint")} footprint, and ${parking}.`,
@@ -646,7 +648,7 @@ function buildAudienceViews(
     audience: "professional",
     label: AUDIENCE_LABELS.professional,
     essence: "The exact model state: certificate, assumptions, boundaries.",
-    headline: `Certificate ${pkg.certificate.id.slice(-24)} — ${pkg.certificate.freshness}.`,
+    headline: `Certified ${pkg.certificate.freshness} — certificate v${pkg.certificate.version}.`,
     lead: [
       `Scenario ${pkg.selected.scenarioId} is certified by ${pkg.certificate.id} (v${pkg.certificate.version}, ${int(pkg.certificate.dependencyCount)} pinned dependencies, solver ${pkg.selected.solverVersion}). Package fingerprint ${pkg.packageFingerprint}.`,
       `The modeled program point is ${homes} homes, ${parking}, ${floors} — every figure recomputable from the certificate's pinned dependency closure.`,

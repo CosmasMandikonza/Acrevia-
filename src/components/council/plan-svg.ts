@@ -84,14 +84,14 @@ export function buildPlanSvg(
   // Legal buildable envelope — dashed, never filled: it is a ceiling, not a proposal.
   for (const polygon of scene.legalEnvelope?.polygons ?? []) {
     parts.push(
-      `<path d="${polygonPaths(polygon)}" fill="none" stroke="#45583b" stroke-width="1.2" stroke-dasharray="6 4" opacity="0.55"/>`,
+      `<path d="${polygonPaths(polygon)}" fill="none" stroke="#45583b" stroke-width="1.3" stroke-dasharray="7 4" opacity="0.75"/>`,
     );
   }
 
   // Existing structures; mission-protected ones carry the solid olive edge.
   for (const structure of scene.structures) {
     parts.push(
-      `<path d="${polygonPaths(structure.polygon)}" fill="${structure.protectedByMission ? "#e7ead9" : "#ded9cb"}" stroke="${structure.protectedByMission ? "#45583b" : "#8a8674"}" stroke-width="${structure.protectedByMission ? 1.6 : 1}"/>`,
+      `<path d="${polygonPaths(structure.polygon)}" fill="${structure.protectedByMission ? "#dde2cc" : "#d8d3c4"}" stroke="${structure.protectedByMission ? "#45583b" : "#7d7866"}" stroke-width="${structure.protectedByMission ? 1.8 : 1.1}"/>`,
     );
     const centroid = polygonCentroid(structure.polygon);
     parts.push(
@@ -99,9 +99,10 @@ export function buildPlanSvg(
     );
   }
 
-  // Parcel boundary on top of everything site-derived.
+  // Parcel boundary on top of everything site-derived, with a light ground
+  // tint so the frame reads as land, not an empty white card.
   parts.push(
-    `<path d="${polygonPaths(parcel)}" fill="none" stroke="#29372d" stroke-width="2"/>`,
+    `<path d="${polygonPaths(parcel)}" fill="#f1efe4" stroke="#29372d" stroke-width="2.2"/>`,
   );
 
   // Selected scenario: conceptual volumes + placed parking (if proven).
@@ -113,7 +114,7 @@ export function buildPlanSvg(
     for (const volume of scenario.volumes) {
       maxHeight = Math.max(maxHeight, volume.heightFt);
       parts.push(
-        `<path d="${polygonPaths(volume.polygon)}" fill="#45583b" fill-opacity="0.18" stroke="#45583b" stroke-width="1.4"/>`,
+        `<path d="${polygonPaths(volume.polygon)}" fill="#45583b" fill-opacity="0.34" stroke="#45583b" stroke-width="1.6"/>`,
       );
     }
     if (scenario.parking?.status === "PLACED") {

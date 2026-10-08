@@ -158,7 +158,7 @@ describe("buildCouncilPackage — projection over trusted state", () => {
     expect(pkg.audienceViews.council.headline).toContain(pkg.project.district);
     expect(pkg.audienceViews.council.cta).toContain("not a permit application");
     // Professional: certificate identity is on the surface.
-    expect(pkg.audienceViews.professional.headline).toContain("Certificate");
+    expect(pkg.audienceViews.professional.headline).toContain("Certified");
     expect(pkg.audienceViews.professional.detail).toBe("audit");
     // Board: the next decision IS the board's call to action.
     expect(pkg.audienceViews.board.cta).toBe(pkg.nextDecision.headline);
