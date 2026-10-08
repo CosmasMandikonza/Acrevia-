@@ -37,7 +37,7 @@ export const surfaces = [
     eyebrow: "A SHARED UNDERSTANDING",
     title: "Bring the right questions to the table.",
     description:
-      "There is no decision package yet. Future board and council materials will use the same project facts and evidence.",
+      "Accept a property and compute a scenario first. The decision room will assemble the same certified facts for every audience — pastor, board, neighbor, city, and professional — with a one-click 16:9 export.",
   },
   {
     id: "evidence",
